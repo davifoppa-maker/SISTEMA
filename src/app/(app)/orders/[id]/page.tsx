@@ -1,0 +1,222 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, Thead, Th, Tr, Td } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { LogisticBadge, SlaBadge } from "@/components/status-badge";
+import { readStore } from "@/lib/queries";
+import { dataDriver } from "@/lib/db";
+import { fetchOrderRawPayload } from "@/lib/db/supabase-data";
+import { brl, dateTime } from "@/lib/utils/format";
+import { CHANNEL_LABELS } from "@/lib/types";
+import { getProvider, providerIdForCarrierName } from "@/lib/services/freight/registry";
+import { SendNfButton } from "./send-nf-button";
+import { StatusControl } from "./status-control";
+import { TrackButton } from "./track-button";
+
+export const dynamic = "force-dynamic";
+
+// Rótulos amigáveis para os tipos de SLA (a UI não mostra o nome técnico).
+const SLA_TYPE_LABELS: Record<string, string> = {
+  aprovacao_faturamento: "Aprovação → faturamento",
+  faturamento_separacao: "Faturamento → separação",
+  separacao_coleta: "Separação → coleta",
+  coleta_entrega: "Prazo de entrega",
+  ciclo_total: "Ciclo total",
+};
+
+export default async function OrderDetailPage({ params }: { params: { id: string } }) {
+  const store = await readStore();
+  const order = store.orders.find((o) => o.id === params.id);
+  if (!order) notFound();
+
+  // O JSON bruto é omitido das leituras em massa; busca sob demanda aqui.
+  const rawPayload = dataDriver === "supabase" ? await fetchOrderRawPayload(order.id) : order.raw_payload;
+
+  const customer = store.customers.find((c) => c.id === order.customer_id);
+  const items = store.order_items.filter((i) => i.order_id === order.id);
+  const invoice = store.invoices.find((i) => i.order_id === order.id);
+  const shipment = store.shipments.find((s) => s.order_id === order.id);
+  const carrier = shipment?.carrier_id ? store.carriers.find((c) => c.id === shipment.carrier_id) : null;
+  const volumes = shipment ? store.shipment_volumes.filter((v) => v.shipment_id === shipment.id) : [];
+  const slas = shipment ? store.sla_records.filter((s) => s.shipment_id === shipment.id) : [];
+  const messages = store.message_logs.filter((m) => m.order_id === order.id);
+  const occurrences = store.occurrences.filter((o) => o.order_id === order.id);
+  // Transportadora de rastreio resolvida pelo nome (o botão "Rastrear" usa esta).
+  const trackProviderId = providerIdForCarrierName(carrier?.name ?? order.carrier_name);
+  const trackProviderLabel = trackProviderId ? getProvider(trackProviderId)?.label ?? null : null;
+
+  return (
+    <>
+      <PageHeader title={`Pedido #${order.order_number}`} description={order.external_order_number ?? undefined}>
+        <Link href="/orders" className="text-sm text-brand-700 hover:underline">← Voltar</Link>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader><CardTitle>Pedido</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <Row label="Canal"><Badge variant="info">{CHANNEL_LABELS[order.channel]}</Badge></Row>
+            <Row label="Status Tiny">{order.tiny_status ?? "—"}</Row>
+            <Row label="Status logístico"><LogisticBadge status={order.logistic_status} /></Row>
+            <Row label="Valor">{brl(order.total_value)}</Row>
+            <Row label="Frete">{order.freight_value != null ? brl(order.freight_value) : "—"}</Row>
+            <Row label="Prazo (entrega)">{order.expected_delivery_at ? dateTime(order.expected_delivery_at) : "—"}</Row>
+            <Row label="Origem">{order.order_origin ?? "—"}</Row>
+            <Row label="Vendedor">{order.seller ?? "—"}</Row>
+            <Row label="Lista de preço">{order.price_list ?? "—"}</Row>
+            <StatusControl orderId={order.id} current={order.logistic_status} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Cliente</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <Row label="Nome">{customer?.name ?? "—"}</Row>
+            <Row label="Documento">{customer?.document ?? "—"}</Row>
+            <Row label="WhatsApp">{customer?.whatsapp_phone ?? "—"}</Row>
+            <Row label="Cidade/UF">{order.city ? `${order.city}/${order.state}` : "—"}</Row>
+            <Row label="Endereço">{customer?.address ?? "—"}</Row>
+            {customer ? (
+              <Link href={`/customers/${customer.id}`} className="text-xs text-brand-700 hover:underline">Ver histórico do cliente →</Link>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Nota fiscal & expedição</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <Row label="NF">{invoice ? `${invoice.number}${invoice.series ? `/${invoice.series}` : ""}` : "—"}</Row>
+            <Row label="Chave NFe" mono>{invoice?.access_key ?? "—"}</Row>
+            <Row label="Transportadora">{carrier?.name ?? order.carrier_name ?? "—"}</Row>
+            <Row label="Rastreio">{shipment?.tracking_code ?? "—"}</Row>
+            <Row label="Coleta real">{dateTime(shipment?.real_collected_at)}</Row>
+            <Row label="Previsão entrega">{dateTime(shipment?.estimated_delivery_at)}</Row>
+            {shipment && shipment.status === "aguardando_coleta" ? (
+              <Link href="/checkout" className="text-xs text-brand-700 hover:underline">Ir para checkout de expedição →</Link>
+            ) : null}
+            <SendNfButton orderId={order.id} />
+            <Link
+              href={`/orders/${order.id}/cotacao`}
+              className="mt-2 inline-block rounded-lg border border-brand-700 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+            >
+              Cotar frete
+            </Link>
+            <TrackButton
+              providerId={trackProviderId}
+              providerLabel={trackProviderLabel}
+              nf={invoice?.number ?? order.nf_numero}
+              chave={invoice?.access_key ?? order.nf_chave}
+              trackingCode={shipment?.tracking_code ?? null}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Itens</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <Thead><tr><Th>SKU</Th><Th>Descrição</Th><Th className="text-right">Qtd</Th><Th className="text-right">Unit.</Th></tr></Thead>
+              <tbody>
+                {items.map((i) => (
+                  <Tr key={i.id}><Td>{i.sku}</Td><Td>{i.description}</Td><Td className="text-right">{i.quantity}</Td><Td className="text-right">{brl(i.unit_value)}</Td></Tr>
+                ))}
+              </tbody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Volumes ({volumes.filter((v) => v.scanned).length}/{volumes.length} bipados)</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <Thead><tr><Th>#</Th><Th>Código</Th><Th>Peso</Th><Th>Bipado</Th></tr></Thead>
+              <tbody>
+                {volumes.map((v) => (
+                  <Tr key={v.id}>
+                    <Td>{v.volume_number}</Td>
+                    <Td className="font-mono text-xs">{v.barcode}</Td>
+                    <Td>{v.weight ? `${v.weight} kg` : "—"}</Td>
+                    <Td>{v.scanned ? <Badge variant="success">Sim</Badge> : <Badge variant="muted">Não</Badge>}</Td>
+                  </Tr>
+                ))}
+                {volumes.length === 0 ? <Tr><Td colSpan={4} className="text-slate-400">Sem volumes (NF não emitida).</Td></Tr> : null}
+              </tbody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader><CardTitle>SLA</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {slas.length === 0 ? <span className="text-slate-400">Sem SLA (aguardando coleta real).</span> : null}
+            {slas.map((s) => (
+              <div key={s.id} className="flex items-center justify-between">
+                <span className="text-slate-600">
+                  {SLA_TYPE_LABELS[s.sla_type] ?? s.sla_type}
+                  {s.deadline_at ? <span className="text-slate-400"> · até {dateTime(s.deadline_at)}</span> : null}
+                </span>
+                <SlaBadge status={s.status} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Mensagens WhatsApp</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {messages.length === 0 ? <span className="text-slate-400">Nenhuma mensagem.</span> : null}
+            {messages.map((m) => (
+              <div key={m.id} className="rounded-lg border border-slate-100 p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <Badge variant={m.status === "sent" ? "success" : m.status === "failed" ? "danger" : "muted"}>{m.status}</Badge>
+                  <span className="text-[10px] text-slate-400">{dateTime(m.sent_at ?? m.created_at)}</span>
+                </div>
+                <p className="text-xs text-slate-600">{m.content}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Ocorrências</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {occurrences.length === 0 ? <span className="text-slate-400">Sem ocorrências.</span> : null}
+            {occurrences.map((o) => (
+              <div key={o.id} className="rounded-lg border border-slate-100 p-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="danger">{o.type}</Badge>
+                  <span className="text-[10px] text-slate-400">{o.status}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600">{o.description}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Payload bruto (Tiny)</CardTitle></CardHeader>
+        <CardContent>
+          <pre className="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
+            {JSON.stringify(rawPayload, null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function Row({ label, children, mono }: { label: string; children: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <span className="text-slate-500">{label}</span>
+      <span className={mono ? "text-right font-mono text-xs" : "text-right font-medium"}>{children}</span>
+    </div>
+  );
+}
