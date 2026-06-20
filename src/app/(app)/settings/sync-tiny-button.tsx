@@ -32,17 +32,19 @@ export function SyncTinyButton() {
     try {
       const qs = new URLSearchParams({ inicio: di, fim: df });
       const res = await fetch(`/api/sync/tiny/recent?${qs.toString()}`, { method: "POST" });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        setMsg(`${json.data?.synced ?? 0} pedido(s) sincronizado(s) — ${di} a ${df}.`);
+      let json: Record<string, unknown> | null = null;
+      const text = await res.text();
+      try { json = JSON.parse(text); } catch { /* não é JSON */ }
+      if (res.ok && json && json.ok) {
+        setMsg(`${(json.data as Record<string,unknown>)?.synced ?? 0} pedido(s) sincronizado(s) — ${di} a ${df}.`);
         setTimeout(() => window.location.reload(), 1500);
       } else {
         setError(true);
-        setMsg(json.error ?? "Falha ao sincronizar.");
+        setMsg((json?.error as string) ?? `Erro ${res.status}: ${text.slice(0, 200)}`);
       }
-    } catch {
+    } catch (e) {
       setError(true);
-      setMsg("Falha de rede ao sincronizar.");
+      setMsg(`Falha de rede: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
