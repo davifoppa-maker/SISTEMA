@@ -5,6 +5,7 @@ import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
 import { brl, dateShort } from "@/lib/utils/format";
 import { PayableMonthFilter } from "./payable-month-filter";
 import { NewPayableButton } from "./new-payable-button";
+import { SyncPayablesButton } from "./sync-payables-button";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,10 @@ export default async function PayablePage({
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <PageHeader title="Contas a pagar" description={label} />
-        <NewPayableButton />
+        <div className="flex gap-2">
+          <SyncPayablesButton />
+          <NewPayableButton />
+        </div>
       </div>
 
       <PayableMonthFilter value={mes} />

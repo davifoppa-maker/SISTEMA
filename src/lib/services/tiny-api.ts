@@ -1090,3 +1090,55 @@ export async function fetchOrderById(id: string): Promise<TinyOrderPayload | nul
   const ped = isObj(json.pedido) ? json.pedido : isObj(json.data) ? json.data : json;
   return mapV3OrderToPayload(ped);
 }
+
+export interface TinyPayable {
+  tiny_id: string;
+  supplier: string;
+  description: string | null;
+  value: number;
+  issue_date: string | null;
+  due_date: string;
+  paid_at: string | null;
+  category: string | null;
+}
+
+function parseTinyDate(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : null;
+}
+
+export async function fetchTinyPayables(params: {
+  dataInicial?: string;
+  dataFinal?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<TinyPayable[]> {
+  const c = getTinyConfig();
+  const url = new URL(`${c.apiBaseUrl}/contas-pagar`);
+  if (params.dataInicial) url.searchParams.set("dataVencimentoInicial", params.dataInicial);
+  if (params.dataFinal) url.searchParams.set("dataVencimentoFinal", params.dataFinal);
+  url.searchParams.set("limit", String(params.limit ?? 100));
+  url.searchParams.set("offset", String(params.offset ?? 0));
+
+  const res = await tinyFetch(url.toString());
+  if (!res.ok) throw new Error(`Tiny contas-pagar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+
+  const json = (await res.json()) as Record<string, any>;
+  const items: any[] = json.itens ?? json.data ?? (Array.isArray(json) ? json : []);
+
+  return items.map((item: any): TinyPayable => ({
+    tiny_id: String(item.id ?? ""),
+    supplier:
+      item.fornecedor?.nome ?? item.contato?.nome ?? item.nomeFornecedor ?? item.descricao ?? "—",
+    description: item.historico ?? item.observacoes ?? item.complemento ?? null,
+    value: parseFloat(String(item.valor ?? item.valorOriginal ?? 0)) || 0,
+    issue_date: parseTinyDate(item.dataEmissao ?? item.dataCriacao ?? item.dataLancamento),
+    due_date: parseTinyDate(item.dataVencimento ?? item.vencimento) ?? "",
+    paid_at: parseTinyDate(item.dataPagamento ?? item.dataBaixa),
+    category: item.categoria?.descricao ?? item.categoria ?? null,
+  })).filter((p) => p.due_date);
+}
