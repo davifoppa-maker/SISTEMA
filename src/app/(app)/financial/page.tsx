@@ -26,12 +26,33 @@ interface ReceivableRow {
   oldestDate: string;
 }
 
-export default async function FinancialPage() {
+function buildMonths(): { value: string; label: string }[] {
+  const months = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+    months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+  }
+  return months;
+}
+
+export default async function FinancialPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string };
+}) {
+  const months = buildMonths();
+  const mes = searchParams.mes ?? months[0].value; // padrão: mês atual
+
   const store = await loadStoreFor(["orders", "customers"]);
 
-  const activeOrders = store.orders.filter(
-    (o) => !CANCELLED.has((o.tiny_status ?? "").toLowerCase()),
-  );
+  const activeOrders = store.orders.filter((o) => {
+    if (CANCELLED.has((o.tiny_status ?? "").toLowerCase())) return false;
+    const orderMonth = o.created_at.slice(0, 7);
+    return orderMonth === mes;
+  });
 
   // Agrupar por cliente
   const byCustomer = new Map<string, ReceivableRow>();
@@ -60,15 +81,37 @@ export default async function FinancialPage() {
   const totalClientes = rows.length;
   const ticketMedio = totalPedidos > 0 ? totalGeral / totalPedidos : 0;
 
+  const mesLabel = months.find((m) => m.value === mes)?.label ?? mes;
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader title="Financeiro" description="Visão geral de contas a receber." />
+
+      {/* Filtro de mês */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-slate-600">Mês:</span>
+        <div className="flex flex-wrap gap-2">
+          {months.map((m) => (
+            <a
+              key={m.value}
+              href={`/financial?mes=${m.value}`}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                mes === m.value
+                  ? "border-brand-700 bg-brand-700 text-white"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {m.label}
+            </a>
+          ))}
+        </div>
+      </div>
 
       {/* Cards resumo */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Total a receber</div>
+            <div className="text-xs text-slate-500">Total — {mesLabel}</div>
             <div className="mt-1 text-2xl font-bold text-slate-800">{brl(totalGeral)}</div>
           </CardContent>
         </Card>
@@ -95,7 +138,7 @@ export default async function FinancialPage() {
       {/* Tabela por cliente */}
       <Card>
         <CardHeader>
-          <CardTitle>Contas a receber por cliente</CardTitle>
+          <CardTitle>Contas a receber por cliente — {mesLabel}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -113,7 +156,7 @@ export default async function FinancialPage() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
-                    <EmptyState message="Nenhum pedido em aberto." />
+                    <EmptyState message="Nenhum pedido em aberto neste mês." />
                   </td>
                 </tr>
               ) : (
