@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const INTERVAL_MS = 60_000;
+const INTERVAL_MS = 30_000;
 
 async function runSync() {
   await Promise.allSettled([
