@@ -1114,6 +1114,7 @@ function parseTinyDate(v: unknown): string | null {
 export async function fetchTinyPayables(params: {
   dataInicial?: string;
   dataFinal?: string;
+  situacao?: number; // 1=aberto, 2=pago, 3=vencido (Tiny V3)
   offset?: number;
   limit?: number;
 }): Promise<TinyPayable[]> {
@@ -1121,6 +1122,7 @@ export async function fetchTinyPayables(params: {
   const url = new URL(`${c.apiBaseUrl}/contas-pagar`);
   if (params.dataInicial) url.searchParams.set("dataVencimentoInicial", params.dataInicial);
   if (params.dataFinal) url.searchParams.set("dataVencimentoFinal", params.dataFinal);
+  if (params.situacao != null) url.searchParams.set("situacao", String(params.situacao));
   url.searchParams.set("limit", String(params.limit ?? 100));
   url.searchParams.set("offset", String(params.offset ?? 0));
 
