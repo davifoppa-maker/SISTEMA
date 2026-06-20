@@ -262,6 +262,18 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
   );
 
   const marcador = payload.marcadores?.[0]?.descricao;
+
+  // Converte data do Tiny (DD/MM/YYYY ou YYYY-MM-DD) para ISO date string.
+  function tinyDateToIso(v: unknown): string | null {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+    const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (iso) return iso[1];
+    return null;
+  }
+
   const fields = {
     external_order_number: str(payload.numero_ecommerce),
     channel,
@@ -274,6 +286,8 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
     price_list: str(payload.lista_preco),
     order_origin: str(payload.ecommerce?.nome),
     carrier_name: str(payload.transportadora),
+    order_date: tinyDateToIso((payload as Record<string, unknown>).data),
+    due_date: tinyDateToIso((payload as Record<string, unknown>).vencimento),
     tags: marcador ? [marcador] : [],
     raw_payload: payload,
   };

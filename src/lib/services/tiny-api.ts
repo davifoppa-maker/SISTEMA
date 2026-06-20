@@ -745,6 +745,14 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
     vendedor: v3.vendedor?.nome ?? v3.vendedor ?? v3.nomeVendedor,
     lista_preco: v3.listaPreco?.nome ?? v3.listaPreco,
     transportadora,
+    // Data real do pedido no Tiny (string YYYY-MM-DD ou DD/MM/YYYY).
+    data: typeof v3.data === "string" && v3.data.length >= 8 ? v3.data : undefined,
+    // Vencimento do boleto (primeiro pagamento).
+    vencimento:
+      v3.formasPagamento?.[0]?.vencimento ??
+      v3.parcelas?.[0]?.vencimento ??
+      v3.vencimento ??
+      undefined,
     itens: itensRaw.map((it: any) => ({
       codigo: it.codigo ?? it.sku ?? it.produto?.codigo ?? it.produto?.sku,
       descricao: it.descricao ?? it.produto?.descricao ?? it.nome,

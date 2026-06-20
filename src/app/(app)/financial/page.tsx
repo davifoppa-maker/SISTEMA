@@ -9,21 +9,26 @@ export const dynamic = "force-dynamic";
 
 const CANCELLED = new Set(["cancelado"]);
 
-function aging(dateStr: string): number {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
-}
-
 function agingLabel(days: number) {
   if (days <= 7) return { label: `${days}d`, cls: "text-emerald-700" };
   if (days <= 30) return { label: `${days}d`, cls: "text-amber-600" };
   return { label: `${days}d`, cls: "text-red-600 font-semibold" };
 }
 
+function dueDateLabel(due: string | null) {
+  if (!due) return { label: "—", cls: "text-slate-400" };
+  const days = Math.floor((new Date(due).getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return { label: `Vencido ${Math.abs(days)}d`, cls: "text-red-600 font-semibold" };
+  if (days === 0) return { label: "Vence hoje", cls: "text-amber-600 font-semibold" };
+  if (days <= 3) return { label: `${days}d`, cls: "text-amber-500" };
+  return { label: `${days}d`, cls: "text-emerald-700" };
+}
+
 interface ReceivableRow {
   customer: Customer;
   orders: Order[];
   total: number;
-  oldestDate: string;
+  earliestDue: string | null;
 }
 
 function buildMonths(): { value: string; label: string }[] {
@@ -38,20 +43,25 @@ function buildMonths(): { value: string; label: string }[] {
   return months;
 }
 
+function getOrderMonth(order: Order): string {
+  // Usa a data real do pedido no Tiny; fallback para created_at.
+  const date = order.order_date ?? order.created_at;
+  return date.slice(0, 7);
+}
+
 export default async function FinancialPage({
   searchParams,
 }: {
   searchParams: { mes?: string };
 }) {
   const months = buildMonths();
-  const mes = searchParams.mes ?? months[0].value; // padrão: mês atual
+  const mes = searchParams.mes ?? months[0].value;
 
   const store = await loadStoreFor(["orders", "customers"]);
 
   const activeOrders = store.orders.filter((o) => {
     if (CANCELLED.has((o.tiny_status ?? "").toLowerCase())) return false;
-    const orderMonth = o.created_at.slice(0, 7);
-    return orderMonth === mes;
+    return getOrderMonth(o) === mes;
   });
 
   // Agrupar por cliente
@@ -63,13 +73,18 @@ export default async function FinancialPage({
     if (existing) {
       existing.orders.push(order);
       existing.total += order.total_value;
-      if (order.created_at < existing.oldestDate) existing.oldestDate = order.created_at;
+      // Menor vencimento entre os pedidos do cliente
+      if (order.due_date) {
+        if (!existing.earliestDue || order.due_date < existing.earliestDue) {
+          existing.earliestDue = order.due_date;
+        }
+      }
     } else {
       byCustomer.set(customer.id, {
         customer,
         orders: [order],
         total: order.total_value,
-        oldestDate: order.created_at,
+        earliestDue: order.due_date ?? null,
       });
     }
   }
@@ -82,6 +97,12 @@ export default async function FinancialPage({
   const ticketMedio = totalPedidos > 0 ? totalGeral / totalPedidos : 0;
 
   const mesLabel = months.find((m) => m.value === mes)?.label ?? mes;
+
+  // Boletos vencidos neste mês
+  const vencidos = activeOrders.filter(
+    (o) => o.due_date && o.due_date < new Date().toISOString().slice(0, 10),
+  );
+  const totalVencido = vencidos.reduce((s, o) => s + o.total_value, 0);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -123,8 +144,9 @@ export default async function FinancialPage({
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Clientes</div>
-            <div className="mt-1 text-2xl font-bold text-slate-800">{totalClientes}</div>
+            <div className="text-xs text-slate-500">Boletos vencidos</div>
+            <div className="mt-1 text-2xl font-bold text-red-600">{brl(totalVencido)}</div>
+            <div className="text-xs text-slate-400">{vencidos.length} pedido(s)</div>
           </CardContent>
         </Card>
         <Card>
@@ -148,8 +170,8 @@ export default async function FinancialPage({
                 <Th>Documento</Th>
                 <Th>Pedidos</Th>
                 <Th>Valor total</Th>
-                <Th>Pedido mais antigo</Th>
-                <Th>Idade</Th>
+                <Th>Vencimento</Th>
+                <Th>Status boleto</Th>
               </Tr>
             </Thead>
             <tbody>
@@ -161,15 +183,21 @@ export default async function FinancialPage({
                 </tr>
               ) : (
                 rows.map((row) => {
-                  const { label, cls } = agingLabel(aging(row.oldestDate));
+                  const { label: dueLabel, cls: dueCls } = dueDateLabel(row.earliestDue);
+                  const aging = row.earliestDue
+                    ? Math.floor((Date.now() - new Date(row.earliestDue).getTime()) / 86_400_000)
+                    : 0;
+                  const { label: ageLabel, cls: ageCls } = agingLabel(Math.max(0, aging));
                   return (
                     <Tr key={row.customer.id}>
                       <Td className="font-medium text-slate-800">{row.customer.name}</Td>
                       <Td className="text-slate-500">{row.customer.document ?? "—"}</Td>
                       <Td>{row.orders.length}</Td>
                       <Td className="font-semibold">{brl(row.total)}</Td>
-                      <Td className="text-slate-500">{dateShort(row.oldestDate)}</Td>
-                      <Td className={cls}>{label}</Td>
+                      <Td className="text-slate-500">
+                        {row.earliestDue ? dateShort(row.earliestDue) : "—"}
+                      </Td>
+                      <Td className={dueCls}>{dueLabel}</Td>
                     </Tr>
                   );
                 })
