@@ -5,6 +5,7 @@ import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
 import { brl, dateShort } from "@/lib/utils/format";
 import type { Order, Customer } from "@/lib/types";
 import { FinancialSyncButton } from "./sync-button";
+import { MonthFilter } from "./month-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -32,16 +33,11 @@ interface ReceivableRow {
   earliestDue: string | null;
 }
 
-function buildMonths(): { value: string; label: string }[] {
-  const months = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
-    months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
-  }
-  return months;
+function mesLabel(mes: string): string {
+  const [y, m] = mes.split("-").map(Number);
+  const d = new Date(y, m - 1, 1);
+  const label = d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function getOrderMonth(order: Order): string {
@@ -55,8 +51,9 @@ export default async function FinancialPage({
 }: {
   searchParams: { mes?: string };
 }) {
-  const months = buildMonths();
-  const mes = searchParams.mes ?? months[0].value;
+  const now = new Date();
+  const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const mes = searchParams.mes ?? defaultMes;
 
   const store = await loadStoreFor(["orders", "customers"]);
 
@@ -97,7 +94,7 @@ export default async function FinancialPage({
   const totalClientes = rows.length;
   const ticketMedio = totalPedidos > 0 ? totalGeral / totalPedidos : 0;
 
-  const mesLabel = months.find((m) => m.value === mes)?.label ?? mes;
+  const label = mesLabel(mes);
 
   // Boletos vencidos neste mês
   const vencidos = activeOrders.filter(
@@ -112,31 +109,13 @@ export default async function FinancialPage({
         <FinancialSyncButton />
       </div>
 
-      {/* Filtro de mês */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-slate-600">Mês:</span>
-        <div className="flex flex-wrap gap-2">
-          {months.map((m) => (
-            <a
-              key={m.value}
-              href={`/financial?mes=${m.value}`}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                mes === m.value
-                  ? "border-brand-700 bg-brand-700 text-white"
-                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {m.label}
-            </a>
-          ))}
-        </div>
-      </div>
+      <MonthFilter value={mes} />
 
       {/* Cards resumo */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Total — {mesLabel}</div>
+            <div className="text-xs text-slate-500">Total — {label}</div>
             <div className="mt-1 text-2xl font-bold text-slate-800">{brl(totalGeral)}</div>
           </CardContent>
         </Card>
@@ -164,7 +143,7 @@ export default async function FinancialPage({
       {/* Tabela por cliente */}
       <Card>
         <CardHeader>
-          <CardTitle>Contas a receber por cliente — {mesLabel}</CardTitle>
+          <CardTitle>Contas a receber por cliente — {label}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
