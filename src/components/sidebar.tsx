@@ -13,6 +13,7 @@ import {
   Calculator,
   Settings,
   LogOut,
+  TrendingUp,
 } from "lucide-react";
 
 // Menu de OPERAÇÕES, enxuto. Transportadoras, Payload bruto/Webhooks e Clientes
@@ -23,6 +24,7 @@ const nav = [
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
+  { href: "/financial", label: "Financeiro", icon: TrendingUp },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
   { href: "/settings", label: "Configurações", icon: Settings },
