@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
 import { brl, dateShort } from "@/lib/utils/format";
 import type { Order, Customer } from "@/lib/types";
+import { FinancialSyncButton } from "./sync-button";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,10 @@ export default async function FinancialPage({
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <PageHeader title="Financeiro" description="Visão geral de contas a receber." />
+      <div className="flex items-center justify-between">
+        <PageHeader title="Financeiro" description="Visão geral de contas a receber." />
+        <FinancialSyncButton />
+      </div>
 
       {/* Filtro de mês */}
       <div className="flex items-center gap-3">
