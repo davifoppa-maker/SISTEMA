@@ -406,6 +406,45 @@ export async function enrichExpeditionNFs(store: DataStore, cap = 50): Promise<n
  * Limitado por `cap` para não estourar o tempo da função. Retorna quantos
  * pedidos mudaram de status logístico.
  */
+/** Busca detalhe individual dos pedidos sem due_date para capturar formasPagamento/vencimento. */
+export async function enrichOrderDates(store: DataStore, cap = 40): Promise<number> {
+  const candidates = store.orders
+    .filter((o) => o.tiny_id && !o.due_date)
+    .slice(0, cap);
+
+  let enriched = 0;
+  for (const order of candidates) {
+    try {
+      const payload = await fetchOrderById(order.tiny_id!);
+      if (!payload) continue;
+      const raw = (payload as Record<string, unknown>);
+      const vencimento = raw.vencimento as string | undefined;
+      const data = raw.data as string | undefined;
+      let changed = false;
+      if (vencimento && !order.due_date) {
+        const iso = tinyDateToIso(vencimento);
+        if (iso) { order.due_date = iso; changed = true; }
+      }
+      if (data && !order.order_date) {
+        const iso = tinyDateToIso(data);
+        if (iso) { order.order_date = iso; changed = true; }
+      }
+      if (changed) { order.updated_at = nowIso(); enriched++; }
+    } catch { /* ignora */ }
+  }
+  return enriched;
+}
+
+function tinyDateToIso(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  return null;
+}
+
 export async function resyncProcessingB2bOrders(store: DataStore, cap = 60): Promise<number> {
   const PROCESSING = new Set(["aguardando_separacao", "aguardando_faturamento"]);
   const candidates = store.orders

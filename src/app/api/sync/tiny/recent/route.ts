@@ -1,6 +1,6 @@
 import { loadStore, commitStore } from "@/lib/db";
 import { ok, fail } from "@/lib/api";
-import { ingestOrder, enrichExpeditionNFs, resyncProcessingB2bOrders, reprocessPendingWebhooks } from "@/lib/services/tiny";
+import { ingestOrder, enrichExpeditionNFs, resyncProcessingB2bOrders, reprocessPendingWebhooks, enrichOrderDates } from "@/lib/services/tiny";
 import { runSlaAndTrackingChecks } from "@/lib/services/automation";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
 
   // Reprocessa webhooks que ficaram pendentes (detalhe do Tiny falhou na hora).
   const webhooksReprocessed = await reprocessPendingWebhooks(store, 30).catch(() => 0);
+  const datesEnriched = await enrichOrderDates(store, 40).catch(() => 0);
   // Re-busca por ID os B2B "em processamento" (mesmo antigos, fora da janela
   // recente) para refletir avanços de status feitos direto no Tiny.
   const b2bResynced = await resyncProcessingB2bOrders(store, 60).catch(() => 0);
