@@ -36,9 +36,9 @@ interface Props {
   orders: OrderOption[];
 }
 
-const DEFAULT_TAX_RATE = 15;
-const DEFAULT_COMMISSION_RATE = 10;
-const DEFAULT_LOGISTICS_RATE = 3;
+const DEFAULT_TAX_RATE = 7;
+const DEFAULT_COMMISSION_RATE = 8;
+const DEFAULT_LOGISTICS_RATE = 7;
 const DEFAULT_MIN_MARGIN = 20;
 
 export function MargemClient({ orders }: Props) {
