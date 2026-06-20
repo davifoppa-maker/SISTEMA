@@ -14,17 +14,23 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  ChevronDown,
 } from "lucide-react";
 
-// Menu de OPERAÇÕES, enxuto. Transportadoras, Payload bruto/Webhooks e Clientes
-// ficam dentro de Configurações; os dados/rotas continuam existindo.
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/orders", label: "Pedidos", icon: Package },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
-  { href: "/financial", label: "Financeiro", icon: TrendingUp },
+  {
+    href: "/financial",
+    label: "Financeiro",
+    icon: TrendingUp,
+    children: [
+      { href: "/financial", label: "Contas a receber" },
+    ],
+  },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
   { href: "/settings", label: "Configurações", icon: Settings },
@@ -53,8 +59,47 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {nav.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
+          const parentActive = pathname === item.href || pathname.startsWith(item.href + "/");
+
+          if (item.children) {
+            return (
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    parentActive ? "bg-brand-50 text-brand-800" : "text-slate-600 hover:bg-slate-100",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="flex-1">{item.label}</span>
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", parentActive && "rotate-180")} />
+                </Link>
+                {parentActive && (
+                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-100 pl-3">
+                    {item.children.map((child) => {
+                      const childActive = pathname === child.href;
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={cn(
+                            "block rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                            childActive ? "text-brand-700" : "text-slate-500 hover:text-slate-800",
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}
