@@ -12,8 +12,9 @@ export function SyncPayablesButton() {
     setMsg(null);
     setError(false);
     const now = new Date();
-    const fim = now.toISOString().slice(0, 10);
+    // Do início de 3 meses atrás até o fim do mês seguinte.
     const inicio = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10);
+    const fim = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10);
     try {
       const res = await fetch(`/api/sync/tiny/payables?inicio=${inicio}&fim=${fim}`, { method: "POST" });
       const text = await res.text();
