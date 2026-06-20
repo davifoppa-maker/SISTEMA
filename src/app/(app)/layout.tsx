@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/sidebar";
 import { DeliveryNotifications } from "@/components/delivery-notifications";
+import { AutoSync } from "@/components/auto-sync";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto max-w-7xl px-6 py-6">{children}</div>
       </main>
       <DeliveryNotifications />
+      <AutoSync />
     </div>
   );
 }
