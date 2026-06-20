@@ -1130,15 +1130,26 @@ export async function fetchTinyPayables(params: {
   const json = (await res.json()) as Record<string, any>;
   const items: any[] = json.itens ?? json.data ?? (Array.isArray(json) ? json : []);
 
-  return items.map((item: any): TinyPayable => ({
-    tiny_id: String(item.id ?? ""),
-    supplier:
-      item.fornecedor?.nome ?? item.contato?.nome ?? item.nomeFornecedor ?? item.descricao ?? "—",
-    description: item.historico ?? item.observacoes ?? item.complemento ?? null,
-    value: parseFloat(String(item.valor ?? item.valorOriginal ?? 0)) || 0,
-    issue_date: parseTinyDate(item.dataEmissao ?? item.dataCriacao ?? item.dataLancamento),
-    due_date: parseTinyDate(item.dataVencimento ?? item.vencimento) ?? "",
-    paid_at: parseTinyDate(item.dataPagamento ?? item.dataBaixa),
-    category: item.categoria?.descricao ?? item.categoria ?? null,
-  })).filter((p) => p.due_date);
+  return items.map((item: any): TinyPayable => {
+    const rawDesc: string = item.historico ?? item.descricao ?? item.observacoes ?? item.complemento ?? "";
+    // Extrai fornecedor do padrão "Ref. a NF nº XXXXX, FORNECEDOR (parcela X/X)"
+    const supplierFromDesc = rawDesc.match(/,\s*([^,(]+?)(?:\s*\(|$)/)?.[1]?.trim();
+    const supplier =
+      (item.fornecedor?.nome ??
+      item.contato?.nome ??
+      item.nomeFornecedor ??
+      supplierFromDesc ??
+      rawDesc.slice(0, 60)) ||
+      "—";
+    return {
+      tiny_id: String(item.id ?? ""),
+      supplier,
+      description: rawDesc || null,
+      value: parseFloat(String(item.valor ?? item.valorOriginal ?? 0)) || 0,
+      issue_date: parseTinyDate(item.dataEmissao ?? item.dataCriacao ?? item.dataLancamento),
+      due_date: parseTinyDate(item.dataVencimento ?? item.vencimento) ?? "",
+      paid_at: parseTinyDate(item.dataPagamento ?? item.dataBaixa),
+      category: item.categoria?.descricao ?? item.categoria ?? null,
+    };
+  }).filter((p) => p.due_date);
 }
