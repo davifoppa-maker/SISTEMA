@@ -28,6 +28,7 @@ const nav = [
     label: "Financeiro",
     icon: TrendingUp,
     children: [
+      { href: "/financial/dashboard", label: "Dashboard" },
       { href: "/financial", label: "Contas a receber" },
       { href: "/financial/payable", label: "Contas a pagar" },
     ],
