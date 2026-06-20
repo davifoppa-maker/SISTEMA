@@ -21,6 +21,7 @@ interface OrderItem {
   description: string;
   quantity: number;
   unit_value: number;
+  unit_cost: number | null;
 }
 
 interface OrderOption {
@@ -47,7 +48,6 @@ export function MargemClient({ orders }: Props) {
   const [commissionRate, setCommissionRate] = useState(DEFAULT_COMMISSION_RATE);
   const [logisticsRate, setLogisticsRate] = useState(DEFAULT_LOGISTICS_RATE);
   const [minMargin, setMinMargin] = useState(DEFAULT_MIN_MARGIN);
-  const [productCostPct, setProductCostPct] = useState(40);
 
   const order = useMemo(
     () => orders.find((o) => o.id === selectedOrderId) ?? null,
@@ -60,12 +60,30 @@ export function MargemClient({ orders }: Props) {
     const taxes = (taxRate / 100) * revenue;
     const commission = (commissionRate / 100) * revenue;
     const logistics = (logisticsRate / 100) * revenue;
-    const productCost = (productCostPct / 100) * revenue;
+
+    // Custo real por SKU; itens sem custo cadastrado ficam como null
+    const productCost = order.items.reduce((sum, item) => {
+      if (item.unit_cost === null) return sum;
+      return sum + item.unit_cost * item.quantity;
+    }, 0);
+
+    const itemsWithoutCost = order.items.filter((i) => i.unit_cost === null);
     const totalCosts = taxes + commission + logistics + productCost;
     const profit = revenue - totalCosts;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
-    return { revenue, taxes, commission, logistics, productCost, totalCosts, profit, margin };
-  }, [order, taxRate, commissionRate, logisticsRate, productCostPct]);
+
+    return {
+      revenue,
+      taxes,
+      commission,
+      logistics,
+      productCost,
+      totalCosts,
+      profit,
+      margin,
+      itemsWithoutCost,
+    };
+  }, [order, taxRate, commissionRate, logisticsRate]);
 
   const isValid = calc ? calc.margin >= minMargin : false;
 
@@ -103,7 +121,6 @@ export function MargemClient({ orders }: Props) {
               <RateInput label="Impostos (%)" value={taxRate} onChange={setTaxRate} />
               <RateInput label="Comissão (%)" value={commissionRate} onChange={setCommissionRate} />
               <RateInput label="Logística (%)" value={logisticsRate} onChange={setLogisticsRate} />
-              <RateInput label="Custo de produtos (%)" value={productCostPct} onChange={setProductCostPct} />
               <div className="border-t border-slate-100 pt-4">
                 <RateInput
                   label="Margem mínima exigida (%)"
@@ -143,12 +160,24 @@ export function MargemClient({ orders }: Props) {
                 bg="bg-purple-50"
               />
               <CostRow
-                label={`Custo Produtos (${productCostPct}%)`}
+                label="Custo dos produtos (real)"
                 value={calc.productCost}
                 icon={Package}
                 color="text-slate-600"
                 bg="bg-slate-50"
               />
+
+              {calc.itemsWithoutCost.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                  ⚠️ {calc.itemsWithoutCost.length} item(s) sem custo cadastrado — não incluídos no cálculo:
+                  <ul className="mt-1 space-y-0.5">
+                    {calc.itemsWithoutCost.map((i) => (
+                      <li key={i.id}>• {i.sku} {i.description}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="border-t border-slate-100 pt-3">
                 <div className="flex justify-between text-sm">
                   <span className="font-medium text-slate-600">Total de custos:</span>
@@ -180,9 +209,7 @@ export function MargemClient({ orders }: Props) {
             </div>
 
             <div className="mb-4 flex items-end gap-2">
-              <span
-                className={`text-5xl font-bold ${isValid ? "text-emerald-600" : "text-red-600"}`}
-              >
+              <span className={`text-5xl font-bold ${isValid ? "text-emerald-600" : "text-red-600"}`}>
                 {calc.margin.toFixed(1)}%
               </span>
               <span className="mb-1 text-slate-500">atual</span>
@@ -240,9 +267,7 @@ export function MargemClient({ orders }: Props) {
                 <p className="text-sm font-medium text-red-700">
                   ⚠️ Margem atual: {calc.margin.toFixed(1)}%
                 </p>
-                <p className="mt-1 text-sm text-red-600">
-                  Mínimo exigido: {minMargin}%
-                </p>
+                <p className="mt-1 text-sm text-red-600">Mínimo exigido: {minMargin}%</p>
                 <p className="mt-2 text-xs text-red-500">
                   Ajuste os parâmetros ou negocie o pedido para atingir a margem mínima.
                 </p>
@@ -265,18 +290,31 @@ export function MargemClient({ orders }: Props) {
                   <th className="px-4 py-3 text-left">SKU</th>
                   <th className="px-4 py-3 text-left">Descrição</th>
                   <th className="px-4 py-3 text-right">Qtd</th>
-                  <th className="px-4 py-3 text-right">Valor unit.</th>
-                  <th className="px-4 py-3 text-right">Subtotal</th>
+                  <th className="px-4 py-3 text-right">Venda unit.</th>
+                  <th className="px-4 py-3 text-right">Custo unit.</th>
+                  <th className="px-4 py-3 text-right">Custo total</th>
+                  <th className="px-4 py-3 text-right">Subtotal venda</th>
                 </tr>
               </thead>
               <tbody>
                 {order.items.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.sku}</td>
+                  <tr
+                    key={item.id}
+                    className={`border-b border-slate-50 last:border-0 ${item.unit_cost === null ? "bg-amber-50/50" : ""}`}
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.sku || "—"}</td>
                     <td className="px-4 py-3 text-slate-800">{item.description}</td>
                     <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">
-                      {brl(item.unit_value)}
+                    <td className="px-4 py-3 text-right text-slate-700">{brl(item.unit_value)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {item.unit_cost !== null ? (
+                        <span className="text-slate-700">{brl(item.unit_cost)}</span>
+                      ) : (
+                        <span className="text-amber-500 text-xs">sem custo</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-600">
+                      {item.unit_cost !== null ? brl(item.unit_cost * item.quantity) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-800">
                       {brl(item.unit_value * item.quantity)}
@@ -286,8 +324,11 @@ export function MargemClient({ orders }: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t border-slate-200 bg-slate-50">
-                  <td colSpan={4} className="px-4 py-3 text-right text-sm font-medium text-slate-600">
+                  <td colSpan={5} className="px-4 py-3 text-right text-sm font-medium text-slate-600">
                     Total:
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-slate-700">
+                    {brl(calc?.productCost ?? 0)}
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-slate-800">
                     {brl(order.total_value)}

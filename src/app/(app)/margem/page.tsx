@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { readStore } from "@/lib/queries";
+import { PRODUCT_COSTS } from "@/lib/product-costs";
 import { MargemClient } from "./margem-client";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +20,19 @@ export default async function MargemPage() {
       const customer = store.customers.find((c) => c.id === o.customer_id);
       const items = store.order_items
         .filter((i) => i.order_id === o.id)
-        .map((i) => ({
-          id: i.id,
-          sku: i.sku ?? "—",
-          description: i.description,
-          quantity: i.quantity,
-          unit_value: i.unit_value,
-        }));
+        .map((i) => {
+          const sku = i.sku ?? "";
+          const unitCost = PRODUCT_COSTS[sku] ?? null;
+          return {
+            id: i.id,
+            sku,
+            description: i.description,
+            quantity: i.quantity,
+            unit_value: i.unit_value,
+            unit_cost: unitCost,
+          };
+        });
+
       return {
         id: o.id,
         order_number: o.order_number,
@@ -40,7 +47,7 @@ export default async function MargemPage() {
     <>
       <PageHeader
         title="Gestor de Margem"
-        description="Calcule a margem de contribuição de cada pedido considerando impostos, comissão e logística."
+        description="Margem de contribuição real por pedido, com custo por SKU."
       />
       <MargemClient orders={orders} />
     </>
