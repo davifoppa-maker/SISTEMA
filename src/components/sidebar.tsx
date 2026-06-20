@@ -15,6 +15,7 @@ import {
   LogOut,
   TrendingUp,
   ChevronDown,
+  BarChart2,
 } from "lucide-react";
 
 const nav = [
@@ -36,6 +37,7 @@ const nav = [
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
   { href: "/settings", label: "Configurações", icon: Settings },
+  { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
 ];
 
 export function Sidebar() {
