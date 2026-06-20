@@ -26,20 +26,12 @@ interface ReceivableRow {
   oldestDate: string;
 }
 
-export default async function FinancialPage({
-  searchParams,
-}: {
-  searchParams: { channel?: string };
-}) {
-  const channel = searchParams.channel ?? "";
-
+export default async function FinancialPage() {
   const store = await loadStoreFor(["orders", "customers"]);
 
-  const activeOrders = store.orders.filter((o) => {
-    if (CANCELLED.has((o.tiny_status ?? "").toLowerCase())) return false;
-    if (channel && o.channel !== channel) return false;
-    return true;
-  });
+  const activeOrders = store.orders.filter(
+    (o) => !CANCELLED.has((o.tiny_status ?? "").toLowerCase()),
+  );
 
   // Agrupar por cliente
   const byCustomer = new Map<string, ReceivableRow>();
@@ -68,34 +60,9 @@ export default async function FinancialPage({
   const totalClientes = rows.length;
   const ticketMedio = totalPedidos > 0 ? totalGeral / totalPedidos : 0;
 
-  const channels = [
-    { value: "", label: "Todos" },
-    { value: "b2b_mercos", label: "B2B (Mercos)" },
-    { value: "b2c_nuvemshop", label: "B2C (Nuvemshop)" },
-    { value: "mercado_livre", label: "Mercado Livre" },
-    { value: "indefinido", label: "Indefinido" },
-  ];
-
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader title="Financeiro" description="Visão geral de contas a receber." />
-
-      {/* Filtro canal */}
-      <div className="flex flex-wrap gap-2">
-        {channels.map((c) => (
-          <a
-            key={c.value}
-            href={`/financial?channel=${c.value}`}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-              channel === c.value
-                ? "border-brand-700 bg-brand-700 text-white"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {c.label}
-          </a>
-        ))}
-      </div>
 
       {/* Cards resumo */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
