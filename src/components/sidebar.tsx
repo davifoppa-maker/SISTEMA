@@ -29,6 +29,7 @@ const nav = [
     icon: TrendingUp,
     children: [
       { href: "/financial", label: "Contas a receber" },
+      { href: "/financial/payable", label: "Contas a pagar" },
     ],
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
