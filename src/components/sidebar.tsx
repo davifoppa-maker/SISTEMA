@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   MessageCircle,
   Calculator,
+  TrendingUp,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const nav = [
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
+  { href: "/margem", label: "Gestor de Margem", icon: TrendingUp },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
