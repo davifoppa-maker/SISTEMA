@@ -42,10 +42,10 @@ export function Sidebar() {
     <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-700 text-sm font-bold text-white">
-          Ex
+          N
         </div>
         <div className="leading-tight">
-          <div className="text-sm font-semibold text-slate-800">Pós Venda Exx</div>
+          <div className="text-sm font-semibold text-slate-800">NYER APP</div>
           <div className="text-[10px] text-slate-400">Logística & Pós-venda</div>
         </div>
       </div>
