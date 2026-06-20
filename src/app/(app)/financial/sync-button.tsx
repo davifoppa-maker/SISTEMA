@@ -11,13 +11,8 @@ export function FinancialSyncButton() {
     setLoading(true);
     setMsg(null);
     setError(false);
-    const today = new Date().toISOString().slice(0, 10);
-    const past = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
     try {
-      const res = await fetch(
-        `/api/sync/tiny/recent?inicio=${past}&fim=${today}`,
-        { method: "POST" },
-      );
+      const res = await fetch(`/api/sync/tiny/recent`, { method: "POST" });
       const text = await res.text();
       let json: Record<string, unknown> | null = null;
       try { json = JSON.parse(text); } catch { /* noop */ }

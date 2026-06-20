@@ -9,14 +9,10 @@ export async function POST(req: Request) {
     return fail("Tiny não conectado", 400);
   }
 
-  const sp = new URL(req.url).searchParams;
-  const dataInicial = sp.get("inicio") || undefined;
-  const dataFinal = sp.get("fim") || undefined;
-
   try {
     const collected: Awaited<ReturnType<typeof fetchTinyPayables>> = [];
-    for (let offset = 0; offset < 500; offset += 100) {
-      const page = await fetchTinyPayables({ dataInicial, dataFinal, limit: 100, offset });
+    for (let offset = 0; offset < 2000; offset += 100) {
+      const page = await fetchTinyPayables({ limit: 100, offset });
       collected.push(...page);
       if (page.length < 100) break;
     }
