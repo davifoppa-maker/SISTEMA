@@ -57,7 +57,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <Card>
           <CardHeader><CardTitle>Pedido</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <Row label="Canal"><Badge variant="info">{CHANNEL_LABELS[order.channel]}</Badge></Row>
+            <Row label="Canal"><Badge variant="info">{order.order_origin ?? CHANNEL_LABELS[order.channel]}</Badge></Row>
             <Row label="Status Tiny">{order.tiny_status ?? "—"}</Row>
             <Row label="Status logístico"><LogisticBadge status={order.logistic_status} /></Row>
             <Row label="Valor">{brl(order.total_value)}</Row>

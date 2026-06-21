@@ -7,6 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { listOrderViewsFast } from "@/lib/queries";
 import { brl, dateShort } from "@/lib/utils/format";
 import { CHANNEL_LABELS, type Channel } from "@/lib/types";
+
+// Monta lista de canais únicos a partir dos pedidos reais (ordem_origem do Olist).
+function buildChannelOptions(views: { order: { channel: Channel; order_origin: string | null } }[]) {
+  const seen = new Map<string, string>(); // channel_code → label
+  for (const v of views) {
+    if (!seen.has(v.order.channel)) {
+      seen.set(v.order.channel, v.order.order_origin ?? CHANNEL_LABELS[v.order.channel] ?? v.order.channel);
+    }
+  }
+  return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+}
 import { RefreshTinyButton } from "@/components/refresh-tiny-button";
 
 export const dynamic = "force-dynamic";
@@ -53,12 +64,12 @@ export default async function OrdersPage({
   searchParams: { q?: string; channel?: string; status?: string };
 }) {
   const q = (searchParams.q ?? "").toLowerCase();
-  // Foco é B2B (Mercos): sem parâmetro de canal, abre já filtrado em B2B.
-  // Para ver todos, escolha "Todos" no filtro de canal (envia channel="").
-  const channel = searchParams.channel === undefined ? "b2b_mercos" : searchParams.channel;
+  const channel = searchParams.channel ?? "";
   const status = searchParams.status ?? "";
 
-  let views = await listOrderViewsFast();
+  const allViews = await listOrderViewsFast();
+  const channelOptions = buildChannelOptions(allViews);
+  let views = allViews;
   if (q) {
     views = views.filter(
       (v) =>
@@ -100,8 +111,8 @@ export default async function OrdersPage({
               <label className="mb-1 block text-xs font-medium text-slate-600">Canal</label>
               <select name="channel" defaultValue={channel} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
                 <option value="">Todos</option>
-                {(Object.keys(CHANNEL_LABELS) as Channel[]).map((c) => (
-                  <option key={c} value={c}>{CHANNEL_LABELS[c]}</option>
+                {channelOptions.map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
                 ))}
               </select>
             </div>
@@ -151,7 +162,7 @@ export default async function OrdersPage({
                     </Link>
                   </Td>
                   <Td className="text-slate-500">{v.order.external_order_number ?? "—"}</Td>
-                  <Td><Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>{CHANNEL_LABELS[v.order.channel]}</Badge></Td>
+                  <Td><Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>{v.order.order_origin ?? CHANNEL_LABELS[v.order.channel]}</Badge></Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
                   <Td className="text-slate-500">{v.order.city ? `${v.order.city}/${v.order.state}` : "—"}</Td>
                   <Td className="text-right">{brl(v.order.total_value)}</Td>
