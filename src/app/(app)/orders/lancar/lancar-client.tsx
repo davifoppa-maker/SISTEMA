@@ -47,6 +47,11 @@ interface Seller {
   email: string | null;
 }
 
+interface Carrier {
+  id: string;
+  name: string;
+}
+
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -70,14 +75,29 @@ export function LancarPedidoClient() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/orders/list-sellers")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.data?.sellers) setSellers(json.data.sellers);
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/orders/list-sellers")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.sellers) setSellers(json.data.sellers);
+        })
+        .catch(() => {}),
+      fetch("/api/orders/list-carriers")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.carriers) {
+            setCarriers(json.data.carriers);
+            // Set Braspress como padrão
+            const braspress = json.data.carriers.find((c: Carrier) => c.name.toLowerCase().includes("braspress"));
+            if (braspress) setSelectedCarrierId(braspress.id);
+          }
+        })
+        .catch(() => {}),
+    ]);
   }, []);
 
   async function handleParse() {
@@ -162,6 +182,7 @@ export function LancarPedidoClient() {
         itens: editedItems,
         ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}),
         ...(selectedSellerId ? { vendedorId: selectedSellerId } : {}),
+        ...(selectedCarrierId ? { transportadoraId: selectedCarrierId } : {}),
       };
       const res = await fetch("/api/orders/create-tiny", {
         method: "POST",
@@ -277,24 +298,43 @@ export function LancarPedidoClient() {
             </div>
           )}
 
-          {/* Vendedor */}
-          {sellers.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
-              <select
-                value={selectedSellerId || ""}
-                onChange={(e) => setSelectedSellerId(e.target.value || null)}
-                className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
-              >
-                <option value="">Selecione um vendedor...</option>
-                {sellers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Vendedor e Transportadora */}
+          <div className="grid grid-cols-2 gap-3">
+            {sellers.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
+                <select
+                  value={selectedSellerId || ""}
+                  onChange={(e) => setSelectedSellerId(e.target.value || null)}
+                  className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+                >
+                  <option value="">Selecione...</option>
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {carriers.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <label className="block text-sm font-semibold text-slate-800 mb-2">Transportadora</label>
+                <select
+                  value={selectedCarrierId || ""}
+                  onChange={(e) => setSelectedCarrierId(e.target.value || null)}
+                  className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+                >
+                  <option value="">Selecione...</option>
+                  {carriers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
 
           {/* Cliente existente */}
           {foundCustomers.length > 0 && (
