@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, Send, RotateCcw, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { CATALOG } from "@/lib/product-costs";
 
 interface ParsedEndereco {
   logradouro: string | null;
@@ -121,6 +122,19 @@ export function LancarPedidoClient() {
   }
 
   const total = editedItems.reduce((s, it) => s + it.quantidade * it.valor_unitario, 0);
+
+  // Calcular margem líquida
+  const custoProdutos = editedItems.reduce((s, it) => {
+    const produto = it.sku ? CATALOG.find((p) => p.sku === it.sku) : null;
+    const custo = produto?.cost ?? 0;
+    return s + custo * it.quantidade;
+  }, 0);
+
+  // Custos operacionais padrão (em %)
+  const taxRate = (7 + 8 + 7) / 100; // impostos + comissao + logistica
+  const custosOp = total * taxRate;
+  const lucro = total - custoProdutos - custosOp;
+  const margem = total > 0 ? (lucro / total) * 100 : 0;
 
   async function handleCreate() {
     if (!parsed) return;
@@ -348,6 +362,32 @@ export function LancarPedidoClient() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+
+          {/* Margem líquida */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide">Custo produtos</p>
+                <p className="text-lg font-semibold text-slate-800">{fmtBRL(custoProdutos)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide">Custos operacionais</p>
+                <p className="text-lg font-semibold text-slate-800">{fmtBRL(custosOp)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide">Lucro</p>
+                <p className={`text-lg font-bold ${lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {fmtBRL(lucro)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide">Margem líquida</p>
+                <p className={`text-lg font-bold ${margem >= 20 ? "text-emerald-600" : margem >= 10 ? "text-amber-600" : "text-red-600"}`}>
+                  {margem.toFixed(1)}%
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Confirm */}
