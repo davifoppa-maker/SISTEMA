@@ -8,12 +8,35 @@ export async function POST(req: Request) {
   const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
-  // Montar itens — sempre usar codigo (SKU) dentro de produto
-  const itensFormatados = itens.map(
-    (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
-      produto: i.sku ? { codigo: i.sku } : { descricao: i.nome },
-      quantidade: i.quantidade,
-      valorUnitario: i.valor_unitario,
+  // Buscar IDs dos produtos no Tiny
+  const itensFormatados = await Promise.all(
+    itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
+      let prodId: number | null = null;
+
+      if (i.sku) {
+        try {
+          const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(i.sku)}`);
+          if (res.ok) {
+            const json = await res.json();
+            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string }>;
+            if (prods.length > 0) {
+              prodId = Number(prods[0].id);
+            }
+          }
+        } catch {
+          // continua sem ID
+        }
+      }
+
+      if (prodId) {
+        return { produto: { id: prodId }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+      }
+
+      if (!i.sku) {
+        throw new Error(`Item "${i.nome}" sem SKU — não consegue criar no Tiny`);
+      }
+
+      throw new Error(`Produto "${i.nome}" (${i.sku}) não encontrado no Tiny`);
     })
   );
 
