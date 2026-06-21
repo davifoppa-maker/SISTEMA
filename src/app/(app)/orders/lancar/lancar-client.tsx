@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, Send, RotateCcw, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { CATALOG } from "@/lib/product-costs";
 
@@ -41,6 +41,12 @@ interface SearchedCustomer {
   telefone: string | null;
 }
 
+interface Seller {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -62,6 +68,17 @@ export function LancarPedidoClient() {
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [foundCustomers, setFoundCustomers] = useState<SearchedCustomer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/orders/list-sellers")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data?.sellers) setSellers(json.data.sellers);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleParse() {
     if (!texto.trim()) return;
@@ -140,7 +157,12 @@ export function LancarPedidoClient() {
     if (!parsed) return;
     setCreating(true);
     try {
-      const payload = { ...parsed, itens: editedItems, ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}) };
+      const payload = {
+        ...parsed,
+        itens: editedItems,
+        ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}),
+        ...(selectedSellerId ? { vendedorId: selectedSellerId } : {}),
+      };
       const res = await fetch("/api/orders/create-tiny", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -252,6 +274,25 @@ export function LancarPedidoClient() {
                   <li key={i} className="text-sm text-amber-700">{a}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Vendedor */}
+          {sellers.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
+              <select
+                value={selectedSellerId || ""}
+                onChange={(e) => setSelectedSellerId(e.target.value || null)}
+                className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+              >
+                <option value="">Selecione um vendedor...</option>
+                {sellers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
