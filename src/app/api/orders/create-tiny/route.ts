@@ -8,6 +8,13 @@ export async function POST(req: Request) {
   const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
+  // Validar que todos os itens têm SKU
+  const itensSemSku = itens.filter((i: any) => !i.sku);
+  if (itensSemSku.length > 0) {
+    const nomes = itensSemSku.map((i: any) => `"${i.nome}"`).join(", ");
+    return fail(`Produtos sem SKU não podem ser lançados: ${nomes}. Verifique o catálogo ou ajuste o pedido.`, 400);
+  }
+
   // Buscar IDs dos produtos no Tiny
   const itensFormatados = await Promise.all(
     itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
