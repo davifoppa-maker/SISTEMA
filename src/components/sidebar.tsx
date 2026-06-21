@@ -23,7 +23,15 @@ import {
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orders", label: "Pedidos", icon: Package },
+  {
+    href: "/orders",
+    label: "Pedidos",
+    icon: Package,
+    children: [
+      { href: "/orders", label: "Todos os pedidos" },
+      { href: "/orders/margem", label: "Margem de pedidos" },
+    ],
+  },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
@@ -40,8 +48,8 @@ const nav = [
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
-  { href: "/settings", label: "Configurações", icon: Settings },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
+  { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
