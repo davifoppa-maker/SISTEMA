@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PlusCircle, Pencil, Check, X } from "lucide-react";
+import { PlusCircle, Pencil, RefreshCw } from "lucide-react";
 
 interface CashAccount {
   id: string;
@@ -222,6 +222,28 @@ export function CaixaClient({ accounts }: { accounts: CashAccount[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<CashAccount | null>(null);
   const [adding, setAdding] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/financial/caixa/sync", { method: "POST" });
+      const body = await res.json();
+      if (body.ok) {
+        setSyncMsg(`✓ ${body.updated} conta(s) atualizadas`);
+        router.refresh();
+      } else {
+        setSyncMsg(`Erro: ${body.error}`);
+      }
+    } catch {
+      setSyncMsg("Erro de rede");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(null), 4000);
+    }
+  }
 
   const companies = Array.from(new Set(accounts.map((a) => a.company)));
   const totalCurrent = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
@@ -248,18 +270,29 @@ export function CaixaClient({ accounts }: { accounts: CashAccount[] }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Caixa</h1>
           <p className="text-sm text-slate-500">Posição de caixa por conta bancária</p>
         </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Nova conta
-        </button>
+        <div className="flex items-center gap-2">
+          {syncMsg && <span className="text-xs text-slate-500">{syncMsg}</span>}
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Sincronizando..." : "Sincronizar planilha"}
+          </button>
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Nova conta
+          </button>
+        </div>
       </div>
 
       {/* Totais */}
