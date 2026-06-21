@@ -1,30 +1,27 @@
 import { tinyFetch } from "@/lib/services/tiny-api";
 import { ok, fail } from "@/lib/api";
 
-async function findProductId(sku: string): Promise<number | null> {
+async function findProductId(sku: string): Promise<{ id?: number; error?: string }> {
   try {
-    const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}&limit=1`);
-    const text = await res.text();
+    const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}`);
 
     if (!res.ok) {
-      console.warn(`[create-tiny] Produto ${sku} não encontrado no Tiny (${res.status})`);
-      return null;
+      return { error: `Status ${res.status}` };
     }
 
-    const json = JSON.parse(text);
-    const produtos = (json.data ?? json.itens ?? []) as Array<{ id: number | string }>;
+    const json = await res.json();
+    const produtos = (json.data ?? json.itens ?? []) as Array<any>;
 
-    if (produtos.length > 0) {
+    if (produtos.length > 0 && produtos[0].id) {
       const id = Number(produtos[0].id);
-      console.log(`[create-tiny] Encontrado ${sku} → id=${id}`);
-      return id;
+      console.log(`[create-tiny] ${sku}: id=${id}`);
+      return { id };
     }
 
-    console.warn(`[create-tiny] Produto ${sku} retornou lista vazia`);
+    return { error: "Produto não encontrado" };
   } catch (err) {
-    console.error(`[create-tiny] Erro buscando ${sku}:`, err);
+    return { error: err instanceof Error ? err.message : "Erro desconhecido" };
   }
-  return null;
 }
 
 export async function POST(req: Request) {
@@ -38,19 +35,20 @@ export async function POST(req: Request) {
   const itensComId = await Promise.all(
     itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }, idx: number) => {
       if (!i.sku) {
-        console.log(`[create-tiny] Item ${idx}: sem SKU, usando descricao`);
+        console.log(`[create-tiny] Item ${idx}: sem SKU → descricao="${i.nome}"`);
         return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
-      const prodId = await findProductId(i.sku);
-      if (prodId) {
-        console.log(`[create-tiny] Item ${idx} (${i.sku}): usando ID ${prodId}`);
-        return { produto: { id: prodId }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+      const result = await findProductId(i.sku);
+
+      if (result.id) {
+        console.log(`[create-tiny] Item ${idx} (${i.sku}): id=${result.id}`);
+        return { produto: { id: result.id }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
-      // Se não encontrou ID, use descrição em vez de código
-      console.warn(`[create-tiny] Item ${idx} (${i.sku}): produto não encontrado, usando descricao`);
-      return { produto: { descricao: `${i.nome} (${i.sku})` }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+      // Sempre fallback pra descrição, nunca deixar nulo
+      console.warn(`[create-tiny] Item ${idx} (${i.sku}): ${result.error} → descricao="${i.nome}"`);
+      return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
     })
   );
 
