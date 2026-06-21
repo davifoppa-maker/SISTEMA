@@ -352,7 +352,10 @@ export function LancarPedidoClient() {
 
           {/* Confirm */}
           <div className="flex items-center justify-between pt-2">
-            <p className="text-xs text-slate-400">Revise os dados acima antes de confirmar. O pedido será criado diretamente no Tiny.</p>
+            <div>
+              <p className="text-xs text-slate-400">Revise os dados acima antes de confirmar. O pedido será criado diretamente no Tiny.</p>
+              {creating && <p className="text-xs text-blue-600 mt-1">⏳ Enviando... (pode levar alguns segundos)</p>}
+            </div>
             <button
               onClick={handleCreate}
               disabled={creating || editedItems.length === 0}

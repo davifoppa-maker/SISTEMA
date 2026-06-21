@@ -45,32 +45,43 @@ export async function POST(req: Request) {
     };
   }
 
-  try {
-    console.log("[lançador] Payload enviado:", JSON.stringify(payload, null, 2));
+  // Retry com backoff exponencial para rate limit
+  async function createWithRetry(maxAttempts = 3) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await tinyFetch("/pedidos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-    const res = await tinyFetch("/pedidos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+        const text = await res.text();
+        let json: unknown;
+        try { json = JSON.parse(text); } catch { json = { raw: text }; }
 
-    const text = await res.text();
-    let json: unknown;
-    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+        // Se for 429 (rate limit), retry com backoff
+        if (res.status === 429 && attempt < maxAttempts) {
+          const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+          console.log(`[create-tiny] Rate limited, tentando novamente em ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
 
-    console.log("[lançador] Tiny response:", res.status, json);
+        if (!res.ok) {
+          const errorMsg = typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500);
+          throw new Error(`Tiny ${res.status}: ${errorMsg}`);
+        }
 
-    if (!res.ok) {
-      const errorMsg = typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500);
-      console.error("[create-tiny] Erro do Tiny:", errorMsg);
-      console.error("[create-tiny] Payload enviado:", JSON.stringify(payload, null, 2));
-      return fail(
-        `Tiny ${res.status}: ${errorMsg}\n\nPayload: ${JSON.stringify(payload).slice(0, 200)}`,
-        res.status
-      );
+        return json;
+      } catch (err) {
+        if (attempt === maxAttempts) throw err;
+      }
     }
+  }
 
-    return ok({ message: "Pedido criado no Tiny", tiny: json });
+  try {
+    const result = await createWithRetry();
+    return ok({ message: "Pedido criado no Tiny", tiny: result });
   } catch (err) {
     return fail("Erro ao criar pedido no Tiny", 500, err instanceof Error ? err.message : err);
   }
