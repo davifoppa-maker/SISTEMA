@@ -61,8 +61,11 @@ export async function POST(req: Request) {
     console.log("[lançador] Tiny response:", res.status, json);
 
     if (!res.ok) {
+      const errorMsg = typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500);
+      console.error("[create-tiny] Erro do Tiny:", errorMsg);
+      console.error("[create-tiny] Payload enviado:", JSON.stringify(payload, null, 2));
       return fail(
-        `Tiny ${res.status}: ${typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500)}`,
+        `Tiny ${res.status}: ${errorMsg}\n\nPayload: ${JSON.stringify(payload).slice(0, 200)}`,
         res.status
       );
     }
