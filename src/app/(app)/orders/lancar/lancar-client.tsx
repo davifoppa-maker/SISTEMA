@@ -32,6 +32,14 @@ interface ParsedOrder {
   avisos: string[];
 }
 
+interface SearchedCustomer {
+  id: string;
+  nome: string;
+  cpf: string | null;
+  email: string | null;
+  telefone: string | null;
+}
+
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -50,6 +58,9 @@ export function LancarPedidoClient() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [editedItems, setEditedItems] = useState<ParsedItem[]>([]);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [foundCustomers, setFoundCustomers] = useState<SearchedCustomer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   async function handleParse() {
     if (!texto.trim()) return;
@@ -57,6 +68,8 @@ export function LancarPedidoClient() {
     setError(null);
     setParsed(null);
     setCreated(false);
+    setFoundCustomers([]);
+    setSelectedCustomerId(null);
     try {
       const res = await fetch("/api/orders/ai-parse", {
         method: "POST",
@@ -65,12 +78,35 @@ export function LancarPedidoClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(`${json.error}${json.extra ? ` — ${json.extra}` : ""}`);
-      setParsed(json.data ?? json);
-      setEditedItems((json.data ?? json).itens ?? []);
+      const parsed = json.data ?? json;
+      setParsed(parsed);
+      setEditedItems(parsed.itens ?? []);
+
+      // Buscar cliente existente no Tiny
+      await searchCustomer(parsed.cliente.nome);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function searchCustomer(nome: string) {
+    setSearchingCustomer(true);
+    try {
+      const res = await fetch("/api/orders/search-customer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.clientes?.length > 0) {
+        setFoundCustomers(json.data.clientes);
+      }
+    } catch {
+      // Ignora erro na busca, continua sem cliente existente
+    } finally {
+      setSearchingCustomer(false);
     }
   }
 
@@ -90,7 +126,7 @@ export function LancarPedidoClient() {
     if (!parsed) return;
     setCreating(true);
     try {
-      const payload = { ...parsed, itens: editedItems };
+      const payload = { ...parsed, itens: editedItems, ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}) };
       const res = await fetch("/api/orders/create-tiny", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,6 +226,39 @@ export function LancarPedidoClient() {
                   <li key={i} className="text-sm text-amber-700">{a}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Cliente existente */}
+          {foundCustomers.length > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-blue-900">Cliente já cadastrado no Tiny</p>
+              <div className="space-y-2">
+                {foundCustomers.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id)}
+                    className={`block w-full rounded-lg border-2 p-3 text-left transition-colors ${
+                      selectedCustomerId === c.id
+                        ? "border-blue-600 bg-blue-100"
+                        : "border-blue-200 bg-white hover:border-blue-400"
+                    }`}
+                  >
+                    <div className="font-semibold text-slate-900">{c.nome}</div>
+                    {c.cpf && <div className="text-xs text-slate-500">CPF: {c.cpf}</div>}
+                    {c.email && <div className="text-xs text-slate-500">Email: {c.email}</div>}
+                    {c.telefone && <div className="text-xs text-slate-500">Telefone: {c.telefone}</div>}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setSelectedCustomerId(null)}
+                  className={`block w-full rounded-lg border-2 p-3 text-left transition-colors ${
+                    selectedCustomerId === null ? "border-slate-400 bg-slate-100" : "border-slate-200 bg-white hover:border-slate-400"
+                  }`}
+                >
+                  <div className="text-sm font-semibold text-slate-700">Criar novo cliente</div>
+                </button>
+              </div>
             </div>
           )}
 

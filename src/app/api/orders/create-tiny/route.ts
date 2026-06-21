@@ -5,13 +5,26 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return fail("Corpo inválido", 400);
 
-  const { cliente, itens, observacao } = body;
+  const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
   // Tiny V3 POST /pedidos payload
   const payload: Record<string, unknown> = {
     situacao: { id: 1 }, // Em aberto
-    cliente: {
+    itens: itens.map((i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
+      descricao: i.nome,
+      ...(i.sku ? { codigo: i.sku } : {}),
+      quantidade: i.quantidade,
+      valorUnitario: i.valor_unitario,
+    })),
+    ...(observacao ? { observacoes: observacao } : {}),
+  };
+
+  // Se encontrou cliente existente, usar ID; caso contrário, criar novo
+  if (clienteId) {
+    payload.cliente = { id: clienteId };
+  } else {
+    payload.cliente = {
       nome: cliente.nome,
       tipoPessoa: "F",
       ...(cliente.cpf ? { cpf: cliente.cpf } : {}),
@@ -30,15 +43,8 @@ export async function POST(req: Request) {
             },
           ]
         : [],
-    },
-    itens: itens.map((i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
-      descricao: i.nome,
-      ...(i.sku ? { codigo: i.sku } : {}),
-      quantidade: i.quantidade,
-      valorUnitario: i.valor_unitario,
-    })),
-    ...(observacao ? { observacoes: observacao } : {}),
-  };
+    };
+  }
 
   const res = await tinyFetch("/pedidos", {
     method: "POST",
