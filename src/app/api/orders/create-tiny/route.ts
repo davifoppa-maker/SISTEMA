@@ -47,9 +47,9 @@ export async function POST(req: Request) {
     ...(observacao ? { observacoes: observacao } : {}),
   };
 
-  // Se encontrou cliente existente, usar ID; caso contrário, criar novo
+  // Se encontrou cliente existente, usar idContato; caso contrário, criar novo
   if (clienteId) {
-    payload.cliente = { id: clienteId };
+    payload.idContato = clienteId;
   } else {
     payload.cliente = {
       nome: cliente.nome,
