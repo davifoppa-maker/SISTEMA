@@ -35,7 +35,27 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const rawPayload = dataDriver === "supabase" ? await fetchOrderRawPayload(order.id) : order.raw_payload;
 
   const customer = store.customers.find((c) => c.id === order.customer_id);
-  const items = store.order_items.filter((i) => i.order_id === order.id);
+  // Tenta itens do store primeiro; se vazio, extrai do rawPayload
+  let items = store.order_items.filter((i) => i.order_id === order.id);
+  const payloadItems = (rawPayload?.itens ?? []) as Array<{
+    id?: string | number;
+    codigo?: string;
+    descricao?: string;
+    quantidade?: number;
+    valor_unitario?: number;
+    valor_desconto?: number;
+    valor?: number;
+  }>;
+  if (items.length === 0 && payloadItems.length > 0) {
+    items = payloadItems.map((pi, idx) => ({
+      id: `payload-${idx}`,
+      order_id: order.id,
+      sku: pi.codigo || "—",
+      description: pi.descricao || "—",
+      quantity: pi.quantidade || 1,
+      unit_value: pi.valor_unitario || 0,
+    }));
+  }
   const invoice = store.invoices.find((i) => i.order_id === order.id);
   const shipment = store.shipments.find((s) => s.order_id === order.id);
   const carrier = shipment?.carrier_id ? store.carriers.find((c) => c.id === shipment.carrier_id) : null;
@@ -114,16 +134,27 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </Card>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4">
         <Card>
           <CardHeader><CardTitle>Itens</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
-              <Thead><tr><Th>SKU</Th><Th>Descrição</Th><Th className="text-right">Qtd</Th><Th className="text-right">Unit.</Th></tr></Thead>
+              <Thead><tr><Th>SKU</Th><Th>Descrição</Th><Th className="text-right">Qtd</Th><Th className="text-right">Valor Unit.</Th><Th className="text-right">Desconto</Th><Th className="text-right">Total</Th></tr></Thead>
               <tbody>
-                {items.map((i) => (
-                  <Tr key={i.id}><Td>{i.sku}</Td><Td>{i.description}</Td><Td className="text-right">{i.quantity}</Td><Td className="text-right">{brl(i.unit_value)}</Td></Tr>
-                ))}
+                {items.map((i) => {
+                  const discount = (payloadItems.find((pi) => pi.codigo === i.sku)?.valor_desconto) || 0;
+                  const total = (i.quantity * i.unit_value) - (discount || 0);
+                  return (
+                    <Tr key={i.id}>
+                      <Td>{i.sku}</Td>
+                      <Td>{i.description}</Td>
+                      <Td className="text-right">{i.quantity}</Td>
+                      <Td className="text-right">{brl(i.unit_value)}</Td>
+                      <Td className="text-right text-red-600">{discount ? brl(discount) : "—"}</Td>
+                      <Td className="text-right font-medium">{brl(total)}</Td>
+                    </Tr>
+                  );
+                })}
               </tbody>
             </Table>
           </CardContent>
@@ -146,6 +177,61 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 {volumes.length === 0 ? <Tr><Td colSpan={4} className="text-slate-400">Sem volumes (NF não emitida).</Td></Tr> : null}
               </tbody>
             </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Forma de pagamento</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {(() => {
+              const formas = (rawPayload?.formasPagamento ?? []) as Array<{ tipo?: string; parcelas?: number; vencimento?: string }>;
+              if (formas.length === 0) return <span className="text-slate-400">Informação não disponível.</span>;
+              return formas.map((f, idx) => (
+                <div key={idx}>
+                  <div className="font-medium text-slate-700">{f.tipo ?? "—"}</div>
+                  {f.parcelas ? <div className="text-xs text-slate-500">{f.parcelas}x</div> : null}
+                  {f.vencimento ? <div className="text-xs text-slate-500">Vencimento: {f.vencimento}</div> : null}
+                </div>
+              ));
+            })()}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Resumo financeiro</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {(() => {
+              const subtotal = items.reduce((sum, i) => sum + (i.quantity * i.unit_value), 0);
+              const totalDiscount = payloadItems.reduce((sum, pi) => sum + ((pi.valor_desconto ?? 0) || 0), 0);
+              const freight = order.freight_value ?? 0;
+              const total = order.total_value ?? 0;
+              return (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Subtotal</span>
+                    <span className="font-medium">{brl(subtotal)}</span>
+                  </div>
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span>Desconto</span>
+                      <span className="font-medium">-{brl(totalDiscount)}</span>
+                    </div>
+                  )}
+                  {freight > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Frete</span>
+                      <span className="font-medium">{brl(freight)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-200 pt-2 flex justify-between font-bold">
+                    <span>Total</span>
+                    <span className={total < 0 ? "text-red-600" : "text-slate-800"}>{brl(total)}</span>
+                  </div>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
