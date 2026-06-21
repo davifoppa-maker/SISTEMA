@@ -450,6 +450,39 @@ export async function enrichOrderDates(store: DataStore, cap = 40): Promise<numb
   return enriched;
 }
 
+/**
+ * Busca itens via fetchOrderById para todos os pedidos que ainda não têm itens.
+ * Chamado após o sync recente para preencher automaticamente.
+ */
+export async function enrichOrderItems(store: DataStore, cap = 50): Promise<number> {
+  const ordersWithoutItems = store.orders.filter(
+    (o) => o.tiny_id && store.order_items.filter((i) => i.order_id === o.id).length === 0
+  ).slice(0, cap);
+
+  let enriched = 0;
+  for (const order of ordersWithoutItems) {
+    try {
+      const payload = await fetchOrderById(order.tiny_id!);
+      const itensTiny = payload?.itens ?? [];
+      if (itensTiny.length > 0) {
+        itensTiny.forEach((it) => {
+          store.order_items.push({
+            id: uuid(),
+            order_id: order.id,
+            sku: str(it.codigo),
+            description: str(it.descricao) ?? "Item",
+            quantity: num(it.quantidade),
+            unit_value: num(it.valor_unitario),
+          });
+        });
+        order.updated_at = nowIso();
+        enriched++;
+      }
+    } catch { /* ignora */ }
+  }
+  return enriched;
+}
+
 function tinyDateToIso(v: unknown): string | null {
   const s = String(v ?? "").trim();
   if (!s) return null;
