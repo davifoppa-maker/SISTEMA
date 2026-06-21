@@ -55,7 +55,8 @@ Regras:
 - Sempre tente mapear o produto para um SKU do catálogo. Se o produto for ambíguo, inclua nos avisos.
 - Para valor_unitario, use o preço de tabela do catálogo se não especificado.
 - Se o endereço estiver incompleto, coloque o que foi fornecido e avise.
-- Responda APENAS com o JSON, sem texto adicional.`;
+- Escape corretamente todas as aspas dentro de strings.
+- Responda APENAS com o JSON válido, sem texto adicional, sem quebras de linha extras, sem caracteres de escape indevidos.`;
 
   try {
     const message = await client.messages.create({
@@ -68,7 +69,15 @@ Regras:
     const textBlock = message.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") return fail("IA não retornou texto", 500);
 
-    const raw = textBlock.text.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "");
+    let raw = textBlock.text.trim();
+    // Remove markdown code blocks
+    raw = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "");
+    raw = raw.replace(/^```\s*/i, "").replace(/\s*```$/, "");
+
+    // Try to extract JSON if there's surrounding text
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) raw = jsonMatch[0];
+
     const parsed = JSON.parse(raw);
     return ok(parsed);
   } catch (err) {
