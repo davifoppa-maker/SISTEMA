@@ -8,10 +8,10 @@ export async function POST(req: Request) {
   const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
-  // Montar itens — sempre usar codigo (SKU)
+  // Montar itens — sempre usar codigo (SKU) dentro de produto
   const itensFormatados = itens.map(
     (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
-      ...(i.sku ? { codigo: i.sku } : { descricao: i.nome }),
+      produto: i.sku ? { codigo: i.sku } : { descricao: i.nome },
       quantidade: i.quantidade,
       valorUnitario: i.valor_unitario,
     })
