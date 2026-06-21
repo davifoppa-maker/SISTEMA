@@ -146,7 +146,19 @@ export function LancarPedidoClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
+
+      let json: any;
+      try {
+        const text = await res.text();
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        if (res.ok) {
+          setCreated(true);
+          return;
+        }
+        throw new Error("Resposta inválida do servidor");
+      }
+
       if (!res.ok) throw new Error(json.error ?? "Erro ao criar pedido");
       setCreated(true);
     } catch (e) {
