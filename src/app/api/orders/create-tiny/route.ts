@@ -47,37 +47,41 @@ export async function POST(req: Request) {
     })
   );
 
-  // Tiny V3 POST /pedidos payload
+  // Tiny V3 POST /pedidos payload - formato simples que funciona
   const payload: Record<string, unknown> = {
-    situacao: 1, // Em aberto
+    situacao: 1,
     itens: itensFormatados,
-    ...(observacao ? { observacoes: observacao } : {}),
   };
 
-  // Se encontrou cliente existente, usar idContato; caso contrário, criar novo
+  // Se encontrou cliente existente, usar idContato
   if (clienteId) {
     payload.idContato = clienteId;
   } else {
+    // Criar novo contato inline
     payload.cliente = {
       nome: cliente.nome,
       tipoPessoa: "F",
-      ...(cliente.cpf ? { cpf: cliente.cpf } : {}),
+      ...(cliente.cpf ? { cpfCnpj: cliente.cpf } : {}),
       ...(cliente.email ? { email: cliente.email } : {}),
       ...(cliente.telefone ? { telefone: cliente.telefone } : {}),
-      enderecos: cliente.endereco?.logradouro
-        ? [
-            {
-              tipo: "entrega",
-              endereco: cliente.endereco.logradouro ?? "",
-              complemento: cliente.endereco.complemento ?? "",
-              bairro: cliente.endereco.bairro ?? "",
-              municipio: cliente.endereco.cidade ?? "",
-              uf: cliente.endereco.uf ?? "",
-              cep: cliente.endereco.cep ?? "",
-            },
-          ]
-        : [],
     };
+
+    // Endereço como campo separado (não como array)
+    if (cliente.endereco?.logradouro) {
+      (payload as any).endereco = {
+        endereco: cliente.endereco.logradouro ?? "",
+        numero: "0",
+        complemento: cliente.endereco.complemento ?? "",
+        bairro: cliente.endereco.bairro ?? "",
+        municipio: cliente.endereco.cidade ?? "",
+        cep: cliente.endereco.cep ?? "",
+        uf: cliente.endereco.uf ?? "",
+      };
+    }
+  }
+
+  if (observacao) {
+    payload.observacoes = observacao;
   }
 
   // Retry com backoff exponencial para rate limit
