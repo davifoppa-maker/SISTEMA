@@ -88,11 +88,12 @@ export function MargemClient() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [params, setParams] = useState<Params>({ impostos: 7, comissao: 8, logistica: 7, margemMin: 20 });
   const [search, setSearch] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const filteredCatalog = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return CATALOG;
-    return CATALOG.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+    const q = search.toLowerCase().trim();
+    if (!q) return [];
+    return CATALOG.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 10);
   }, [search]);
 
   function getQty(sku: string) {
@@ -170,63 +171,51 @@ export function MargemClient() {
         <p className="text-sm text-slate-500">Simule pedidos e acompanhe descontos por volume e mix</p>
       </div>
 
-      <div className="flex flex-1 gap-4 overflow-hidden p-4">
+      <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
         {/* Left panel */}
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden" style={{ flex: "2 1 0" }}>
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Buscar por nome ou SKU..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
-          />
-
-          {/* Catalog grid */}
-          <div className="overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredCatalog.map((product) => {
-                const qty = getQty(product.sku);
-                const netPrice = product.tabela * (1 - discount);
-                return (
-                  <div key={product.sku} className="flex flex-col gap-1.5 p-3">
-                    <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-1 flex-col gap-4 lg:overflow-hidden" style={{ flex: "2 1 0" }}>
+          {/* Search with autocomplete */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Buscar produto por nome ou SKU..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
+            />
+            {showDropdown && filteredCatalog.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                {filteredCatalog.map((product) => {
+                  const qty = getQty(product.sku);
+                  const netPrice = product.tabela * (1 - discount);
+                  return (
+                    <div
+                      key={product.sku}
+                      className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50"
+                      onMouseDown={() => {
+                        setQty(product.sku, qty + 1);
+                        setSearch("");
+                        setShowDropdown(false);
+                      }}
+                    >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
-                            {product.sku}
-                          </span>
+                          <span className="font-mono text-[10px] text-slate-400">{product.sku}</span>
                           <TypeBadge type={product.type} />
                         </div>
-                        <p className="mt-1 text-xs font-medium leading-tight text-slate-800">{product.name}</p>
+                        <p className="text-xs font-medium text-slate-800">{product.name}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[10px] text-slate-400 line-through">{fmtBRL(product.tabela)}</div>
+                        <div className="text-sm font-semibold text-emerald-600">{fmtBRL(netPrice)}</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs text-slate-400 line-through">{fmtBRL(product.tabela)}</span>
-                        <span className="ml-1.5 text-sm font-semibold text-emerald-600">{fmtBRL(netPrice)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setQty(product.sku, qty - 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                          disabled={qty === 0}
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center text-sm font-medium text-slate-800">{qty}</span>
-                        <button
-                          onClick={() => setQty(product.sku, qty + 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-700 bg-brand-700 text-white hover:bg-brand-800"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Order table */}
@@ -276,7 +265,7 @@ export function MargemClient() {
         </div>
 
         {/* Right panel */}
-        <div className="flex flex-col gap-4 overflow-y-auto" style={{ flex: "1 1 0", minWidth: "280px", maxWidth: "360px" }}>
+        <div className="flex flex-col gap-4 lg:overflow-y-auto" style={{ flex: "1 1 0", minWidth: "280px", maxWidth: "100%" }}>
           {/* Sistema de Pontos */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Sistema de Pontos</h2>

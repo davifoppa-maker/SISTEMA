@@ -472,7 +472,7 @@ Observações: ${obs || "—"}`;
             <Textarea rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
           </div>
           <hr className="border-slate-100" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label>Valor cotado (R$)</Label>
               <Input value={quotedValue} onChange={(e) => setQuotedValue(e.target.value)} placeholder="0,00" />
