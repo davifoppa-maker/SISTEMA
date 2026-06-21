@@ -113,10 +113,10 @@ function QtyCell({ qty, onSet }: { qty: number; onSet: (v: number) => void }) {
   return (
     <button
       onClick={() => { setVal(String(qty)); setEditing(true); }}
-      className="group inline-flex items-center gap-1 rounded px-1 py-0.5 text-slate-700 hover:bg-slate-100"
+      className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-700 hover:border-brand-700 hover:bg-brand-50"
     >
       <span className="text-sm font-medium">{qty}</span>
-      <svg className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
       </svg>
     </button>
