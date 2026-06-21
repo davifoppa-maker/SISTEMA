@@ -46,6 +46,8 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log("[lançador] Payload enviado:", JSON.stringify(payload, null, 2));
+
     const res = await tinyFetch("/pedidos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -56,9 +58,11 @@ export async function POST(req: Request) {
     let json: unknown;
     try { json = JSON.parse(text); } catch { json = { raw: text }; }
 
+    console.log("[lançador] Tiny response:", res.status, json);
+
     if (!res.ok) {
       return fail(
-        `Tiny ${res.status}: ${typeof json === "object" && json ? JSON.stringify(json).slice(0, 300) : text.slice(0, 300)}`,
+        `Tiny ${res.status}: ${typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500)}`,
         res.status
       );
     }
