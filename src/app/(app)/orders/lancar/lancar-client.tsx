@@ -64,7 +64,7 @@ export function LancarPedidoClient() {
         body: JSON.stringify({ texto }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Erro desconhecido");
+      if (!res.ok) throw new Error(`${json.error}${json.extra ? ` — ${json.extra}` : ""}`);
       setParsed(json.data ?? json);
       setEditedItems((json.data ?? json).itens ?? []);
     } catch (e) {

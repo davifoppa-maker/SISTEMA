@@ -9,6 +9,10 @@ const catalogSummary = CATALOG.map(
 ).join("\n");
 
 export async function POST(req: Request) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return fail("ANTHROPIC_API_KEY não configurada no servidor", 500);
+  }
+
   const body = await req.json().catch(() => null);
   const texto = typeof body?.texto === "string" ? body.texto.trim() : "";
   if (!texto) return fail("Texto vazio", 400);
