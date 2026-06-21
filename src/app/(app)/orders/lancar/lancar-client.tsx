@@ -298,38 +298,38 @@ export function LancarPedidoClient() {
             </div>
           )}
 
-          {/* Vendedor e Transportadora */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
-              <select
-                value={selectedSellerId || ""}
-                onChange={(e) => setSelectedSellerId(e.target.value || null)}
-                className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {sellers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-800 mb-2">Transportadora</label>
-              <select
-                value={selectedCarrierId || ""}
-                onChange={(e) => setSelectedCarrierId(e.target.value || null)}
-                className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {carriers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Vendedor */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
+            <select
+              value={selectedSellerId || ""}
+              onChange={(e) => setSelectedSellerId(e.target.value || null)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Transportadora */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Transportadora</label>
+            <select
+              value={selectedCarrierId || ""}
+              onChange={(e) => setSelectedCarrierId(e.target.value || null)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              {carriers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Cliente existente */}
