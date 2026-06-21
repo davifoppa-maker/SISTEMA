@@ -84,6 +84,45 @@ function Slider({
   );
 }
 
+function QtyCell({ qty, onSet }: { qty: number; onSet: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(qty));
+
+  if (editing) {
+    return (
+      <input
+        type="number"
+        min={1}
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => {
+          const n = parseInt(val);
+          if (!isNaN(n) && n > 0) onSet(n);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-14 rounded border border-brand-700 px-1 py-0.5 text-right text-sm font-medium text-slate-800 outline-none focus:ring-1 focus:ring-brand-700"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => { setVal(String(qty)); setEditing(true); }}
+      className="group inline-flex items-center gap-1 rounded px-1 py-0.5 text-slate-700 hover:bg-slate-100"
+    >
+      <span className="text-sm font-medium">{qty}</span>
+      <svg className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
+      </svg>
+    </button>
+  );
+}
+
 export function MargemClient() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [params, setParams] = useState<Params>({ impostos: 7, comissao: 8, logistica: 7, margemMin: 20 });
@@ -244,7 +283,9 @@ export function MargemClient() {
                             <div className="font-medium text-slate-800">{product.name}</div>
                             <div className="font-mono text-[10px] text-slate-400">{product.sku}</div>
                           </td>
-                          <td className="px-4 py-2 text-right text-slate-700">{qty}</td>
+                          <td className="px-4 py-2 text-right">
+                            <QtyCell qty={qty} onSet={(v) => setQty(product.sku, v)} />
+                          </td>
                           <td className="px-4 py-2 text-right text-slate-400 line-through">{fmtBRL(product.tabela)}</td>
                           <td className="px-4 py-2 text-right text-emerald-600">{fmtBRL(netUnit)}</td>
                           <td className="px-4 py-2 text-right font-semibold text-slate-800">{fmtBRL(netUnit * qty)}</td>
