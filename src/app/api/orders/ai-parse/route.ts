@@ -5,7 +5,7 @@ import { ok, fail } from "@/lib/api";
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const catalogSummary = CATALOG.map(
-  (p) => `SKU: ${p.sku} | Nome: ${p.name} | Preço tabela: R$${p.tabela}`
+  (p) => `${p.sku} | ${p.name} | R$${p.tabela}`
 ).join("\n");
 
 export async function POST(req: Request) {
@@ -51,9 +51,10 @@ Retorne SEMPRE um JSON válido com a seguinte estrutura:
   "avisos": ["Lista de dúvidas ou itens não reconhecidos"]
 }
 
-Regras:
-- Sempre tente mapear o produto para um SKU do catálogo. Se o produto for ambíguo, inclua nos avisos.
-- Para valor_unitario, use o preço de tabela do catálogo se não especificado.
+Regras CRÍTICAS:
+- NUNCA retorne um SKU que não existe no catálogo acima. Se o produto não está lá, retorne null para o SKU e avise.
+- Sempre mapear para o SKU EXATO. Se não conseguir encontrar, deixe null e avise nos avisos.
+- Para valor_unitario, use SEMPRE o preço de tabela do catálogo. Se o cliente mencionar outro preço, avise.
 - Se o endereço estiver incompleto, coloque o que foi fornecido e avise.
 - **IMPORTANTE - Mix de sabores:** Se o cliente mencionar "mesclar", "mix", "diversos sabores", "sortido" ou similar:
   - Identifique todos os SKUs daquele produto com sabores diferentes
@@ -61,7 +62,7 @@ Regras:
   - Crie um item SEPARADO pra cada SKU
   - Exemplo: "126 Whey Refill 1kg mesclar" → 4 itens de 31-32 cada (NYER26007, NYER26008, NYER26009, NYER26010)
 - Escape corretamente todas as aspas dentro de strings.
-- Responda APENAS com o JSON válido, sem texto adicional, sem quebras de linha extras, sem caracteres de escape indevidos.`;
+- Responda APENAS com JSON válido, sem texto adicional.`;
 
   try {
     const message = await client.messages.create({
