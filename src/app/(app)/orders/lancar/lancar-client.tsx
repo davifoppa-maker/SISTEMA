@@ -365,29 +365,11 @@ export function LancarPedidoClient() {
           </div>
 
           {/* Margem líquida */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide">Custo produtos</p>
-                <p className="text-lg font-semibold text-slate-800">{fmtBRL(custoProdutos)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide">Custos operacionais</p>
-                <p className="text-lg font-semibold text-slate-800">{fmtBRL(custosOp)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide">Lucro</p>
-                <p className={`text-lg font-bold ${lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                  {fmtBRL(lucro)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide">Margem líquida</p>
-                <p className={`text-lg font-bold ${margem >= 20 ? "text-emerald-600" : margem >= 10 ? "text-amber-600" : "text-red-600"}`}>
-                  {margem.toFixed(1)}%
-                </p>
-              </div>
-            </div>
+          <div className={`rounded-xl border-2 p-6 text-center ${margem >= 26 ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
+            <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Margem líquida</p>
+            <p className={`text-5xl font-bold ${margem >= 26 ? "text-emerald-600" : "text-red-600"}`}>
+              {margem.toFixed(1)}%
+            </p>
           </div>
 
           {/* Confirm */}
