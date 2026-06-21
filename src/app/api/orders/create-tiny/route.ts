@@ -1,29 +1,6 @@
 import { tinyFetch } from "@/lib/services/tiny-api";
 import { ok, fail } from "@/lib/api";
 
-async function findProductId(sku: string): Promise<{ id?: number; error?: string }> {
-  try {
-    const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}`);
-
-    if (!res.ok) {
-      return { error: `Status ${res.status}` };
-    }
-
-    const json = await res.json();
-    const produtos = (json.data ?? json.itens ?? []) as Array<any>;
-
-    if (produtos.length > 0 && produtos[0].id) {
-      const id = Number(produtos[0].id);
-      console.log(`[create-tiny] ${sku}: id=${id}`);
-      return { id };
-    }
-
-    return { error: "Produto não encontrado" };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "Erro desconhecido" };
-  }
-}
-
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return fail("Corpo inválido", 400);
@@ -31,31 +8,19 @@ export async function POST(req: Request) {
   const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
-  // Resolver IDs dos produtos no Tiny
-  const itensComId = await Promise.all(
-    itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }, idx: number) => {
-      if (!i.sku) {
-        console.log(`[create-tiny] Item ${idx}: sem SKU → descricao="${i.nome}"`);
-        return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
-      }
-
-      const result = await findProductId(i.sku);
-
-      if (result.id) {
-        console.log(`[create-tiny] Item ${idx} (${i.sku}): id=${result.id}`);
-        return { produto: { id: result.id }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
-      }
-
-      // Sempre fallback pra descrição, nunca deixar nulo
-      console.warn(`[create-tiny] Item ${idx} (${i.sku}): ${result.error} → descricao="${i.nome}"`);
-      return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+  // Montar itens — sempre usar codigo (SKU)
+  const itensFormatados = itens.map(
+    (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
+      ...(i.sku ? { codigo: i.sku } : { descricao: i.nome }),
+      quantidade: i.quantidade,
+      valorUnitario: i.valor_unitario,
     })
   );
 
   // Tiny V3 POST /pedidos payload
   const payload: Record<string, unknown> = {
     situacao: 1, // Em aberto
-    itens: itensComId,
+    itens: itensFormatados,
     ...(observacao ? { observacoes: observacao } : {}),
   };
 
