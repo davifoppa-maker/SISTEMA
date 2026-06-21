@@ -35,8 +35,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const rawPayload = dataDriver === "supabase" ? await fetchOrderRawPayload(order.id) : order.raw_payload;
 
   const customer = store.customers.find((c) => c.id === order.customer_id);
-  // Tenta itens do store primeiro; se vazio, extrai do rawPayload
-  let items = store.order_items.filter((i) => i.order_id === order.id);
+  // Tenta itens do store; se vazio, tenta do rawPayload (com fallback)
+  const storeItems = store.order_items.filter((i) => i.order_id === order.id);
   const payloadItems = (rawPayload?.itens ?? []) as Array<{
     id?: string | number;
     codigo?: string;
@@ -46,16 +46,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     valor_desconto?: number;
     valor?: number;
   }>;
-  if (items.length === 0 && payloadItems.length > 0) {
-    items = payloadItems.map((pi, idx) => ({
+  const items = storeItems.length > 0 ? storeItems :
+    payloadItems.length > 0 ? payloadItems.map((pi, idx) => ({
       id: `payload-${idx}`,
       order_id: order.id,
       sku: pi.codigo || "—",
       description: pi.descricao || "—",
       quantity: pi.quantidade || 1,
       unit_value: pi.valor_unitario || 0,
-    }));
-  }
+    })) : [];
   const invoice = store.invoices.find((i) => i.order_id === order.id);
   const shipment = store.shipments.find((s) => s.order_id === order.id);
   const carrier = shipment?.carrier_id ? store.carriers.find((c) => c.id === shipment.carrier_id) : null;
@@ -138,25 +137,31 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <Card>
           <CardHeader><CardTitle>Itens</CardTitle></CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <Thead><tr><Th>SKU</Th><Th>Descrição</Th><Th className="text-right">Qtd</Th><Th className="text-right">Valor Unit.</Th><Th className="text-right">Desconto</Th><Th className="text-right">Total</Th></tr></Thead>
-              <tbody>
-                {items.map((i) => {
-                  const discount = (payloadItems.find((pi) => pi.codigo === i.sku)?.valor_desconto) || 0;
-                  const total = (i.quantity * i.unit_value) - (discount || 0);
-                  return (
-                    <Tr key={i.id}>
-                      <Td>{i.sku}</Td>
-                      <Td>{i.description}</Td>
-                      <Td className="text-right">{i.quantity}</Td>
-                      <Td className="text-right">{brl(i.unit_value)}</Td>
-                      <Td className="text-right text-red-600">{discount ? brl(discount) : "—"}</Td>
-                      <Td className="text-right font-medium">{brl(total)}</Td>
-                    </Tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+            {items.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">
+                Itens não disponíveis. O Tiny não retornou os itens deste pedido no detalhe.
+              </div>
+            ) : (
+              <Table>
+                <Thead><tr><Th>SKU</Th><Th>Descrição</Th><Th className="text-right">Qtd</Th><Th className="text-right">Valor Unit.</Th><Th className="text-right">Desconto</Th><Th className="text-right">Total</Th></tr></Thead>
+                <tbody>
+                  {items.map((i) => {
+                    const discount = (payloadItems.find((pi) => pi.codigo === i.sku)?.valor_desconto) || 0;
+                    const total = (i.quantity * i.unit_value) - (discount || 0);
+                    return (
+                      <Tr key={i.id}>
+                        <Td>{i.sku}</Td>
+                        <Td>{i.description}</Td>
+                        <Td className="text-right">{i.quantity}</Td>
+                        <Td className="text-right">{brl(i.unit_value)}</Td>
+                        <Td className="text-right text-red-600">{discount ? brl(discount) : "—"}</Td>
+                        <Td className="text-right font-medium">{brl(total)}</Td>
+                      </Tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
           </CardContent>
         </Card>
 
@@ -285,24 +290,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           </CardContent>
         </Card>
       </div>
-
-      <Card className="mt-4">
-        <CardHeader><CardTitle>Debug: Itens extraídos vs Payload</CardTitle></CardHeader>
-        <CardContent className="space-y-2 text-xs">
-          <div>
-            <strong>store.order_items.length:</strong> {store.order_items.filter((i) => i.order_id === order.id).length}
-          </div>
-          <div>
-            <strong>payloadItems.length:</strong> {payloadItems.length}
-          </div>
-          <div>
-            <strong>items.length (final):</strong> {items.length}
-          </div>
-          <div>
-            <strong>rawPayload?.itens:</strong> {JSON.stringify((rawPayload as any)?.itens, null, 2)}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card className="mt-4">
         <CardHeader><CardTitle>Payload bruto (Tiny)</CardTitle></CardHeader>
