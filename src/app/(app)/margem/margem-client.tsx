@@ -312,6 +312,7 @@ export function MargemClient() {
                       <th className="px-4 py-2 text-right">Tabela unit</th>
                       <th className="px-4 py-2 text-right">Líquido unit</th>
                       <th className="px-4 py-2 text-right">Total líquido</th>
+                      <th className="px-4 py-2" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -344,13 +345,22 @@ export function MargemClient() {
                             </div>
                           </td>
                           <td className="px-4 py-2 text-right font-semibold text-slate-800">{fmtBRL(netUnit * qty)}</td>
+                          <td className="px-4 py-2 text-center">
+                            <button
+                              onClick={() => setQty(product.sku, 0)}
+                              className="text-slate-300 hover:text-red-500 transition-colors"
+                              title="Remover produto"
+                            >
+                              ✕
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-200 bg-slate-50">
-                      <td colSpan={4} className="px-4 py-2 text-right text-xs font-medium text-slate-600">Total Receita</td>
+                      <td colSpan={5} className="px-4 py-2 text-right text-xs font-medium text-slate-600">Total Receita</td>
                       <td className="px-4 py-2 text-right font-bold text-slate-800">{fmtBRL(receita)}</td>
                     </tr>
                   </tfoot>
