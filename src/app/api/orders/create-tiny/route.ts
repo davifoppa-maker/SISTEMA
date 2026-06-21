@@ -18,18 +18,21 @@ export async function POST(req: Request) {
 
       // Buscar ID do produto no Tiny pelo SKU
       try {
-        const searchRes = await fetch(`${new URL(req.url).origin}/api/orders/search-product`, {
+        const origin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
+        const searchRes = await fetch(`${origin}/api/orders/search-product`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ codigo: i.sku }),
         });
 
         const searchJson = await searchRes.json();
+        console.log(`[create-tiny] Search ${i.sku}:`, searchRes.status, searchJson);
+
         if (searchRes.ok && searchJson.data?.id) {
           return { produto: { id: Number(searchJson.data.id) }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
         }
-      } catch {
-        // Fallback: usar código se não conseguir achar ID
+      } catch (err) {
+        console.error(`[create-tiny] Erro buscando ${i.sku}:`, err);
       }
 
       return { produto: { codigo: i.sku }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
@@ -104,9 +107,12 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log("[create-tiny] Payload final:", JSON.stringify(payload, null, 2));
     const result = await createWithRetry();
     return ok({ message: "Pedido criado no Tiny", tiny: result });
   } catch (err) {
-    return fail("Erro ao criar pedido no Tiny", 500, err instanceof Error ? err.message : err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[create-tiny] Erro:", errMsg);
+    return fail(`Erro ao criar pedido no Tiny: ${errMsg}`, 500);
   }
 }
