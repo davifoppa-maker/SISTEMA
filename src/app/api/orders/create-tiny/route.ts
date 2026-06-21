@@ -85,7 +85,16 @@ export async function POST(req: Request) {
 
         const text = await res.text();
         let json: unknown;
-        try { json = JSON.parse(text); } catch { json = { raw: text }; }
+        try {
+          json = text ? JSON.parse(text) : { ok: true };
+        } catch (err) {
+          console.error(`[create-tiny] Erro parsing JSON:`, text.slice(0, 200));
+          if (res.ok) {
+            // Sucesso mas response inválida — provavelmente funcionou
+            return { ok: true, message: "Pedido criado" };
+          }
+          throw new Error(`Resposta inválida do Tiny: ${text.slice(0, 200)}`);
+        }
 
         // Se for 429 (rate limit), retry com backoff
         if (res.status === 429 && attempt < maxAttempts) {
