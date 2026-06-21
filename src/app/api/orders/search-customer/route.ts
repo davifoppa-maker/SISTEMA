@@ -21,8 +21,17 @@ export async function POST(req: Request) {
       telefone?: string;
     }>;
 
+    // Deduplica por ID (remove duplicatas)
+    const uniqueMap = new Map<string, any>();
+    clientes.forEach((c) => {
+      const key = String(c.id);
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, c);
+      }
+    });
+
     return ok({
-      clientes: clientes.map((c) => ({
+      clientes: Array.from(uniqueMap.values()).map((c) => ({
         id: String(c.id),
         nome: c.nome,
         cpf: c.cpf || null,
