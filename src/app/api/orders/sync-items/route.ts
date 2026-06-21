@@ -83,8 +83,8 @@ export async function POST(req: Request) {
         order_id: order.id,
         sku: str(it.codigo),
         description: str(it.descricao) ?? "Item",
-        quantity: num(it.quantidade),
-        unit_value: num(it.valor_unitario),
+        quantity: num(it.quantidade) ?? 0,
+        unit_value: num(it.valor_unitario) ?? 0,
       });
     }
 

@@ -6,15 +6,16 @@ import { Table, Thead, Th, Tr, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { LogisticBadge, SlaBadge } from "@/components/status-badge";
 import { readStore } from "@/lib/queries";
-import { dataDriver } from "@/lib/db";
+import { dataDriver, loadStore, commitStore } from "@/lib/db";
 import { fetchOrderRawPayload } from "@/lib/db/supabase-data";
 import { brl, dateTime } from "@/lib/utils/format";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { getProvider, providerIdForCarrierName } from "@/lib/services/freight/registry";
+import { fetchOrderById, isTinyConnected } from "@/lib/services/tiny-api";
+import { uuid, nowIso } from "@/lib/utils/ids";
 import { SendNfButton } from "./send-nf-button";
 import { StatusControl } from "./status-control";
 import { TrackButton } from "./track-button";
-import { SyncItemsButton } from "./sync-items-button";
 
 export const dynamic = "force-dynamic";
 
@@ -36,17 +37,43 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const rawPayload = dataDriver === "supabase" ? await fetchOrderRawPayload(order.id) : order.raw_payload;
 
   const customer = store.customers.find((c) => c.id === order.customer_id);
-  // Tenta itens do store; se vazio, tenta do rawPayload (com fallback)
-  const storeItems = store.order_items.filter((i) => i.order_id === order.id);
-  const payloadItems = (rawPayload?.itens ?? []) as Array<{
-    id?: string | number;
-    codigo?: string;
-    descricao?: string;
-    quantidade?: number;
-    valor_unitario?: number;
-    valor_desconto?: number;
-    valor?: number;
-  }>;
+
+  // Tenta itens do store; se vazio, busca direto do Tiny agora (server-side)
+  let storeItems = store.order_items.filter((i) => i.order_id === order.id);
+  if (storeItems.length === 0 && order.tiny_id) {
+    try {
+      const tinyOk = await isTinyConnected().catch(() => false);
+      if (tinyOk) {
+        const full = await fetchOrderById(order.tiny_id).catch(() => null);
+        const itensTiny = (full as Record<string, unknown>)?.itens as Array<Record<string, unknown>> ?? [];
+        if (itensTiny.length > 0) {
+          const mutableStore = await loadStore();
+          const mutableOrder = mutableStore.orders.find((o) => o.id === order.id);
+          if (mutableOrder) {
+            itensTiny.forEach((it) => {
+              const item = {
+                id: uuid(),
+                order_id: order.id,
+                sku: String(it.codigo ?? "").trim() || null,
+                description: String(it.descricao ?? "").trim() || "Item",
+                quantity: parseFloat(String(it.quantidade ?? "0")) || 0,
+                unit_value: parseFloat(String(it.valor_unitario ?? "0")) || 0,
+              };
+              mutableStore.order_items.push(item);
+              storeItems = [...storeItems, item];
+            });
+            mutableOrder.updated_at = nowIso();
+            await commitStore(mutableStore);
+          }
+        }
+      }
+    } catch {
+      // falhou — segue sem itens
+    }
+  }
+
+  type PayloadItem = { id?: string | number; codigo?: string; descricao?: string; quantidade?: number; valor_unitario?: number; valor_desconto?: number; valor?: number };
+  const payloadItems = ((rawPayload as Record<string, unknown>)?.itens ?? []) as PayloadItem[];
   const items = storeItems.length > 0 ? storeItems :
     payloadItems.length > 0 ? payloadItems.map((pi, idx) => ({
       id: `payload-${idx}`,
@@ -136,14 +163,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <div className="mt-4 grid grid-cols-1 gap-4">
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>Itens</CardTitle>
-            <SyncItemsButton orderId={order.id} hasItems={items.length > 0} />
-          </CardHeader>
+          <CardHeader><CardTitle>Itens</CardTitle></CardHeader>
           <CardContent className="p-0">
             {items.length === 0 ? (
               <div className="p-4 text-sm text-slate-500">
-                Itens não disponíveis. O Tiny não retornou os itens deste pedido. Tente clicar em "Buscar itens do Tiny".
+                Itens não disponíveis — o Tiny não retornou itens para este pedido.
               </div>
             ) : (
               <Table>
@@ -195,7 +219,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <CardHeader><CardTitle>Forma de pagamento</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {(() => {
-              const formas = (rawPayload?.formasPagamento ?? []) as Array<{ tipo?: string; parcelas?: number; vencimento?: string }>;
+              const formas = ((rawPayload as Record<string, unknown>)?.formasPagamento ?? []) as Array<{ tipo?: string; parcelas?: number; vencimento?: string }>;
               if (formas.length === 0) return <span className="text-slate-400">Informação não disponível.</span>;
               return formas.map((f, idx) => (
                 <div key={idx}>
