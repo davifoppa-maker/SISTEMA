@@ -287,6 +287,24 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       </div>
 
       <Card className="mt-4">
+        <CardHeader><CardTitle>Debug: Itens extraídos vs Payload</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <div>
+            <strong>store.order_items.length:</strong> {store.order_items.filter((i) => i.order_id === order.id).length}
+          </div>
+          <div>
+            <strong>payloadItems.length:</strong> {payloadItems.length}
+          </div>
+          <div>
+            <strong>items.length (final):</strong> {items.length}
+          </div>
+          <div>
+            <strong>rawPayload?.itens:</strong> {JSON.stringify((rawPayload as any)?.itens, null, 2)}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
         <CardHeader><CardTitle>Payload bruto (Tiny)</CardTitle></CardHeader>
         <CardContent>
           <pre className="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
