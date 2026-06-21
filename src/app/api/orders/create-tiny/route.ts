@@ -8,14 +8,38 @@ export async function POST(req: Request) {
   const { cliente, itens, observacao, clienteId } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
+  // Resolver IDs dos produtos no Tiny
+  const itensComId = await Promise.all(
+    itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
+      if (!i.sku) {
+        // Sem SKU, não consegue buscar no Tiny — usar descrição
+        return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+      }
+
+      // Buscar ID do produto no Tiny pelo SKU
+      try {
+        const searchRes = await fetch(`${new URL(req.url).origin}/api/orders/search-product`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: i.sku }),
+        });
+
+        const searchJson = await searchRes.json();
+        if (searchRes.ok && searchJson.data?.id) {
+          return { produto: { id: Number(searchJson.data.id) }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+        }
+      } catch {
+        // Fallback: usar código se não conseguir achar ID
+      }
+
+      return { produto: { codigo: i.sku }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+    })
+  );
+
   // Tiny V3 POST /pedidos payload
   const payload: Record<string, unknown> = {
     situacao: 1, // Em aberto
-    itens: itens.map((i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
-      produto: i.sku ? { codigo: i.sku } : { descricao: i.nome },
-      quantidade: i.quantidade,
-      valorUnitario: i.valor_unitario,
-    })),
+    itens: itensComId,
     ...(observacao ? { observacoes: observacao } : {}),
   };
 
