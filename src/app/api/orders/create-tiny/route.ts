@@ -10,10 +10,9 @@ export async function POST(req: Request) {
 
   // Tiny V3 POST /pedidos payload
   const payload: Record<string, unknown> = {
-    situacao: { id: 1 }, // Em aberto
+    situacao: 1, // Em aberto
     itens: itens.map((i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => ({
-      descricao: i.nome,
-      ...(i.sku ? { codigo: i.sku } : {}),
+      produto: i.sku ? { codigo: i.sku } : { descricao: i.nome },
       quantidade: i.quantidade,
       valorUnitario: i.valor_unitario,
     })),
