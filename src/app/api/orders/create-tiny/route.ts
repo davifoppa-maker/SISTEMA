@@ -1,6 +1,25 @@
 import { tinyFetch } from "@/lib/services/tiny-api";
 import { ok, fail } from "@/lib/api";
 
+async function findProductId(sku: string): Promise<number | null> {
+  try {
+    const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}&limit=1`);
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const produtos = (json.data ?? json.itens ?? []) as Array<{ id: number | string }>;
+
+    if (produtos.length > 0) {
+      const id = Number(produtos[0].id);
+      console.log(`[create-tiny] Encontrado ${sku} → id=${id}`);
+      return id;
+    }
+  } catch (err) {
+    console.error(`[create-tiny] Erro buscando ${sku}:`, err);
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return fail("Corpo inválido", 400);
@@ -12,29 +31,15 @@ export async function POST(req: Request) {
   const itensComId = await Promise.all(
     itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
       if (!i.sku) {
-        // Sem SKU, não consegue buscar no Tiny — usar descrição
         return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
-      // Buscar ID do produto no Tiny pelo SKU
-      try {
-        const origin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
-        const searchRes = await fetch(`${origin}/api/orders/search-product`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codigo: i.sku }),
-        });
-
-        const searchJson = await searchRes.json();
-        console.log(`[create-tiny] Search ${i.sku}:`, searchRes.status, searchJson);
-
-        if (searchRes.ok && searchJson.data?.id) {
-          return { produto: { id: Number(searchJson.data.id) }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
-        }
-      } catch (err) {
-        console.error(`[create-tiny] Erro buscando ${i.sku}:`, err);
+      const prodId = await findProductId(i.sku);
+      if (prodId) {
+        return { produto: { id: prodId }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
+      // Fallback: usar código
       return { produto: { codigo: i.sku }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
     })
   );
