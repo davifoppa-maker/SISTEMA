@@ -318,6 +318,21 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
     });
   } else {
     Object.assign(order, fields, { updated_at: nowIso() });
+    // Se o pedido já existe mas agora temos itens (e não tínhamos antes), adicionar
+    const existingItems = store.order_items.filter((i) => i.order_id === order.id);
+    const newItems = (payload.itens ?? []).filter((it) => it.codigo || it.descricao);
+    if (existingItems.length === 0 && newItems.length > 0) {
+      newItems.forEach((it) => {
+        store.order_items.push({
+          id: uuid(),
+          order_id: order.id,
+          sku: str(it.codigo),
+          description: str(it.descricao) ?? "Item",
+          quantity: num(it.quantidade),
+          unit_value: num(it.valor_unitario),
+        });
+      });
+    }
   }
 
   // Aplica o status do Tiny (e leva B2B "Enviado" para o Checkout de Expedição).

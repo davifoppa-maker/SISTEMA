@@ -14,6 +14,7 @@ import { getProvider, providerIdForCarrierName } from "@/lib/services/freight/re
 import { SendNfButton } from "./send-nf-button";
 import { StatusControl } from "./status-control";
 import { TrackButton } from "./track-button";
+import { SyncItemsButton } from "./sync-items-button";
 
 export const dynamic = "force-dynamic";
 
@@ -135,11 +136,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <div className="mt-4 grid grid-cols-1 gap-4">
         <Card>
-          <CardHeader><CardTitle>Itens</CardTitle></CardHeader>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Itens</CardTitle>
+            <SyncItemsButton orderId={order.id} hasItems={items.length > 0} />
+          </CardHeader>
           <CardContent className="p-0">
             {items.length === 0 ? (
               <div className="p-4 text-sm text-slate-500">
-                Itens não disponíveis. O Tiny não retornou os itens deste pedido no detalhe.
+                Itens não disponíveis. O Tiny não retornou os itens deste pedido. Tente clicar em "Buscar itens do Tiny".
               </div>
             ) : (
               <Table>
