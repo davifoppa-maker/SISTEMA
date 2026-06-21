@@ -190,19 +190,22 @@ export function LancarPedidoClient() {
         body: JSON.stringify(payload),
       });
 
+      const text = await res.text();
       let json: any;
       try {
-        const text = await res.text();
         json = text ? JSON.parse(text) : {};
       } catch {
         if (res.ok) {
           setCreated(true);
           return;
         }
-        throw new Error("Resposta inválida do servidor");
+        throw new Error(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`);
       }
 
-      if (!res.ok) throw new Error(json.error ?? "Erro ao criar pedido");
+      if (!res.ok) {
+        const errorMsg = json.error || json.message || text.slice(0, 200);
+        throw new Error(errorMsg);
+      }
       setCreated(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao criar pedido");
