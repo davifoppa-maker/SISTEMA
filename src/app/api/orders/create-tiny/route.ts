@@ -46,19 +46,26 @@ export async function POST(req: Request) {
     };
   }
 
-  const res = await tinyFetch("/pedidos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await tinyFetch("/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  const text = await res.text();
-  let json: unknown;
-  try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    const text = await res.text();
+    let json: unknown;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
 
-  if (!res.ok) {
-    return fail(`Tiny retornou ${res.status}`, res.status, json);
+    if (!res.ok) {
+      return fail(
+        `Tiny ${res.status}: ${typeof json === "object" && json ? JSON.stringify(json).slice(0, 300) : text.slice(0, 300)}`,
+        res.status
+      );
+    }
+
+    return ok({ message: "Pedido criado no Tiny", tiny: json });
+  } catch (err) {
+    return fail("Erro ao criar pedido no Tiny", 500, err instanceof Error ? err.message : err);
   }
-
-  return ok({ message: "Pedido criado no Tiny", tiny: json });
 }
