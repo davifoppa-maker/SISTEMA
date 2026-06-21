@@ -4,9 +4,14 @@ import { ok, fail } from "@/lib/api";
 async function findProductId(sku: string): Promise<number | null> {
   try {
     const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}&limit=1`);
-    if (!res.ok) return null;
+    const text = await res.text();
 
-    const json = await res.json();
+    if (!res.ok) {
+      console.warn(`[create-tiny] Produto ${sku} não encontrado no Tiny (${res.status})`);
+      return null;
+    }
+
+    const json = JSON.parse(text);
     const produtos = (json.data ?? json.itens ?? []) as Array<{ id: number | string }>;
 
     if (produtos.length > 0) {
@@ -14,6 +19,8 @@ async function findProductId(sku: string): Promise<number | null> {
       console.log(`[create-tiny] Encontrado ${sku} → id=${id}`);
       return id;
     }
+
+    console.warn(`[create-tiny] Produto ${sku} retornou lista vazia`);
   } catch (err) {
     console.error(`[create-tiny] Erro buscando ${sku}:`, err);
   }
@@ -29,18 +36,21 @@ export async function POST(req: Request) {
 
   // Resolver IDs dos produtos no Tiny
   const itensComId = await Promise.all(
-    itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
+    itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }, idx: number) => {
       if (!i.sku) {
+        console.log(`[create-tiny] Item ${idx}: sem SKU, usando descricao`);
         return { produto: { descricao: i.nome }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
       const prodId = await findProductId(i.sku);
       if (prodId) {
+        console.log(`[create-tiny] Item ${idx} (${i.sku}): usando ID ${prodId}`);
         return { produto: { id: prodId }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
-      // Fallback: usar código
-      return { produto: { codigo: i.sku }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
+      // Se não encontrou ID, use descrição em vez de código
+      console.warn(`[create-tiny] Item ${idx} (${i.sku}): produto não encontrado, usando descricao`);
+      return { produto: { descricao: `${i.nome} (${i.sku})` }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
     })
   );
 
