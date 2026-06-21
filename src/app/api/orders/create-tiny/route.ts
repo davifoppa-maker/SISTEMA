@@ -129,7 +129,8 @@ export async function POST(req: Request) {
     return ok({ message: "Pedido criado no Tiny", tiny: result });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error("[create-tiny] Erro:", errMsg);
-    return fail(`Erro ao criar pedido no Tiny: ${errMsg}`, 500);
+    console.error("[create-tiny] Erro completo:", err);
+    console.error("[create-tiny] Mensagem:", errMsg);
+    return fail(errMsg || "Erro desconhecido ao criar pedido", 500);
   }
 }
