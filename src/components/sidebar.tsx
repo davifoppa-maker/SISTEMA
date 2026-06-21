@@ -30,6 +30,7 @@ const nav = [
     children: [
       { href: "/orders", label: "Todos os pedidos" },
       { href: "/orders/margem", label: "Margem de pedidos" },
+      { href: "/orders/lancar", label: "Lançar pedido (IA)" },
     ],
   },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
