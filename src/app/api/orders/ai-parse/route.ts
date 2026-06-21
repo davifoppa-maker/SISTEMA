@@ -55,6 +55,11 @@ Regras:
 - Sempre tente mapear o produto para um SKU do catálogo. Se o produto for ambíguo, inclua nos avisos.
 - Para valor_unitario, use o preço de tabela do catálogo se não especificado.
 - Se o endereço estiver incompleto, coloque o que foi fornecido e avise.
+- **IMPORTANTE - Mix de sabores:** Se o cliente mencionar "mesclar", "mix", "diversos sabores", "sortido" ou similar:
+  - Identifique todos os SKUs daquele produto com sabores diferentes
+  - Divida a quantidade total igualmente entre os SKUs
+  - Crie um item SEPARADO pra cada SKU
+  - Exemplo: "126 Whey Refill 1kg mesclar" → 4 itens de 31-32 cada (NYER26007, NYER26008, NYER26009, NYER26010)
 - Escape corretamente todas as aspas dentro de strings.
 - Responda APENAS com o JSON válido, sem texto adicional, sem quebras de linha extras, sem caracteres de escape indevidos.`;
 
