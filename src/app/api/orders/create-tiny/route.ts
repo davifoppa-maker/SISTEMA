@@ -47,38 +47,71 @@ export async function POST(req: Request) {
     })
   );
 
-  // Tiny V3 POST /pedidos payload - formato simples que funciona
-  const payload: Record<string, unknown> = {
-    situacao: 1,
-    itens: itensFormatados,
-  };
+  // O Tiny V3 EXIGE idContato no pedido — não aceita criar o cliente inline.
+  // Se nenhum cliente existente foi selecionado, criamos o contato primeiro
+  // (POST /contatos) e usamos o id retornado.
+  let idContato: number | string | null = clienteId ?? null;
 
-  // Se encontrou cliente existente, usar idContato
-  if (clienteId) {
-    payload.idContato = clienteId;
-  } else {
-    // Criar novo contato inline
-    payload.cliente = {
+  if (!idContato) {
+    // Tenta achar um contato já existente pelo nome (evita duplicar cadastro).
+    try {
+      const sres = await tinyFetch(`/contatos?nome=${encodeURIComponent(cliente.nome)}&limit=5`);
+      if (sres.ok) {
+        const sjson = await sres.json();
+        const achados = (sjson.data ?? sjson.itens ?? []) as Array<{ id: number | string }>;
+        if (achados.length > 0) idContato = achados[0].id;
+      }
+    } catch {
+      /* segue para criar */
+    }
+  }
+
+  if (!idContato) {
+    // Cria o contato no Tiny.
+    const contatoPayload: Record<string, unknown> = {
       nome: cliente.nome,
       tipoPessoa: "F",
       ...(cliente.cpf ? { cpfCnpj: cliente.cpf } : {}),
       ...(cliente.email ? { email: cliente.email } : {}),
       ...(cliente.telefone ? { telefone: cliente.telefone } : {}),
+      ...(cliente.endereco?.logradouro
+        ? {
+            endereco: {
+              endereco: cliente.endereco.logradouro ?? "",
+              numero: cliente.endereco.numero ?? "0",
+              complemento: cliente.endereco.complemento ?? "",
+              bairro: cliente.endereco.bairro ?? "",
+              municipio: cliente.endereco.cidade ?? "",
+              cep: cliente.endereco.cep ?? "",
+              uf: cliente.endereco.uf ?? "",
+            },
+          }
+        : {}),
     };
 
-    // Endereço como campo separado (não como array)
-    if (cliente.endereco?.logradouro) {
-      (payload as any).endereco = {
-        endereco: cliente.endereco.logradouro ?? "",
-        numero: "0",
-        complemento: cliente.endereco.complemento ?? "",
-        bairro: cliente.endereco.bairro ?? "",
-        municipio: cliente.endereco.cidade ?? "",
-        cep: cliente.endereco.cep ?? "",
-        uf: cliente.endereco.uf ?? "",
-      };
+    const cres = await tinyFetch("/contatos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(contatoPayload),
+    });
+    const ctext = await cres.text();
+    let cjson: any = null;
+    try { cjson = ctext ? JSON.parse(ctext) : null; } catch { /* */ }
+    if (!cres.ok) {
+      return fail(`Não foi possível criar o contato no Tiny: ${ctext.slice(0, 300)}`, 502);
+    }
+    idContato = cjson?.id ?? cjson?.data?.id ?? null;
+    if (!idContato) {
+      return fail(`Contato criado mas sem id retornado: ${ctext.slice(0, 200)}`, 502);
     }
   }
+
+  // Tiny V3 POST /pedidos payload
+  const payload: Record<string, unknown> = {
+    idContato,
+    situacao: 1,
+    itens: itensFormatados,
+  };
 
   if (observacao) {
     payload.observacoes = observacao;
