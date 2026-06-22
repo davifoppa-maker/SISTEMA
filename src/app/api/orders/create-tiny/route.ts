@@ -1,11 +1,11 @@
-import { tinyFetch } from "@/lib/services/tiny-api";
+import { tinyFetch, gravarTransporteNoTiny } from "@/lib/services/tiny-api";
 import { ok, fail } from "@/lib/api";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return fail("Corpo inválido", 400);
 
-  const { cliente, itens, observacao, clienteId } = body;
+  const { cliente, itens, observacao, clienteId, vendedorNome, transportadoraNome, formaPagamento } = body;
   if (!cliente?.nome || !itens?.length) return fail("Cliente e itens são obrigatórios", 400);
 
   // Validar que todos os itens têm SKU
@@ -111,17 +111,41 @@ export async function POST(req: Request) {
     }
   }
 
+  // Resolve o vendedor (idVendedor) pelo nome, consultando o Tiny.
+  let idVendedor: number | string | null = null;
+  if (vendedorNome) {
+    try {
+      const vres = await tinyFetch(`/vendedores?nome=${encodeURIComponent(vendedorNome)}&limit=5`);
+      if (vres.ok) {
+        const vjson = await vres.json();
+        const vends = (vjson.data ?? vjson.itens ?? []) as Array<{ id: number | string; nome?: string }>;
+        const alvo = String(vendedorNome).trim().toLowerCase();
+        const match = vends.find((v) => String(v.nome ?? "").trim().toLowerCase() === alvo) ?? vends[0];
+        if (match) idVendedor = match.id;
+      }
+    } catch {
+      /* vendedor best-effort */
+    }
+  }
+
   // Tiny V3 POST /pedidos payload.
-  // situacao 0 = "em aberto" — o pedido nasce para CONFERÊNCIA da equipe, nunca
-  // como "faturado" (1). A conferência/faturamento é feita manualmente no Tiny.
+  // NÃO enviamos `situacao` — assim o Tiny cria o pedido no estado padrão
+  // ("em aberto") para CONFERÊNCIA da equipe. Forçar um código estava gerando
+  // "faturado".
   const payload: Record<string, unknown> = {
     idContato,
-    situacao: 0,
     itens: itensFormatados,
+    ...(idVendedor ? { idVendedor } : {}),
   };
 
-  if (observacao) {
-    payload.observacoes = observacao;
+  // Observação com forma de pagamento e vendedor (para conferência), além da
+  // observação original do pedido.
+  const obsPartes: string[] = [];
+  if (observacao) obsPartes.push(String(observacao));
+  if (formaPagamento) obsPartes.push(`Forma de pagamento: ${formaPagamento}`);
+  if (vendedorNome && !idVendedor) obsPartes.push(`Vendedor: ${vendedorNome}`);
+  if (obsPartes.length) {
+    payload.observacoes = obsPartes.join(" | ");
   }
 
   // Retry com backoff exponencial para rate limit
@@ -203,11 +227,23 @@ export async function POST(req: Request) {
     }
     console.log("[create-tiny] Verificação pós-criação:", JSON.stringify(verificacao));
 
+    // Grava a transportadora no pedido (forma de envio + contato), via o
+    // endpoint /despacho — mesma rotina já usada no resto do sistema.
+    let transporte: unknown = null;
+    if (transportadoraNome) {
+      try {
+        transporte = await gravarTransporteNoTiny(String(result.id), String(transportadoraNome));
+      } catch (e) {
+        transporte = { ok: false, body: e instanceof Error ? e.message : String(e) };
+      }
+    }
+
     return ok({
       message: `Pedido ${result.numeroPedido ?? result.id} criado no Tiny`,
       id: result.id,
       numeroPedido: result.numeroPedido,
       verificacao,
+      transporte,
       tiny: result.raw,
     });
   } catch (err) {

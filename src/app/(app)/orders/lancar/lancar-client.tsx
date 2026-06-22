@@ -79,6 +79,7 @@ export function LancarPedidoClient() {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
+  const [formaPagamento, setFormaPagamento] = useState<string>("");
 
   useEffect(() => {
     Promise.all([
@@ -179,12 +180,16 @@ export function LancarPedidoClient() {
     if (!parsed) return;
     setCreating(true);
     try {
+      const carrierNome = selectedCarrierId
+        ? carriers.find((c) => c.id === selectedCarrierId)?.name ?? null
+        : null;
       const payload = {
         ...parsed,
         itens: editedItems,
         ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}),
-        ...(selectedSellerId ? { vendedorId: selectedSellerId } : {}),
-        ...(selectedCarrierId ? { transportadoraId: selectedCarrierId } : {}),
+        ...(selectedSellerId ? { vendedorNome: selectedSellerId } : {}),
+        ...(carrierNome ? { transportadoraNome: carrierNome } : {}),
+        ...(formaPagamento ? { formaPagamento } : {}),
       };
       const res = await fetch("/api/orders/create-tiny", {
         method: "POST",
@@ -382,6 +387,21 @@ export function LancarPedidoClient() {
                   {c.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Forma de pagamento */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Forma de pagamento</label>
+            <select
+              value={formaPagamento}
+              onChange={(e) => setFormaPagamento(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              <option value="Pix">Pix</option>
+              <option value="Boleto">Boleto</option>
+              <option value="Cartão de crédito">Cartão de crédito</option>
             </select>
           </div>
 
