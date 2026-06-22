@@ -85,7 +85,8 @@ export async function POST(req: Request) {
   }
 
   // Retry com backoff exponencial para rate limit
-  async function createWithRetry(maxAttempts = 3) {
+  async function createWithRetry(maxAttempts = 3): Promise<{ id: unknown; numeroPedido: unknown; raw: unknown }> {
+    let lastErr: Error | null = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await tinyFetch("/pedidos", {
@@ -95,17 +96,6 @@ export async function POST(req: Request) {
         });
 
         const text = await res.text();
-        let json: unknown;
-        try {
-          json = text ? JSON.parse(text) : { ok: true };
-        } catch (err) {
-          console.error(`[create-tiny] Erro parsing JSON:`, text.slice(0, 200));
-          if (res.ok) {
-            // Sucesso mas response inválida — provavelmente funcionou
-            return { ok: true, message: "Pedido criado" };
-          }
-          throw new Error(`Resposta inválida do Tiny: ${text.slice(0, 200)}`);
-        }
 
         // Se for 429 (rate limit), retry com backoff
         if (res.status === 429 && attempt < maxAttempts) {
@@ -115,22 +105,47 @@ export async function POST(req: Request) {
           continue;
         }
 
+        let json: any = null;
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch {
+          json = null;
+        }
+
         if (!res.ok) {
-          const errorMsg = typeof json === "object" && json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500);
+          const errorMsg = json ? JSON.stringify(json).slice(0, 500) : text.slice(0, 500);
           throw new Error(`Tiny ${res.status}: ${errorMsg}`);
         }
 
-        return json;
+        // SUCESSO só é válido se o Tiny devolver um id de pedido.
+        // Sem id, o pedido NÃO foi criado — não declarar sucesso falso.
+        const id = json?.id ?? json?.data?.id ?? null;
+        const numeroPedido = json?.numeroPedido ?? json?.data?.numeroPedido ?? null;
+
+        if (!id) {
+          throw new Error(
+            `Tiny respondeu ${res.status} mas não retornou id do pedido. Resposta: ${text.slice(0, 300) || "(vazia)"}`
+          );
+        }
+
+        return { id, numeroPedido, raw: json };
       } catch (err) {
-        if (attempt === maxAttempts) throw err;
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (attempt === maxAttempts) throw lastErr;
       }
     }
+    throw lastErr ?? new Error("Falha desconhecida ao criar pedido");
   }
 
   try {
     console.log("[create-tiny] Payload final:", JSON.stringify(payload, null, 2));
     const result = await createWithRetry();
-    return ok({ message: "Pedido criado no Tiny", tiny: result });
+    return ok({
+      message: `Pedido ${result.numeroPedido ?? result.id} criado no Tiny`,
+      id: result.id,
+      numeroPedido: result.numeroPedido,
+      tiny: result.raw,
+    });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[create-tiny] Erro completo:", err);

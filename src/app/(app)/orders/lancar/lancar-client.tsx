@@ -69,6 +69,7 @@ export function LancarPedidoClient() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [editedItems, setEditedItems] = useState<ParsedItem[]>([]);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [buscandoCliente, setBuscandoCliente] = useState(false);
@@ -196,17 +197,20 @@ export function LancarPedidoClient() {
       try {
         json = text ? JSON.parse(text) : {};
       } catch {
-        if (res.ok) {
-          setCreated(true);
-          return;
-        }
         throw new Error(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`);
       }
 
-      if (!res.ok) {
+      if (!res.ok || json.ok === false) {
         const errorMsg = json.error || json.message || text.slice(0, 200);
-        throw new Error(errorMsg);
+        throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
       }
+
+      // Só é sucesso se o Tiny devolveu número/id do pedido
+      const num = json.data?.numeroPedido ?? json.data?.id ?? null;
+      if (!num) {
+        throw new Error("O Tiny não confirmou a criação do pedido (sem número de pedido). Tente novamente.");
+      }
+      setOrderNumber(String(num));
       setCreated(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao criar pedido");
@@ -220,6 +224,7 @@ export function LancarPedidoClient() {
     setParsed(null);
     setError(null);
     setCreated(false);
+    setOrderNumber(null);
     setEditedItems([]);
   }
 
@@ -308,7 +313,9 @@ export function LancarPedidoClient() {
         <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <CheckCircle className="h-6 w-6 text-emerald-600 shrink-0" />
           <div>
-            <p className="font-semibold text-emerald-800">Pedido criado com sucesso no Tiny!</p>
+            <p className="font-semibold text-emerald-800">
+              Pedido {orderNumber ? `#${orderNumber}` : ""} criado com sucesso no Tiny!
+            </p>
             <p className="text-sm text-emerald-600">O pedido foi enviado para o Tiny ERP e já está disponível para processamento.</p>
           </div>
           <button onClick={handleReset} className="ml-auto rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
