@@ -15,28 +15,54 @@ export async function POST(req: Request) {
     return fail(`Produtos sem SKU não podem ser lançados: ${nomes}. Verifique o catálogo ou ajuste o pedido.`, 400);
   }
 
-  // Buscar IDs dos produtos no Tiny
+  // Normaliza para comparar nomes de produto (sem acento/maiúsc./pontuação).
+  const normProd = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Buscar IDs dos produtos no Tiny.
+  // OBS: o Tiny NÃO usa os nossos códigos internos (NYER…). Então buscamos
+  // primeiro pelo CÓDIGO (caso bata) e, se não casar, pelo NOME do produto —
+  // que é o que realmente identifica o item no cadastro do Tiny.
   const itensFormatados = await Promise.all(
     itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
       let prodId: number | null = null;
+      const nomeAlvo = normProd(i.nome ?? "");
 
+      // 1) Tenta pelo código exato (se algum dia os códigos forem alinhados).
       if (i.sku) {
         try {
           const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(i.sku)}`);
           if (res.ok) {
             const json = await res.json();
             const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; sku?: string; codigo?: string }>;
-            // IMPORTANTE: o filtro do Tiny traz correspondências parciais.
-            // Precisamos do produto cujo código/SKU é EXATAMENTE o nosso, senão
-            // pega o produto errado (ex.: "260311" casando com outro item).
-            const alvo = String(i.sku).trim();
-            const exato = prods.find(
-              (p) => String(p.sku ?? p.codigo ?? "").trim() === alvo
-            );
+            const exato = prods.find((p) => String(p.sku ?? p.codigo ?? "").trim() === String(i.sku).trim());
             if (exato) prodId = Number(exato.id);
           }
         } catch {
-          // continua sem ID
+          /* segue para busca por nome */
+        }
+      }
+
+      // 2) Busca pelo NOME do produto e casa pela descrição exata (normalizada).
+      if (!prodId && nomeAlvo) {
+        try {
+          const res = await tinyFetch(`/produtos?pesquisa=${encodeURIComponent(i.nome)}&limit=20`);
+          if (res.ok) {
+            const json = await res.json();
+            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; descricao?: string; nome?: string }>;
+            // match exato normalizado primeiro; senão, "contém todas as palavras".
+            const exato = prods.find((p) => normProd(String(p.descricao ?? p.nome ?? "")) === nomeAlvo);
+            const palavras = nomeAlvo.split(" ").filter((w) => w.length > 2);
+            const contem =
+              exato ??
+              prods.find((p) => {
+                const d = normProd(String(p.descricao ?? p.nome ?? ""));
+                return palavras.length > 0 && palavras.every((w) => d.includes(w));
+              });
+            if (contem) prodId = Number(contem.id);
+          }
+        } catch {
+          /* nada encontrado */
         }
       }
 
@@ -48,7 +74,7 @@ export async function POST(req: Request) {
         throw new Error(`Item "${i.nome}" sem SKU — não consegue criar no Tiny`);
       }
 
-      throw new Error(`Produto "${i.nome}" (SKU ${i.sku}) não encontrado no Tiny com código exato. Verifique se o SKU está cadastrado.`);
+      throw new Error(`Produto "${i.nome}" não encontrado no Tiny (nem por código nem por nome). Verifique o cadastro do produto no Tiny.`);
     })
   );
 
