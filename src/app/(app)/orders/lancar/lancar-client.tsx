@@ -70,7 +70,8 @@ export function LancarPedidoClient() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [editedItems, setEditedItems] = useState<ParsedItem[]>([]);
-  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [foundCustomers, setFoundCustomers] = useState<SearchedCustomer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [sellers, setSellers] = useState<Seller[]>([]);
@@ -130,7 +131,7 @@ export function LancarPedidoClient() {
   }
 
   async function searchCustomer(nome: string) {
-    setSearchingCustomer(true);
+    setBuscandoCliente(true);
     try {
       const res = await fetch("/api/orders/search-customer", {
         method: "POST",
@@ -144,7 +145,7 @@ export function LancarPedidoClient() {
     } catch {
       // Ignora erro na busca, continua sem cliente existente
     } finally {
-      setSearchingCustomer(false);
+      setBuscandoCliente(false);
     }
   }
 
@@ -234,6 +235,45 @@ export function LancarPedidoClient() {
 
       {!parsed && !created && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+          {/* Busca manual de cliente */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Buscar cliente no Tiny</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={buscaCliente}
+                onChange={(e) => setBuscaCliente(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && buscaCliente.trim()) searchCustomer(buscaCliente.trim()); }}
+                placeholder="Nome do cliente..."
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+              />
+              <button
+                onClick={() => buscaCliente.trim() && searchCustomer(buscaCliente.trim())}
+                disabled={buscandoCliente || !buscaCliente.trim()}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-brand-700 hover:text-brand-700 disabled:opacity-50"
+              >
+                {buscandoCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
+              </button>
+            </div>
+            {foundCustomers.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {foundCustomers.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id); }}
+                    className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selectedCustomerId === c.id ? "border-brand-700 bg-brand-50 text-brand-800" : "border-slate-200 bg-white hover:border-brand-400"}`}
+                  >
+                    <span className="font-medium">{c.nome}</span>
+                    {c.telefone && <span className="ml-2 text-slate-400 text-xs">{c.telefone}</span>}
+                    {c.email && <span className="ml-2 text-slate-400 text-xs">{c.email}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedCustomerId && (
+              <p className="mt-1 text-xs text-brand-700 font-medium">✓ Cliente selecionado — o pedido será vinculado a ele.</p>
+            )}
+          </div>
           <label className="block text-sm font-medium text-slate-700">
             Descreva o pedido
           </label>
