@@ -25,10 +25,15 @@ export async function POST(req: Request) {
           const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(i.sku)}`);
           if (res.ok) {
             const json = await res.json();
-            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string }>;
-            if (prods.length > 0) {
-              prodId = Number(prods[0].id);
-            }
+            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; sku?: string; codigo?: string }>;
+            // IMPORTANTE: o filtro do Tiny traz correspondências parciais.
+            // Precisamos do produto cujo código/SKU é EXATAMENTE o nosso, senão
+            // pega o produto errado (ex.: "260311" casando com outro item).
+            const alvo = String(i.sku).trim();
+            const exato = prods.find(
+              (p) => String(p.sku ?? p.codigo ?? "").trim() === alvo
+            );
+            if (exato) prodId = Number(exato.id);
           }
         } catch {
           // continua sem ID
@@ -43,7 +48,7 @@ export async function POST(req: Request) {
         throw new Error(`Item "${i.nome}" sem SKU — não consegue criar no Tiny`);
       }
 
-      throw new Error(`Produto "${i.nome}" (${i.sku}) não encontrado no Tiny`);
+      throw new Error(`Produto "${i.nome}" (SKU ${i.sku}) não encontrado no Tiny com código exato. Verifique se o SKU está cadastrado.`);
     })
   );
 
@@ -106,10 +111,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // Tiny V3 POST /pedidos payload
+  // Tiny V3 POST /pedidos payload.
+  // situacao 0 = "em aberto" — o pedido nasce para CONFERÊNCIA da equipe, nunca
+  // como "faturado" (1). A conferência/faturamento é feita manualmente no Tiny.
   const payload: Record<string, unknown> = {
     idContato,
-    situacao: 1,
+    situacao: 0,
     itens: itensFormatados,
   };
 
