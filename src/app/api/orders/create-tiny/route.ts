@@ -140,10 +140,34 @@ export async function POST(req: Request) {
   try {
     console.log("[create-tiny] Payload final:", JSON.stringify(payload, null, 2));
     const result = await createWithRetry();
+
+    // VERIFICAÇÃO: relê o pedido recém-criado para confirmar que ele realmente
+    // existe no Tiny (e não foi só um 201 "fantasma"). Sem isso, não temos como
+    // saber por que "não cai no Olist". Best-effort: não falha se a releitura der erro.
+    let verificacao: { existe: boolean; situacao: unknown; numero: unknown } | null = null;
+    try {
+      const gres = await tinyFetch(`/pedidos/${encodeURIComponent(String(result.id))}`);
+      if (gres.ok) {
+        const ped = (await gres.json().catch(() => null)) as any;
+        const p = ped?.pedido ?? ped?.data ?? ped ?? {};
+        verificacao = {
+          existe: Boolean(p?.id ?? p?.numeroPedido ?? p?.numero),
+          situacao: p?.situacao ?? p?.codigoSituacao ?? p?.descricaoSituacao ?? null,
+          numero: p?.numeroPedido ?? p?.numero ?? null,
+        };
+      } else {
+        verificacao = { existe: false, situacao: `GET ${gres.status}`, numero: null };
+      }
+    } catch {
+      /* releitura best-effort */
+    }
+    console.log("[create-tiny] Verificação pós-criação:", JSON.stringify(verificacao));
+
     return ok({
       message: `Pedido ${result.numeroPedido ?? result.id} criado no Tiny`,
       id: result.id,
       numeroPedido: result.numeroPedido,
+      verificacao,
       tiny: result.raw,
     });
   } catch (err) {
