@@ -1,0 +1,570 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Sparkles, Send, RotateCcw, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { CATALOG } from "@/lib/product-costs";
+
+interface ParsedEndereco {
+  logradouro: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+}
+interface ParsedCliente {
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+  cpf: string | null;
+  endereco: ParsedEndereco;
+}
+interface ParsedItem {
+  sku: string | null;
+  nome: string;
+  quantidade: number;
+  valor_unitario: number;
+}
+interface ParsedOrder {
+  cliente: ParsedCliente;
+  itens: ParsedItem[];
+  observacao: string | null;
+  confianca: "alta" | "media" | "baixa";
+  avisos: string[];
+}
+
+interface SearchedCustomer {
+  id: string;
+  nome: string;
+  cpf: string | null;
+  email: string | null;
+  telefone: string | null;
+}
+
+interface Seller {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
+interface Carrier {
+  id: string;
+  name: string;
+}
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function Badge({ c }: { c: "alta" | "media" | "baixa" }) {
+  const map = { alta: "bg-emerald-100 text-emerald-700", media: "bg-amber-100 text-amber-700", baixa: "bg-red-100 text-red-700" };
+  const label = { alta: "Alta confiança", media: "Confiança média", baixa: "Baixa confiança" };
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${map[c]}`}>{label[c]}</span>;
+}
+
+export function LancarPedidoClient() {
+  const [texto, setTexto] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [parsed, setParsed] = useState<ParsedOrder | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [editedItems, setEditedItems] = useState<ParsedItem[]>([]);
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [foundCustomers, setFoundCustomers] = useState<SearchedCustomer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
+  const [formaPagamento, setFormaPagamento] = useState<string>("");
+  const [empresa, setEmpresa] = useState<"nyer" | "ecopro">("nyer");
+
+  useEffect(() => {
+    const m = document.cookie.match(/(?:^|;\s*)empresa=([^;]+)/);
+    setEmpresa(m?.[1] === "ecopro" ? "ecopro" : "nyer");
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/orders/list-sellers")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.sellers) setSellers(json.data.sellers);
+        })
+        .catch(() => {}),
+      fetch("/api/orders/list-carriers")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.data?.carriers) {
+            setCarriers(json.data.carriers);
+            // Set Braspress como padrão
+            const braspress = json.data.carriers.find((c: Carrier) => c.name.toLowerCase().includes("braspress"));
+            if (braspress) setSelectedCarrierId(braspress.id);
+          }
+        })
+        .catch(() => {}),
+    ]);
+  }, []);
+
+  async function handleParse() {
+    if (!texto.trim()) return;
+    setLoading(true);
+    setError(null);
+    setParsed(null);
+    setCreated(false);
+    setFoundCustomers([]);
+    setSelectedCustomerId(null);
+    try {
+      const res = await fetch("/api/orders/ai-parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(`${json.error}${json.extra ? ` — ${json.extra}` : ""}`);
+      const parsed = json.data ?? json;
+      setParsed(parsed);
+      setEditedItems(parsed.itens ?? []);
+
+      // Buscar cliente existente no Tiny
+      await searchCustomer(parsed.cliente.nome);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function searchCustomer(nome: string) {
+    setBuscandoCliente(true);
+    try {
+      const res = await fetch("/api/orders/search-customer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.clientes?.length > 0) {
+        setFoundCustomers(json.data.clientes);
+      }
+    } catch {
+      // Ignora erro na busca, continua sem cliente existente
+    } finally {
+      setBuscandoCliente(false);
+    }
+  }
+
+  function setItemQty(i: number, qty: number) {
+    setEditedItems((prev) => prev.map((item, idx) => idx === i ? { ...item, quantidade: qty } : item));
+  }
+  function setItemPrice(i: number, price: number) {
+    setEditedItems((prev) => prev.map((item, idx) => idx === i ? { ...item, valor_unitario: price } : item));
+  }
+  function removeItem(i: number) {
+    setEditedItems((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  const total = editedItems.reduce((s, it) => s + it.quantidade * it.valor_unitario, 0);
+
+  // Calcular margem líquida
+  const custoProdutos = editedItems.reduce((s, it) => {
+    const produto = it.sku ? CATALOG.find((p) => p.sku === it.sku) : null;
+    const custo = produto?.cost ?? 0;
+    return s + custo * it.quantidade;
+  }, 0);
+
+  // Custos operacionais padrão (em %)
+  const taxRate = (7 + 8 + 7) / 100; // impostos + comissao + logistica
+  const custosOp = total * taxRate;
+  const lucro = total - custoProdutos - custosOp;
+  const margem = total > 0 ? (lucro / total) * 100 : 0;
+
+  async function handleCreate() {
+    if (!parsed) return;
+    setCreating(true);
+    try {
+      const carrierNome = selectedCarrierId
+        ? carriers.find((c) => c.id === selectedCarrierId)?.name ?? null
+        : null;
+      const payload = {
+        ...parsed,
+        itens: editedItems,
+        empresa,
+        ...(selectedCustomerId ? { clienteId: selectedCustomerId } : {}),
+        ...(selectedSellerId ? { vendedorNome: selectedSellerId } : {}),
+        ...(carrierNome ? { transportadoraNome: carrierNome } : {}),
+        ...(formaPagamento ? { formaPagamento } : {}),
+      };
+      const res = await fetch("/api/orders/create-tiny", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await res.text();
+      let json: any;
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`Resposta inválida (${res.status}): ${text.slice(0, 200)}`);
+      }
+
+      if (!res.ok || json.ok === false) {
+        const errorMsg = json.error || json.message || text.slice(0, 200);
+        throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+      }
+
+      // Só é sucesso se o Tiny devolveu número/id do pedido
+      const num = json.data?.numeroPedido ?? json.data?.id ?? null;
+      if (!num) {
+        throw new Error("O Tiny não confirmou a criação do pedido (sem número de pedido). Tente novamente.");
+      }
+      // O Tiny devolveu o número do pedido → criado com sucesso.
+      // (A releitura pós-criação é só informativa; o Tiny às vezes leva alguns
+      // segundos para o pedido ficar consultável por id, então não bloqueamos.)
+      setOrderNumber(String(num));
+      setCreated(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao criar pedido");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleReset() {
+    setTexto("");
+    setParsed(null);
+    setError(null);
+    setCreated(false);
+    setOrderNumber(null);
+    setEditedItems([]);
+  }
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-brand-700" />
+          Lançador de Pedido por IA
+        </h1>
+        <p className="text-sm text-slate-500">Descreva o pedido em linguagem natural — a IA interpreta e monta a estrutura para você confirmar.</p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-slate-500">Empresa ativa:</span>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${empresa === "ecopro" ? "bg-emerald-100 text-emerald-700" : "bg-brand-50 text-brand-700"}`}>
+            {empresa === "ecopro" ? "Ecopro" : "NYER Nutrition"}
+          </span>
+          <span className="text-xs text-slate-400">(mude na barra lateral)</span>
+        </div>
+      </div>
+
+      {!parsed && !created && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+          {/* Busca manual de cliente */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Buscar cliente no Tiny</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={buscaCliente}
+                onChange={(e) => setBuscaCliente(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && buscaCliente.trim()) searchCustomer(buscaCliente.trim()); }}
+                placeholder="Nome do cliente..."
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+              />
+              <button
+                onClick={() => buscaCliente.trim() && searchCustomer(buscaCliente.trim())}
+                disabled={buscandoCliente || !buscaCliente.trim()}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-brand-700 hover:text-brand-700 disabled:opacity-50"
+              >
+                {buscandoCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
+              </button>
+            </div>
+            {foundCustomers.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {foundCustomers.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id); }}
+                    className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selectedCustomerId === c.id ? "border-brand-700 bg-brand-50 text-brand-800" : "border-slate-200 bg-white hover:border-brand-400"}`}
+                  >
+                    <span className="font-medium">{c.nome}</span>
+                    {c.telefone && <span className="ml-2 text-slate-400 text-xs">{c.telefone}</span>}
+                    {c.email && <span className="ml-2 text-slate-400 text-xs">{c.email}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedCustomerId && (
+              <p className="mt-1 text-xs text-brand-700 font-medium">✓ Cliente selecionado — o pedido será vinculado a ele.</p>
+            )}
+          </div>
+          <label className="block text-sm font-medium text-slate-700">
+            Descreva o pedido
+          </label>
+          <textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            placeholder={`Exemplo:\nCliente: João Silva, (11) 98765-4321, joao@email.com\nEndereço: Rua das Flores, 123, Ap 45, Centro, São Paulo - SP, CEP 01310-100\nPedido:\n- 2x Whey Refill 900g Chocolate\n- 1x Creatina Refill 300g\nDesconto de 10%`}
+            rows={8}
+            className="w-full rounded-lg border border-slate-200 p-3 text-sm text-slate-800 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700 resize-none"
+          />
+          <div className="flex justify-end">
+            <button
+              onClick={handleParse}
+              disabled={loading || !texto.trim()}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {loading ? "Interpretando..." : "Interpretar com IA"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {created && (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+          <CheckCircle className="h-6 w-6 text-emerald-600 shrink-0" />
+          <div>
+            <p className="font-semibold text-emerald-800">
+              Pedido {orderNumber ? `#${orderNumber}` : ""} criado com sucesso no Tiny ({empresa === "ecopro" ? "Ecopro" : "NYER"})!
+            </p>
+            <p className="text-sm text-emerald-600">O pedido foi enviado para o Tiny ERP e já está disponível para processamento.</p>
+          </div>
+          <button onClick={handleReset} className="ml-auto rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+            Novo pedido
+          </button>
+        </div>
+      )}
+
+      {parsed && !created && (
+        <div className="space-y-4">
+          {/* Header with confidence */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-slate-700">Pedido interpretado</span>
+              <Badge c={parsed.confianca} />
+            </div>
+            <button onClick={handleReset} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
+              <RotateCcw className="h-3.5 w-3.5" /> Recomeçar
+            </button>
+          </div>
+
+          {parsed.avisos?.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="mb-1 text-xs font-semibold text-amber-700 uppercase tracking-wide">Avisos da IA</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {parsed.avisos.map((a, i) => (
+                  <li key={i} className="text-sm text-amber-700">{a}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Vendedor */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Vendedor</label>
+            <select
+              value={selectedSellerId || ""}
+              onChange={(e) => setSelectedSellerId(e.target.value || null)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Transportadora */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Transportadora</label>
+            <select
+              value={selectedCarrierId || ""}
+              onChange={(e) => setSelectedCarrierId(e.target.value || null)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              {carriers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Forma de pagamento */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-800 mb-2">Forma de pagamento</label>
+            <select
+              value={formaPagamento}
+              onChange={(e) => setFormaPagamento(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              <option value="Pix">Pix</option>
+              <option value="Boleto">Boleto</option>
+              <option value="Cartão de crédito">Cartão de crédito</option>
+            </select>
+          </div>
+
+          {/* Cliente existente */}
+          {foundCustomers.length > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-blue-900">Cliente já cadastrado no Tiny</p>
+              <div className="space-y-2">
+                {foundCustomers.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCustomerId(selectedCustomerId === c.id ? null : c.id)}
+                    className={`block w-full rounded-lg border-2 p-3 text-left transition-colors ${
+                      selectedCustomerId === c.id
+                        ? "border-blue-600 bg-blue-100"
+                        : "border-blue-200 bg-white hover:border-blue-400"
+                    }`}
+                  >
+                    <div className="font-semibold text-slate-900">{c.nome}</div>
+                    {c.cpf && <div className="text-xs text-slate-500">CPF: {c.cpf}</div>}
+                    {c.email && <div className="text-xs text-slate-500">Email: {c.email}</div>}
+                    {c.telefone && <div className="text-xs text-slate-500">Telefone: {c.telefone}</div>}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setSelectedCustomerId(null)}
+                  className={`block w-full rounded-lg border-2 p-3 text-left transition-colors ${
+                    selectedCustomerId === null ? "border-slate-400 bg-slate-100" : "border-slate-200 bg-white hover:border-slate-400"
+                  }`}
+                >
+                  <div className="text-sm font-semibold text-slate-700">Criar novo cliente</div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cliente */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">Dados do cliente</h2>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-xs text-slate-400 block">Nome</span><span className="font-medium text-slate-800">{parsed.cliente.nome || "—"}</span></div>
+              <div><span className="text-xs text-slate-400 block">Telefone</span><span className="font-medium text-slate-800">{parsed.cliente.telefone || "—"}</span></div>
+              <div><span className="text-xs text-slate-400 block">E-mail</span><span className="font-medium text-slate-800">{parsed.cliente.email || "—"}</span></div>
+              <div><span className="text-xs text-slate-400 block">CPF</span><span className="font-medium text-slate-800">{parsed.cliente.cpf || "—"}</span></div>
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3 text-sm">
+              <span className="text-xs text-slate-400 block mb-1">Endereço</span>
+              <span className="text-slate-700">
+                {[
+                  parsed.cliente.endereco.logradouro,
+                  parsed.cliente.endereco.complemento,
+                  parsed.cliente.endereco.bairro,
+                  parsed.cliente.endereco.cidade,
+                  parsed.cliente.endereco.uf,
+                  parsed.cliente.endereco.cep,
+                ].filter(Boolean).join(", ") || "—"}
+              </span>
+            </div>
+            {parsed.observacao && (
+              <div className="mt-3 border-t border-slate-100 pt-3 text-sm">
+                <span className="text-xs text-slate-400 block mb-1">Observação</span>
+                <span className="text-slate-700">{parsed.observacao}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Itens */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-800">Itens do pedido</h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-100">
+                  <th className="px-4 py-2 text-left">Produto</th>
+                  <th className="px-4 py-2 text-center w-24">Qtd</th>
+                  <th className="px-4 py-2 text-right w-32">Valor unit.</th>
+                  <th className="px-4 py-2 text-right w-32">Total</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {editedItems.map((item, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-slate-800">{item.nome}</div>
+                      {item.sku
+                        ? <div className="font-mono text-[10px] text-slate-400">{item.sku}</div>
+                        : <div className="text-[10px] text-amber-500">SKU não mapeado</div>
+                      }
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="number" min={1} value={item.quantidade}
+                        onChange={(e) => setItemQty(i, Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-xs focus:border-brand-700 focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <input
+                        type="number" min={0} step={0.01} value={item.valor_unitario}
+                        onChange={(e) => setItemPrice(i, parseFloat(e.target.value) || 0)}
+                        className="w-24 rounded border border-slate-200 px-1 py-0.5 text-right text-xs focus:border-brand-700 focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                      {fmtBRL(item.quantidade * item.valor_unitario)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => removeItem(i)} className="text-slate-300 hover:text-red-500 text-base leading-none">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200 bg-slate-50">
+                  <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Total do pedido</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{fmtBRL(total)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Margem líquida */}
+          <div className={`rounded-xl border-2 p-6 text-center ${margem >= 26 ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
+            <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Margem líquida</p>
+            <p className={`text-5xl font-bold ${margem >= 26 ? "text-emerald-600" : "text-red-600"}`}>
+              {margem.toFixed(1)}%
+            </p>
+          </div>
+
+          {/* Confirm */}
+          <div className="flex items-center justify-between pt-2">
+            <div>
+              <p className="text-xs text-slate-400">Revise os dados acima antes de confirmar. O pedido será criado diretamente no Tiny.</p>
+              {creating && <p className="text-xs text-blue-600 mt-1">⏳ Enviando... (pode levar alguns segundos)</p>}
+            </div>
+            <button
+              onClick={handleCreate}
+              disabled={creating || editedItems.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {creating ? "Criando..." : "Confirmar e criar no Tiny"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

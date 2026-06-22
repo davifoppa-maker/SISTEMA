@@ -18,62 +18,75 @@ export interface TinyTokenSet {
   obtained_at: string; // ISO
 }
 
-const PROVIDER = "tiny";
+// Mapeia companyId → provider key gravado no banco.
+function toProvider(companyId = "nyer"): string {
+  return companyId === "ecopro" ? "tiny_ecopro" : "tiny";
+}
 
 // Cache em memória (fallback de desenvolvimento). Singleton por processo.
-const globalForTokens = globalThis as unknown as { __tinyTokens?: TinyTokenSet | null };
+const globalForTokens = globalThis as unknown as {
+  __tinyTokens?: TinyTokenSet | null;
+  __tinyEcoproTokens?: TinyTokenSet | null;
+};
 
-function fromEnv(): TinyTokenSet | null {
-  const access = process.env.TINY_ACCESS_TOKEN;
+function fromEnv(companyId = "nyer"): TinyTokenSet | null {
+  const prefix = companyId === "ecopro" ? "ECOPRO_" : "";
+  const access = process.env[`${prefix}TINY_ACCESS_TOKEN`];
   if (!access) return null;
   return {
     access_token: access,
-    refresh_token: process.env.TINY_REFRESH_TOKEN || null,
-    // Sem validade conhecida: trata como expirado para forçar refresh no 1º uso.
+    refresh_token: process.env[`${prefix}TINY_REFRESH_TOKEN`] || null,
     expires_at: new Date(0).toISOString(),
     scope: null,
     obtained_at: new Date(0).toISOString(),
   };
 }
 
-export async function getStoredTokens(): Promise<TinyTokenSet | null> {
+function memKey(companyId = "nyer"): "__tinyTokens" | "__tinyEcoproTokens" {
+  return companyId === "ecopro" ? "__tinyEcoproTokens" : "__tinyTokens";
+}
+
+export async function getStoredTokens(companyId = "nyer"): Promise<TinyTokenSet | null> {
+  const provider = toProvider(companyId);
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("oauth_tokens")
       .select("access_token, refresh_token, expires_at, scope, obtained_at")
-      .eq("provider", PROVIDER)
+      .eq("provider", provider)
       .maybeSingle();
     if (error) throw new Error(`Falha ao ler tokens do Supabase: ${error.message}`);
     if (data) return data as TinyTokenSet;
-    // Sem registro ainda: tenta semear do ambiente.
-    return fromEnv();
+    return fromEnv(companyId);
   }
-  if (globalForTokens.__tinyTokens !== undefined && globalForTokens.__tinyTokens !== null) {
-    return globalForTokens.__tinyTokens;
+  const key = memKey(companyId);
+  if (globalForTokens[key] !== undefined && globalForTokens[key] !== null) {
+    return globalForTokens[key]!;
   }
-  return fromEnv();
+  return fromEnv(companyId);
 }
 
-export async function saveTokens(tokens: TinyTokenSet): Promise<void> {
+export async function saveTokens(tokens: TinyTokenSet, companyId = "nyer"): Promise<void> {
+  const provider = toProvider(companyId);
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("oauth_tokens")
-      .upsert({ provider: PROVIDER, ...tokens, updated_at: new Date().toISOString() }, {
+      .upsert({ provider, ...tokens, updated_at: new Date().toISOString() }, {
         onConflict: "provider",
       });
     if (error) throw new Error(`Falha ao salvar tokens no Supabase: ${error.message}`);
     return;
   }
-  globalForTokens.__tinyTokens = tokens;
+  globalForTokens[memKey(companyId)] = tokens;
 }
 
-export async function clearTokens(): Promise<void> {
+export async function clearTokens(companyId = "nyer"): Promise<void> {
+  const provider = toProvider(companyId);
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseAdmin();
-    await supabase.from("oauth_tokens").delete().eq("provider", PROVIDER);
+    await supabase.from("oauth_tokens").delete().eq("provider", provider);
     return;
   }
-  globalForTokens.__tinyTokens = null;
+  globalForTokens[memKey(companyId)] = null;
 }

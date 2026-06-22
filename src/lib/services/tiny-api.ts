@@ -32,13 +32,16 @@ const DEFAULTS = {
   scope: "openid offline_access",
 };
 
-export function getTinyConfig(): TinyConfig {
+export function getTinyConfig(companyId = "nyer"): TinyConfig {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
+  const isEcopro = companyId === "ecopro";
+  const prefix = isEcopro ? "ECOPRO_" : "";
   return {
-    clientId: process.env.TINY_CLIENT_ID || "",
-    clientSecret: process.env.TINY_CLIENT_SECRET || "",
+    clientId: process.env[`${prefix}TINY_CLIENT_ID`] || "",
+    clientSecret: process.env[`${prefix}TINY_CLIENT_SECRET`] || "",
     redirectUri:
-      process.env.TINY_REDIRECT_URI || `${appUrl.replace(/\/$/, "")}/api/auth/tiny/callback`,
+      process.env[`${prefix}TINY_REDIRECT_URI`] ||
+      `${appUrl.replace(/\/$/, "")}/api/auth/tiny/callback${isEcopro ? "?empresa=ecopro" : ""}`,
     authUrl: process.env.TINY_AUTH_URL || DEFAULTS.authUrl,
     tokenUrl: process.env.TINY_TOKEN_URL || DEFAULTS.tokenUrl,
     apiBaseUrl: (process.env.TINY_API_BASE_URL || DEFAULTS.apiBaseUrl).replace(/\/$/, ""),
@@ -48,14 +51,14 @@ export function getTinyConfig(): TinyConfig {
 }
 
 /** O app tem credenciais de OAuth (client_id + client_secret) configuradas? */
-export function isTinyConfigured(): boolean {
-  const c = getTinyConfig();
+export function isTinyConfigured(companyId = "nyer"): boolean {
+  const c = getTinyConfig(companyId);
   return Boolean(c.clientId && c.clientSecret);
 }
 
 /** URL para iniciar o consentimento OAuth no Tiny. */
-export function buildAuthorizationUrl(state: string): string {
-  const c = getTinyConfig();
+export function buildAuthorizationUrl(state: string, companyId = "nyer"): string {
+  const c = getTinyConfig(companyId);
   const url = new URL(c.authUrl);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", c.clientId);
@@ -63,6 +66,12 @@ export function buildAuthorizationUrl(state: string): string {
   url.searchParams.set("scope", c.scope);
   url.searchParams.set("state", state);
   return url.toString();
+}
+
+/** Há tokens armazenados (app conectado a uma conta Tiny)? */
+export async function isTinyConnected(companyId = "nyer"): Promise<boolean> {
+  const tokens = await getStoredTokens(companyId);
+  return Boolean(tokens?.access_token);
 }
 
 function basicAuthHeader(c: TinyConfig): string {
@@ -82,8 +91,8 @@ function toTokenSet(raw: Record<string, unknown>): TinyTokenSet {
   };
 }
 
-async function postToken(body: Record<string, string>): Promise<TinyTokenSet> {
-  const c = getTinyConfig();
+async function postToken(body: Record<string, string>, companyId = "nyer"): Promise<TinyTokenSet> {
+  const c = getTinyConfig(companyId);
   const res = await fetch(c.tokenUrl, {
     method: "POST",
     headers: {
@@ -102,26 +111,26 @@ async function postToken(body: Record<string, string>): Promise<TinyTokenSet> {
 }
 
 /** Troca o authorization code (callback) por tokens e persiste. */
-export async function exchangeCodeForTokens(code: string): Promise<TinyTokenSet> {
-  const c = getTinyConfig();
+export async function exchangeCodeForTokens(code: string, companyId = "nyer"): Promise<TinyTokenSet> {
+  const c = getTinyConfig(companyId);
   const tokens = await postToken({
     grant_type: "authorization_code",
     code,
     redirect_uri: c.redirectUri,
-  });
-  await saveTokens(tokens);
+  }, companyId);
+  await saveTokens(tokens, companyId);
   return tokens;
 }
 
 /** Renova os tokens a partir de um refresh_token e persiste. */
-export async function refreshTokens(refreshToken: string): Promise<TinyTokenSet> {
+export async function refreshTokens(refreshToken: string, companyId = "nyer"): Promise<TinyTokenSet> {
   const tokens = await postToken({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-  });
+  }, companyId);
   // O Keycloak nem sempre devolve um novo refresh_token; preserva o anterior.
   if (!tokens.refresh_token) tokens.refresh_token = refreshToken;
-  await saveTokens(tokens);
+  await saveTokens(tokens, companyId);
   return tokens;
 }
 
@@ -133,29 +142,31 @@ function isExpired(tokens: TinyTokenSet): boolean {
  * Retorna um access_token válido, renovando via refresh_token se necessário.
  * Lança erro se o app não estiver conectado (sem tokens) — chame após isTinyConnected().
  */
-export async function getValidAccessToken(): Promise<string> {
-  let tokens = await getStoredTokens();
+export async function getValidAccessToken(companyId = "nyer"): Promise<string> {
+  let tokens = await getStoredTokens(companyId);
   if (!tokens || !tokens.access_token) {
-    throw new Error("Olist Tiny não conectado. Conclua o OAuth em /api/auth/tiny/login.");
+    throw new Error(`Olist Tiny (${companyId}) não conectado. Conclua o OAuth em /api/auth/tiny/login.`);
   }
   if (isExpired(tokens)) {
     if (!tokens.refresh_token) {
-      throw new Error("Token do Tiny expirado e sem refresh_token. Reconecte o app.");
+      throw new Error(`Token do Tiny (${companyId}) expirado e sem refresh_token. Reconecte o app.`);
     }
-    tokens = await refreshTokens(tokens.refresh_token);
+    tokens = await refreshTokens(tokens.refresh_token, companyId);
   }
   return tokens.access_token;
 }
 
-/** Há tokens armazenados (app conectado a uma conta Tiny)? */
-export async function isTinyConnected(): Promise<boolean> {
-  const tokens = await getStoredTokens();
-  return Boolean(tokens?.access_token);
-}
-
-/** Requisição autenticada à API V3, com uma tentativa de refresh em caso de 401. */
-export async function tinyFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const c = getTinyConfig();
+/**
+ * Requisição autenticada à API V3.
+ *  - Renova o token uma vez em caso de 401.
+ *  - Em caso de 429 (rate limit do Tiny), espera e tenta de novo (backoff),
+ *    respeitando o header Retry-After quando presente. O limite do Tiny V3 é
+ *    baixo, então sem isso as operações em lote (sync, criação de pedido com
+ *    várias buscas de produto) falham com frequência.
+ *  - companyId: "nyer" (padrão) ou "ecopro" — determina qual conta Tiny usar.
+ */
+export async function tinyFetch(path: string, init: RequestInit = {}, companyId = "nyer"): Promise<Response> {
+  const c = getTinyConfig(companyId);
   const url = path.startsWith("http") ? path : `${c.apiBaseUrl}${path}`;
 
   const doFetch = async (token: string) =>
@@ -169,15 +180,27 @@ export async function tinyFetch(path: string, init: RequestInit = {}): Promise<R
       cache: "no-store",
     });
 
-  let token = await getValidAccessToken();
+  let token = await getValidAccessToken(companyId);
   let res = await doFetch(token);
+
   if (res.status === 401) {
-    const tokens = await getStoredTokens();
+    const tokens = await getStoredTokens(companyId);
     if (tokens?.refresh_token) {
-      token = (await refreshTokens(tokens.refresh_token)).access_token;
+      token = (await refreshTokens(tokens.refresh_token, companyId)).access_token;
       res = await doFetch(token);
     }
   }
+
+  // Retry em 429 com backoff exponencial (até 4 tentativas extras).
+  for (let attempt = 1; res.status === 429 && attempt <= 4; attempt++) {
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : Math.min(8000, 1000 * Math.pow(2, attempt - 1)); // 1s, 2s, 4s, 8s
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await doFetch(token);
+  }
+
   return res;
 }
 

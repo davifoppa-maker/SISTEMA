@@ -10,26 +10,37 @@ import { SyncTinyButton } from "./sync-tiny-button";
 
 export const dynamic = "force-dynamic";
 
+const COMPANIES = [
+  { id: "nyer", label: "NYER Nutrition", envPrefix: "" },
+  { id: "ecopro", label: "Ecopro", envPrefix: "ECOPRO_" },
+] as const;
+
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams?: { tiny?: string; detalhe?: string };
+  searchParams?: { tiny?: string; detalhe?: string; empresa?: string };
 }) {
   const store = await readStore();
 
-  const tinyConfigured = isTinyConfigured();
-  const tinyConnected = tinyConfigured ? await isTinyConnected().catch(() => false) : false;
+  const companyStatuses = await Promise.all(
+    COMPANIES.map(async (c) => {
+      const configured = isTinyConfigured(c.id);
+      const connected = configured ? await isTinyConnected(c.id).catch(() => false) : false;
+      return { ...c, configured, connected };
+    })
+  );
 
   const integrations = [
     { name: "Meta WhatsApp", env: "META_WHATSAPP_TOKEN", configured: Boolean(process.env.META_WHATSAPP_TOKEN) },
     { name: "Supabase", env: "SUPABASE_SERVICE_ROLE_KEY", configured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY) },
   ];
 
+  const feedbackEmpresa = searchParams?.empresa ?? "nyer";
   const tinyBanner =
     searchParams?.tiny === "conectado"
-      ? { variant: "success" as const, text: "Olist Tiny conectado com sucesso." }
+      ? { variant: "success" as const, text: `Olist Tiny (${feedbackEmpresa === "ecopro" ? "Ecopro" : "NYER"}) conectado com sucesso.` }
       : searchParams?.tiny === "erro"
-        ? { variant: "warning" as const, text: `Falha ao conectar ao Tiny: ${searchParams?.detalhe ?? "erro"}` }
+        ? { variant: "warning" as const, text: `Falha ao conectar ao Tiny (${feedbackEmpresa}): ${searchParams?.detalhe ?? "erro"}` }
         : null;
 
   return (
@@ -42,39 +53,42 @@ export default async function SettingsPage({
         </div>
       )}
 
-      <Card className="mb-4">
-        <CardHeader><CardTitle>Olist Tiny (API V3)</CardTitle></CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500">Credenciais (OAuth):</span>
-                <Badge variant={tinyConfigured ? "success" : "warning"}>
-                  {tinyConfigured ? "configuradas" : "ausentes"}
-                </Badge>
-                <span className="text-slate-500">Conta:</span>
-                <Badge variant={tinyConnected ? "success" : "muted"}>
-                  {tinyConnected ? "conectada" : "não conectada"}
-                </Badge>
+      {companyStatuses.map((company) => (
+        <Card className="mb-4" key={company.id}>
+          <CardHeader><CardTitle>Olist Tiny — {company.label}</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Credenciais (OAuth):</span>
+                  <Badge variant={company.configured ? "success" : "warning"}>
+                    {company.configured ? "configuradas" : "ausentes"}
+                  </Badge>
+                  <span className="text-slate-500">Conta:</span>
+                  <Badge variant={company.connected ? "success" : "muted"}>
+                    {company.connected ? "conectada" : "não conectada"}
+                  </Badge>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Defina <code>{company.envPrefix}TINY_CLIENT_ID</code> e{" "}
+                  <code>{company.envPrefix}TINY_CLIENT_SECRET</code> e clique em conectar para autorizar.
+                </div>
               </div>
-              <div className="text-xs text-slate-400">
-                Defina <code>TINY_CLIENT_ID</code> e <code>TINY_CLIENT_SECRET</code> e clique em conectar para autorizar.
-              </div>
+              {company.configured ? (
+                <a
+                  href={`/api/auth/tiny/login${company.id === "ecopro" ? "?empresa=ecopro" : ""}`}
+                  className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
+                >
+                  {company.connected ? "Reconectar" : `Conectar ao Olist Tiny (${company.label})`}
+                </a>
+              ) : (
+                <span className="text-xs text-slate-400">Configure as credenciais para habilitar a conexão.</span>
+              )}
             </div>
-            {tinyConfigured ? (
-              <a
-                href="/api/auth/tiny/login"
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
-              >
-                {tinyConnected ? "Reconectar" : "Conectar ao Olist Tiny"}
-              </a>
-            ) : (
-              <span className="text-xs text-slate-400">Configure as credenciais para habilitar a conexão.</span>
-            )}
-          </div>
-          {tinyConnected && <SyncTinyButton />}
-        </CardContent>
-      </Card>
+            {company.id === "nyer" && company.connected && <SyncTinyButton />}
+          </CardContent>
+        </Card>
+      ))}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>

@@ -4,6 +4,19 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils/cn";
+
+type Company = "nyer" | "ecopro";
+
+function getActiveCompany(): Company {
+  if (typeof document === "undefined") return "nyer";
+  const m = document.cookie.match(/(?:^|;\s*)empresa=([^;]+)/);
+  return m?.[1] === "ecopro" ? "ecopro" : "nyer";
+}
+
+function setActiveCompany(id: Company) {
+  const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `empresa=${id}; path=/; expires=${expires}; SameSite=Lax`;
+}
 import {
   LayoutDashboard,
   Package,
@@ -45,9 +58,25 @@ const nav = [
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
 ];
 
+const COMPANIES: { id: Company; label: string; initial: string; color: string }[] = [
+  { id: "nyer", label: "NYER Nutrition", initial: "N", color: "bg-brand-700" },
+  { id: "ecopro", label: "Ecopro", initial: "E", color: "bg-emerald-600" },
+];
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [activeCompany, setActiveCompanyState] = useState<Company>("nyer");
+
+  useEffect(() => {
+    setActiveCompanyState(getActiveCompany());
+  }, []);
+
+  function switchCompany(id: Company) {
+    setActiveCompany(id);
+    setActiveCompanyState(id);
+    router.refresh();
+  }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -55,15 +84,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     router.refresh();
   }
 
+  const company = COMPANIES.find((c) => c.id === activeCompany) ?? COMPANIES[0];
+
   return (
     <>
-      <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-700 text-sm font-bold text-white">
-          N
+      <div className="border-b border-slate-100 px-3 pt-3 pb-2">
+        <div className="flex items-center gap-2 px-2 pb-2">
+          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white", company.color)}>
+            {company.initial}
+          </div>
+          <div className="leading-tight min-w-0">
+            <div className="text-sm font-semibold text-slate-800 truncate">{company.label}</div>
+            <div className="text-[10px] text-slate-400">Logística & Pós-venda</div>
+          </div>
         </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold text-slate-800">NYER APP</div>
-          <div className="text-[10px] text-slate-400">Logística & Pós-venda</div>
+        <div className="flex gap-1">
+          {COMPANIES.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => switchCompany(c.id)}
+              className={cn(
+                "flex-1 rounded-md py-1 text-xs font-medium transition-colors",
+                activeCompany === c.id
+                  ? "bg-brand-50 text-brand-700 border border-brand-200"
+                  : "text-slate-500 hover:bg-slate-100",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
