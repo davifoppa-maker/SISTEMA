@@ -153,7 +153,14 @@ export async function isTinyConnected(): Promise<boolean> {
   return Boolean(tokens?.access_token);
 }
 
-/** Requisição autenticada à API V3, com uma tentativa de refresh em caso de 401. */
+/**
+ * Requisição autenticada à API V3.
+ *  - Renova o token uma vez em caso de 401.
+ *  - Em caso de 429 (rate limit do Tiny), espera e tenta de novo (backoff),
+ *    respeitando o header Retry-After quando presente. O limite do Tiny V3 é
+ *    baixo, então sem isso as operações em lote (sync, criação de pedido com
+ *    várias buscas de produto) falham com frequência.
+ */
 export async function tinyFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const c = getTinyConfig();
   const url = path.startsWith("http") ? path : `${c.apiBaseUrl}${path}`;
@@ -171,6 +178,7 @@ export async function tinyFetch(path: string, init: RequestInit = {}): Promise<R
 
   let token = await getValidAccessToken();
   let res = await doFetch(token);
+
   if (res.status === 401) {
     const tokens = await getStoredTokens();
     if (tokens?.refresh_token) {
@@ -178,6 +186,17 @@ export async function tinyFetch(path: string, init: RequestInit = {}): Promise<R
       res = await doFetch(token);
     }
   }
+
+  // Retry em 429 com backoff exponencial (até 4 tentativas extras).
+  for (let attempt = 1; res.status === 429 && attempt <= 4; attempt++) {
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : Math.min(8000, 1000 * Math.pow(2, attempt - 1)); // 1s, 2s, 4s, 8s
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await doFetch(token);
+  }
+
   return res;
 }
 
