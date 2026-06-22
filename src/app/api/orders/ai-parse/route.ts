@@ -85,6 +85,60 @@ Regras CRÍTICAS:
     if (jsonMatch) raw = jsonMatch[0];
 
     const parsed = JSON.parse(raw);
+
+    // RECONCILIAÇÃO COM O CATÁLOGO OFICIAL.
+    // A IA não é confiável para o SKU: ela às vezes inventa códigos (ex.: um
+    // "Aroma de Baunilha" 260311 que não existe). Aqui forçamos que todo item
+    // tenha um SKU REAL do catálogo:
+    //   1. Se o SKU retornado existe no catálogo → usa, e corrige nome/preço.
+    //   2. Se não existe → tenta casar pelo nome do produto.
+    //   3. Se nada casar → zera o SKU e avisa (não deixa lançar produto errado).
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+    const avisos: string[] = Array.isArray(parsed.avisos) ? parsed.avisos : [];
+
+    if (Array.isArray(parsed.itens)) {
+      parsed.itens = parsed.itens.map((item: any) => {
+        const skuInformado = item?.sku ? String(item.sku).trim() : null;
+        let prod = skuInformado ? CATALOG.find((p) => p.sku === skuInformado) : undefined;
+
+        // Tenta casar pelo nome quando o SKU não bate (ou veio nulo).
+        if (!prod && item?.nome) {
+          const alvo = norm(String(item.nome));
+          // match exato normalizado, senão "contém todas as palavras".
+          prod =
+            CATALOG.find((p) => norm(p.name) === alvo) ??
+            CATALOG.find((p) => {
+              const palavras = alvo.split(" ").filter((w) => w.length > 2);
+              const nomeProd = norm(p.name);
+              return palavras.length > 0 && palavras.every((w) => nomeProd.includes(w));
+            });
+        }
+
+        if (prod) {
+          return {
+            sku: prod.sku,
+            nome: prod.name,
+            quantidade: Number(item?.quantidade) > 0 ? Number(item.quantidade) : 1,
+            // Preço de tabela oficial, salvo se a IA trouxe um preço explícito
+            // diferente (negociado) — nesse caso mantém, mas o aviso já existe.
+            valor_unitario: Number(item?.valor_unitario) > 0 ? Number(item.valor_unitario) : prod.tabela,
+          };
+        }
+
+        // Não encontrou no catálogo — não deixa passar um SKU inválido.
+        avisos.push(`Produto "${item?.nome ?? "?"}" não encontrado no catálogo oficial — SKU removido. Ajuste manualmente.`);
+        return {
+          sku: null,
+          nome: item?.nome ?? "Produto desconhecido",
+          quantidade: Number(item?.quantidade) > 0 ? Number(item.quantidade) : 1,
+          valor_unitario: Number(item?.valor_unitario) > 0 ? Number(item.valor_unitario) : 0,
+        };
+      });
+    }
+
+    parsed.avisos = avisos;
     return ok(parsed);
   } catch (err) {
     return fail("Erro ao processar com IA", 500, err instanceof Error ? err.message : err);
