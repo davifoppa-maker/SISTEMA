@@ -210,11 +210,9 @@ export function LancarPedidoClient() {
       if (!num) {
         throw new Error("O Tiny não confirmou a criação do pedido (sem número de pedido). Tente novamente.");
       }
-      // Se a verificação pós-criação disse que o pedido NÃO existe, avisa.
-      const v = json.data?.verificacao;
-      if (v && v.existe === false) {
-        throw new Error(`O Tiny aceitou (pedido ${num}) mas a releitura não encontrou o pedido (${v.situacao}). Pode estar travado — verifique no Olist.`);
-      }
+      // O Tiny devolveu o número do pedido → criado com sucesso.
+      // (A releitura pós-criação é só informativa; o Tiny às vezes leva alguns
+      // segundos para o pedido ficar consultável por id, então não bloqueamos.)
       setOrderNumber(String(num));
       setCreated(true);
     } catch (e) {
