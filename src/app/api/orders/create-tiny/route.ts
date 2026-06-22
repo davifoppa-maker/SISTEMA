@@ -1,6 +1,10 @@
 import { tinyFetch, gravarTransporteNoTiny } from "@/lib/services/tiny-api";
 import { ok, fail } from "@/lib/api";
 
+// Criar pedido envolve várias chamadas ao Tiny (com retry de rate limit), então
+// damos mais tempo para a função não ser cortada no meio (timeout padrão é 10s).
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return fail("Corpo inválido", 400);
@@ -15,66 +19,37 @@ export async function POST(req: Request) {
     return fail(`Produtos sem SKU não podem ser lançados: ${nomes}. Verifique o catálogo ou ajuste o pedido.`, 400);
   }
 
-  // Normaliza para comparar nomes de produto (sem acento/maiúsc./pontuação).
-  const normProd = (s: string) =>
-    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
-
-  // Buscar IDs dos produtos no Tiny.
-  // OBS: o Tiny NÃO usa os nossos códigos internos (NYER…). Então buscamos
-  // primeiro pelo CÓDIGO (caso bata) e, se não casar, pelo NOME do produto —
-  // que é o que realmente identifica o item no cadastro do Tiny.
+  // Buscar IDs dos produtos no Tiny pelo SKU NYER cadastrado.
   const itensFormatados = await Promise.all(
     itens.map(async (i: { sku: string | null; nome: string; quantidade: number; valor_unitario: number }) => {
       let prodId: number | null = null;
-      const nomeAlvo = normProd(i.nome ?? "");
 
-      // 1) Tenta pelo código exato (param V3 correto: ?codigo=).
-      if (i.sku) {
-        try {
-          const res = await tinyFetch(`/produtos?codigo=${encodeURIComponent(i.sku)}`);
-          if (res.ok) {
-            const json = await res.json();
-            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; sku?: string; codigo?: string }>;
-            const exato = prods.find((p) => String(p.sku ?? p.codigo ?? "").trim() === String(i.sku).trim());
-            if (exato) prodId = Number(exato.id);
-          }
-        } catch {
-          /* segue para busca por nome */
-        }
+      if (!i.sku) {
+        throw new Error(`Item "${i.nome}" sem SKU — não consegue criar no Tiny`);
       }
 
-      // 2) Busca pelo NOME do produto (param V3 correto: ?nome=) e casa pela
-      // descrição exata normalizada; senão "contém todas as palavras".
-      if (!prodId && nomeAlvo) {
-        try {
-          const res = await tinyFetch(`/produtos?nome=${encodeURIComponent(i.nome)}&limit=50`);
-          if (res.ok) {
-            const json = await res.json();
-            const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; descricao?: string; nome?: string }>;
-            const exato = prods.find((p) => normProd(String(p.descricao ?? p.nome ?? "")) === nomeAlvo);
-            const palavras = nomeAlvo.split(" ").filter((w) => w.length > 2);
-            const contem =
-              exato ??
-              prods.find((p) => {
-                const d = normProd(String(p.descricao ?? p.nome ?? ""));
-                return palavras.length > 0 && palavras.every((w) => d.includes(w));
-              });
-            if (contem) prodId = Number(contem.id);
-          }
-        } catch {
-          /* nada encontrado */
+      // ISOLA SÓ OS PRODUTOS COM SKU NYER CADASTRADO NO TINY.
+      // Busca pelo código (param V3 correto: ?codigo=) e exige que o produto
+      // retornado tenha EXATAMENTE o nosso SKU. Sem busca por nome (que pegava
+      // matéria-prima/marca branca errada). Se não tiver o SKU NYER cadastrado,
+      // bloqueia — nunca lança um produto adivinhado.
+      try {
+        const res = await tinyFetch(`/produtos?codigo=${encodeURIComponent(i.sku)}`);
+        if (res.ok) {
+          const json = await res.json();
+          const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; sku?: string; codigo?: string }>;
+          const exato = prods.find((p) => String(p.sku ?? p.codigo ?? "").trim() === String(i.sku).trim());
+          if (exato) prodId = Number(exato.id);
         }
+      } catch {
+        /* trata como não encontrado abaixo */
       }
 
       if (prodId) {
         return { produto: { id: prodId }, quantidade: i.quantidade, valorUnitario: i.valor_unitario };
       }
 
-      if (!i.sku) {
-        throw new Error(`Item "${i.nome}" sem SKU — não consegue criar no Tiny`);
-      }
-
-      throw new Error(`Produto "${i.nome}" não encontrado no Tiny (nem por código nem por nome). Verifique o cadastro do produto no Tiny.`);
+      throw new Error(`Produto "${i.nome}" (SKU ${i.sku}) não está cadastrado no Tiny com esse código NYER. Cadastre o produto no Tiny com o código ${i.sku} para poder lançá-lo.`);
     })
   );
 
@@ -232,30 +207,8 @@ export async function POST(req: Request) {
     console.log("[create-tiny] Payload final:", JSON.stringify(payload, null, 2));
     const result = await createWithRetry();
 
-    // VERIFICAÇÃO: relê o pedido recém-criado para confirmar que ele realmente
-    // existe no Tiny (e não foi só um 201 "fantasma"). Sem isso, não temos como
-    // saber por que "não cai no Olist". Best-effort: não falha se a releitura der erro.
-    let verificacao: { existe: boolean; situacao: unknown; numero: unknown } | null = null;
-    try {
-      const gres = await tinyFetch(`/pedidos/${encodeURIComponent(String(result.id))}`);
-      if (gres.ok) {
-        const ped = (await gres.json().catch(() => null)) as any;
-        const p = ped?.pedido ?? ped?.data ?? ped ?? {};
-        verificacao = {
-          existe: Boolean(p?.id ?? p?.numeroPedido ?? p?.numero),
-          situacao: p?.situacao ?? p?.codigoSituacao ?? p?.descricaoSituacao ?? null,
-          numero: p?.numeroPedido ?? p?.numero ?? null,
-        };
-      } else {
-        verificacao = { existe: false, situacao: `GET ${gres.status}`, numero: null };
-      }
-    } catch {
-      /* releitura best-effort */
-    }
-    console.log("[create-tiny] Verificação pós-criação:", JSON.stringify(verificacao));
-
     // Grava a transportadora no pedido (forma de envio + contato), via o
-    // endpoint /despacho — mesma rotina já usada no resto do sistema.
+    // endpoint /despacho — best-effort, não bloqueia o sucesso do pedido.
     let transporte: unknown = null;
     if (transportadoraNome) {
       try {
@@ -269,7 +222,6 @@ export async function POST(req: Request) {
       message: `Pedido ${result.numeroPedido ?? result.id} criado no Tiny`,
       id: result.id,
       numeroPedido: result.numeroPedido,
-      verificacao,
       transporte,
       tiny: result.raw,
     });
