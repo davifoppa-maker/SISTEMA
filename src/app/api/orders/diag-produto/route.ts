@@ -8,8 +8,8 @@ import { ok, fail } from "@/lib/api";
 export async function GET(req: Request) {
   const sku = new URL(req.url).searchParams.get("sku") || "NYER26009";
   try {
-    // 1) Busca por código (filtro[codigo]) — o que o create-tiny usa hoje.
-    const porCodigo = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(sku)}`);
+    // 1) Busca por código (param V3 correto: ?codigo=).
+    const porCodigo = await tinyFetch(`/produtos?codigo=${encodeURIComponent(sku)}`);
     const codigoJson = await porCodigo.json().catch(() => null);
     const porCodigoItens = ((codigoJson?.data ?? codigoJson?.itens ?? []) as any[]).map((p) => ({
       id: p?.id,
@@ -18,8 +18,8 @@ export async function GET(req: Request) {
       preco: p?.preco,
     }));
 
-    // 2) Busca genérica (pesquisa) pelo mesmo termo, para comparar.
-    const porPesquisa = await tinyFetch(`/produtos?pesquisa=${encodeURIComponent(sku)}&limit=5`);
+    // 2) Busca por nome (param V3 correto: ?nome=) pelo mesmo termo.
+    const porPesquisa = await tinyFetch(`/produtos?nome=${encodeURIComponent(sku)}&limit=5`);
     const pesquisaJson = await porPesquisa.json().catch(() => null);
     const porPesquisaItens = ((pesquisaJson?.data ?? pesquisaJson?.itens ?? []) as any[]).map((p) => ({
       id: p?.id,

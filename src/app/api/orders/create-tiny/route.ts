@@ -28,10 +28,10 @@ export async function POST(req: Request) {
       let prodId: number | null = null;
       const nomeAlvo = normProd(i.nome ?? "");
 
-      // 1) Tenta pelo código exato (se algum dia os códigos forem alinhados).
+      // 1) Tenta pelo código exato (param V3 correto: ?codigo=).
       if (i.sku) {
         try {
-          const res = await tinyFetch(`/produtos?filtro[codigo]=${encodeURIComponent(i.sku)}`);
+          const res = await tinyFetch(`/produtos?codigo=${encodeURIComponent(i.sku)}`);
           if (res.ok) {
             const json = await res.json();
             const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; sku?: string; codigo?: string }>;
@@ -43,14 +43,14 @@ export async function POST(req: Request) {
         }
       }
 
-      // 2) Busca pelo NOME do produto e casa pela descrição exata (normalizada).
+      // 2) Busca pelo NOME do produto (param V3 correto: ?nome=) e casa pela
+      // descrição exata normalizada; senão "contém todas as palavras".
       if (!prodId && nomeAlvo) {
         try {
-          const res = await tinyFetch(`/produtos?pesquisa=${encodeURIComponent(i.nome)}&limit=20`);
+          const res = await tinyFetch(`/produtos?nome=${encodeURIComponent(i.nome)}&limit=50`);
           if (res.ok) {
             const json = await res.json();
             const prods = (json.data ?? json.itens ?? []) as Array<{ id: number | string; descricao?: string; nome?: string }>;
-            // match exato normalizado primeiro; senão, "contém todas as palavras".
             const exato = prods.find((p) => normProd(String(p.descricao ?? p.nome ?? "")) === nomeAlvo);
             const palavras = nomeAlvo.split(" ").filter((w) => w.length > 2);
             const contem =
@@ -155,11 +155,12 @@ export async function POST(req: Request) {
   }
 
   // Tiny V3 POST /pedidos payload.
-  // NÃO enviamos `situacao` — assim o Tiny cria o pedido no estado padrão
-  // ("em aberto") para CONFERÊNCIA da equipe. Forçar um código estava gerando
-  // "faturado".
+  // situacao 0 = "Em aberto" — CONFIRMADO pelos pedidos reais da conta (os
+  // pedidos normais têm situacao 0). O pedido nasce para CONFERÊNCIA da equipe.
+  // (Omitir a situação fazia o Tiny criar como "faturado".)
   const payload: Record<string, unknown> = {
     idContato,
+    situacao: 0,
     itens: itensFormatados,
     ...(idVendedor ? { idVendedor } : {}),
   };
