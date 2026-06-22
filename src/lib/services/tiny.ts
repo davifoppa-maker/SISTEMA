@@ -262,6 +262,18 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
   );
 
   const marcador = payload.marcadores?.[0]?.descricao;
+
+  // Converte data do Tiny (DD/MM/YYYY ou YYYY-MM-DD) para ISO date string.
+  function tinyDateToIso(v: unknown): string | null {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+    const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (iso) return iso[1];
+    return null;
+  }
+
   const fields = {
     external_order_number: str(payload.numero_ecommerce),
     channel,
@@ -274,6 +286,8 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
     price_list: str(payload.lista_preco),
     order_origin: str(payload.ecommerce?.nome),
     carrier_name: str(payload.transportadora),
+    order_date: tinyDateToIso((payload as Record<string, unknown>).data),
+    due_date: tinyDateToIso((payload as Record<string, unknown>).vencimento),
     tags: marcador ? [marcador] : [],
     raw_payload: payload,
   };
@@ -304,6 +318,21 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
     });
   } else {
     Object.assign(order, fields, { updated_at: nowIso() });
+    // Se o pedido já existe mas agora temos itens (e não tínhamos antes), adicionar
+    const existingItems = store.order_items.filter((i) => i.order_id === order!.id);
+    const newItems = (payload.itens ?? []).filter((it) => it.codigo || it.descricao);
+    if (existingItems.length === 0 && newItems.length > 0) {
+      newItems.forEach((it) => {
+        store.order_items.push({
+          id: uuid(),
+          order_id: order!.id,
+          sku: str(it.codigo),
+          description: str(it.descricao) ?? "Item",
+          quantity: num(it.quantidade),
+          unit_value: num(it.valor_unitario),
+        });
+      });
+    }
   }
 
   // Aplica o status do Tiny (e leva B2B "Enviado" para o Checkout de Expedição).
@@ -392,6 +421,78 @@ export async function enrichExpeditionNFs(store: DataStore, cap = 50): Promise<n
  * Limitado por `cap` para não estourar o tempo da função. Retorna quantos
  * pedidos mudaram de status logístico.
  */
+/** Busca detalhe individual dos pedidos sem due_date para capturar formasPagamento/vencimento. */
+export async function enrichOrderDates(store: DataStore, cap = 40): Promise<number> {
+  const candidates = store.orders
+    .filter((o) => o.tiny_id && !o.due_date)
+    .slice(0, cap);
+
+  let enriched = 0;
+  for (const order of candidates) {
+    try {
+      const payload = await fetchOrderById(order.tiny_id!);
+      if (!payload) continue;
+      const raw = (payload as Record<string, unknown>);
+      const vencimento = raw.vencimento as string | undefined;
+      const data = raw.data as string | undefined;
+      let changed = false;
+      if (vencimento && !order.due_date) {
+        const iso = tinyDateToIso(vencimento);
+        if (iso) { order.due_date = iso; changed = true; }
+      }
+      if (data && !order.order_date) {
+        const iso = tinyDateToIso(data);
+        if (iso) { order.order_date = iso; changed = true; }
+      }
+      if (changed) { order.updated_at = nowIso(); enriched++; }
+    } catch { /* ignora */ }
+  }
+  return enriched;
+}
+
+/**
+ * Busca itens via fetchOrderById para todos os pedidos que ainda não têm itens.
+ * Chamado após o sync recente para preencher automaticamente.
+ */
+export async function enrichOrderItems(store: DataStore, cap = 50): Promise<number> {
+  const ordersWithoutItems = store.orders.filter(
+    (o) => o.tiny_id && store.order_items.filter((i) => i.order_id === o.id).length === 0
+  ).slice(0, cap);
+
+  let enriched = 0;
+  for (const order of ordersWithoutItems) {
+    try {
+      const payload = await fetchOrderById(order.tiny_id!);
+      const itensTiny = payload?.itens ?? [];
+      if (itensTiny.length > 0) {
+        itensTiny.forEach((it) => {
+          store.order_items.push({
+            id: uuid(),
+            order_id: order.id,
+            sku: str(it.codigo),
+            description: str(it.descricao) ?? "Item",
+            quantity: num(it.quantidade),
+            unit_value: num(it.valor_unitario),
+          });
+        });
+        order.updated_at = nowIso();
+        enriched++;
+      }
+    } catch { /* ignora */ }
+  }
+  return enriched;
+}
+
+function tinyDateToIso(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  return null;
+}
+
 export async function resyncProcessingB2bOrders(store: DataStore, cap = 60): Promise<number> {
   const PROCESSING = new Set(["aguardando_separacao", "aguardando_faturamento"]);
   const candidates = store.orders

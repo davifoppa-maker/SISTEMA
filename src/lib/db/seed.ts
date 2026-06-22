@@ -218,6 +218,8 @@ export function buildSeedStore(): DataStore {
       nf_chave: null,
       freight_value: null,
       expected_delivery_at: null,
+      order_date: null,
+      due_date: null,
       tags: channelKind === "mercos" ? ["Atacado/Mercos"] : ["Varejo/Nuvemshop"],
       raw_payload: rawTinyPayload(spec, channelKind),
       created_at: daysAgo(idx + 2),

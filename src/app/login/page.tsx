@@ -44,9 +44,9 @@ function LoginForm() {
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-700 text-lg font-bold text-white">
-            Ex
+            N
           </div>
-          <h1 className="text-lg font-semibold text-slate-800">Pós Venda Exx</h1>
+          <h1 className="text-lg font-semibold text-slate-800">NYER APP</h1>
           <p className="text-xs text-slate-500">Acesso restrito — informe suas credenciais.</p>
         </div>
 

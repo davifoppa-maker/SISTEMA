@@ -768,6 +768,15 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
     vendedor: v3.vendedor?.nome ?? v3.vendedor ?? v3.nomeVendedor,
     lista_preco: v3.listaPreco?.nome ?? v3.listaPreco,
     transportadora,
+    // Data real do pedido no Tiny.
+    data: v3.dataCriacao ?? (typeof v3.data === "string" && v3.data.length >= 8 ? v3.data : undefined),
+    // Vencimento do boleto — vem só no detalhe do pedido.
+    vencimento:
+      v3.formasPagamento?.[0]?.vencimento ??
+      v3.formasPagamento?.[0]?.dataVencimento ??
+      v3.parcelas?.[0]?.vencimento ??
+      v3.vencimento ??
+      undefined,
     itens: itensRaw.map((it: any) => ({
       codigo: it.codigo ?? it.sku ?? it.produto?.codigo ?? it.produto?.sku,
       descricao: it.descricao ?? it.produto?.descricao ?? it.nome,
@@ -1103,4 +1112,69 @@ export async function fetchOrderById(id: string): Promise<TinyOrderPayload | nul
   const isObj = (v: unknown) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
   const ped = isObj(json.pedido) ? json.pedido : isObj(json.data) ? json.data : json;
   return mapV3OrderToPayload(ped);
+}
+
+export interface TinyPayable {
+  tiny_id: string;
+  supplier: string;
+  description: string | null;
+  value: number;
+  issue_date: string | null;
+  due_date: string;
+  paid_at: string | null;
+  category: string | null;
+}
+
+function parseTinyDate(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : null;
+}
+
+export async function fetchTinyPayables(params: {
+  dataInicial?: string;
+  dataFinal?: string;
+  situacao?: number; // 1=aberto, 2=pago, 3=vencido (Tiny V3)
+  offset?: number;
+  limit?: number;
+}): Promise<TinyPayable[]> {
+  const c = getTinyConfig();
+  const url = new URL(`${c.apiBaseUrl}/contas-pagar`);
+  if (params.dataInicial) url.searchParams.set("dataVencimentoInicial", params.dataInicial);
+  if (params.dataFinal) url.searchParams.set("dataVencimentoFinal", params.dataFinal);
+  if (params.situacao != null) url.searchParams.set("situacao", String(params.situacao));
+  url.searchParams.set("limit", String(params.limit ?? 100));
+  url.searchParams.set("offset", String(params.offset ?? 0));
+
+  const res = await tinyFetch(url.toString());
+  if (!res.ok) throw new Error(`Tiny contas-pagar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+
+  const json = (await res.json()) as Record<string, any>;
+  const items: any[] = json.itens ?? json.data ?? (Array.isArray(json) ? json : []);
+
+  return items.map((item: any): TinyPayable => {
+    const rawDesc: string = item.historico ?? item.descricao ?? item.observacoes ?? item.complemento ?? "";
+    // Extrai fornecedor do padrão "Ref. a NF nº XXXXX, FORNECEDOR (parcela X/X)"
+    const supplierFromDesc = rawDesc.match(/,\s*([^,(]+?)(?:\s*\(|$)/)?.[1]?.trim();
+    const supplier =
+      (item.fornecedor?.nome ??
+      item.contato?.nome ??
+      item.nomeFornecedor ??
+      supplierFromDesc ??
+      rawDesc.slice(0, 60)) ||
+      "—";
+    return {
+      tiny_id: String(item.id ?? ""),
+      supplier,
+      description: rawDesc || null,
+      value: parseFloat(String(item.valor ?? item.valorOriginal ?? 0)) || 0,
+      issue_date: parseTinyDate(item.dataEmissao ?? item.dataCriacao ?? item.dataLancamento),
+      due_date: parseTinyDate(item.dataVencimento ?? item.vencimento) ?? "",
+      paid_at: parseTinyDate(item.dataPagamento ?? item.dataBaixa),
+      category: item.categoria?.descricao ?? item.categoria ?? null,
+    };
+  }).filter((p) => p.due_date);
 }

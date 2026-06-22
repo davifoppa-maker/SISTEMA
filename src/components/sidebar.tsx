@@ -34,11 +34,18 @@ import {
   X,
 } from "lucide-react";
 
-// Menu de OPERAÇÕES, enxuto. Transportadoras, Payload bruto/Webhooks e Clientes
-// ficam dentro de Configurações; os dados/rotas continuam existindo.
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orders", label: "Pedidos", icon: Package },
+  {
+    href: "/orders",
+    label: "Pedidos",
+    icon: Package,
+    children: [
+      { href: "/orders", label: "Todos os pedidos" },
+      { href: "/orders/margem", label: "Margem de pedidos" },
+      { href: "/orders/lancar", label: "Lançar pedido (IA)" },
+    ],
+  },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
@@ -50,12 +57,13 @@ const nav = [
       { href: "/financial/dashboard", label: "Dashboard" },
       { href: "/financial", label: "Contas a receber" },
       { href: "/financial/payable", label: "Contas a pagar" },
+      { href: "/financial/caixa", label: "Caixa" },
     ],
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
-  { href: "/settings", label: "Configurações", icon: Settings },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
+  { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
 const COMPANIES: { id: Company; label: string; initial: string; color: string }[] = [
@@ -199,7 +207,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger button */}
       <button
         onClick={() => setOpen(true)}
         className="fixed left-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-md md:hidden"
@@ -208,7 +215,6 @@ export function Sidebar() {
         <Menu className="h-5 w-5 text-slate-600" />
       </button>
 
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -216,7 +222,6 @@ export function Sidebar() {
         />
       )}
 
-      {/* Mobile drawer */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-300 md:hidden",
@@ -233,7 +238,6 @@ export function Sidebar() {
         <SidebarContent onNavigate={() => setOpen(false)} />
       </aside>
 
-      {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <SidebarContent />
       </aside>

@@ -15,8 +15,8 @@ function makeStore(): DataStore {
     external_order_number: null, channel: "b2b_mercos", customer_id: "cus-1", tiny_status: null,
     logistic_status: "coletado", total_value: 100, city: "Urubici", state: "SC", seller: null,
     price_list: null, order_origin: null, carrier_name: "JadLog", nf_numero: "253926", nf_chave: null,
-    freight_value: null, expected_delivery_at: null, tags: [], raw_payload: null,
-    created_at: "", updated_at: "",
+    freight_value: null, expected_delivery_at: null, order_date: null, due_date: null,
+    tags: [], raw_payload: null, created_at: "", updated_at: "",
   } as Order;
   const shipment: Shipment = {
     id: "ship-1", order_id: "ord-1", invoice_id: null, carrier_id: "car-jad", batch_id: null,

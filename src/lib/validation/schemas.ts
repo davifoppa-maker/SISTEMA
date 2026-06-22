@@ -25,6 +25,8 @@ export const tinyOrderSchema = z
     vendedor: z.string().optional(),
     lista_preco: z.string().optional(),
     transportadora: z.string().optional().nullable(),
+    data: z.string().optional(),
+    vencimento: z.string().optional(),
     itens: z
       .array(
         z.object({

@@ -126,6 +126,10 @@ export interface Order {
   freight_value: number | null;
   /** Prazo / data prevista de entrega (vira a SLA do pedido). */
   expected_delivery_at: string | null;
+  /** Data real do pedido no Tiny (campo `data` do payload V3). */
+  order_date: string | null;
+  /** Data de vencimento do boleto (formasPagamento[0].vencimento). */
+  due_date: string | null;
   tags: string[];
   raw_payload: unknown;
   created_at: string;

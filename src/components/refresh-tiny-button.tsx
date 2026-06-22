@@ -28,7 +28,8 @@ export function RefreshTinyButton({ days = 4, label = "Atualizar (Tiny)" }: { da
         setTimeout(() => window.location.reload(), 1200);
       } else {
         setError(true);
-        setMsg(json.error ?? "Falha ao atualizar.");
+        const detalhe = typeof json.extra === "string" ? json.extra : json.extra ? JSON.stringify(json.extra) : "";
+        setMsg(`${json.error ?? "Falha ao atualizar."}${detalhe ? ` — ${detalhe}` : ""}`);
       }
     } catch {
       setError(true);

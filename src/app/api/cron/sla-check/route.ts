@@ -3,7 +3,7 @@ import { ok, fail } from "@/lib/api";
 import { runSlaAndTrackingChecks } from "@/lib/services/automation";
 import { pollCarrierTracking } from "@/lib/services/freight/tracking-poll";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
-import { ingestOrder, enrichExpeditionNFs, reprocessPendingWebhooks } from "@/lib/services/tiny";
+import { ingestOrder, enrichExpeditionNFs, reprocessPendingWebhooks, enrichOrderItems } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { nowIso, uuid } from "@/lib/utils/ids";
 
@@ -59,12 +59,13 @@ async function handle(req: Request) {
   // se a função expirar no meio do enrich, os status do pedido não se perdem.
   await commitStore(store).catch(() => {});
   const nfEnriched = await enrichExpeditionNFs(store, 25).catch(() => 0);
+  const itemsEnriched = await enrichOrderItems(store, 30).catch(() => 0);
   // Rastreio nas transportadoras (Arlete/Jadlog): grava eventos e sugere a baixa
   // quando a entrega é confirmada (não dá baixa sozinho).
   const tracking = await pollCarrierTracking(store, 40).catch(() => null);
   const result = runSlaAndTrackingChecks(store);
   await commitStore(store);
-  return ok({ ...result, synced, nfEnriched, webhooksReprocessed, tracking });
+  return ok({ ...result, synced, nfEnriched, itemsEnriched, webhooksReprocessed, tracking });
 }
 
 export async function GET(req: Request) {
