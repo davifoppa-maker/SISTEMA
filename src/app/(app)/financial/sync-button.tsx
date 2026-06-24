@@ -12,12 +12,12 @@ export function FinancialSyncButton() {
     setMsg(null);
     setError(false);
     try {
-      const res = await fetch(`/api/sync/tiny/recent`, { method: "POST" });
+      const res = await fetch(`/api/sync/tiny/receivables`, { method: "POST" });
       const text = await res.text();
       let json: Record<string, unknown> | null = null;
       try { json = JSON.parse(text); } catch { /* noop */ }
       if (res.ok && json?.ok) {
-        setMsg(`${(json.data as Record<string,unknown>)?.synced ?? 0} pedido(s) sincronizado(s).`);
+        setMsg(`${(json.data as Record<string, unknown>)?.synced ?? 0} conta(s) sincronizada(s).`);
         setTimeout(() => window.location.reload(), 1200);
       } else {
         setError(true);
@@ -38,7 +38,7 @@ export function FinancialSyncButton() {
         disabled={loading}
         className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60"
       >
-        {loading ? "Sincronizando…" : "Sincronizar últimos 30 dias"}
+        {loading ? "Sincronizando…" : "Sincronizar do Tiny"}
       </button>
       {msg && (
         <span className={`text-xs ${error ? "text-red-600" : "text-emerald-600"}`}>{msg}</span>

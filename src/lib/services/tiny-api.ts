@@ -1178,3 +1178,58 @@ export async function fetchTinyPayables(params: {
     };
   }).filter((p) => p.due_date);
 }
+
+export interface TinyReceivable {
+  tiny_id: string;
+  customer: string;
+  description: string | null;
+  value: number;
+  issue_date: string | null;
+  due_date: string;
+  received_at: string | null;
+  category: string | null;
+}
+
+export async function fetchTinyReceivables(params: {
+  dataInicial?: string;
+  dataFinal?: string;
+  situacao?: number; // 1=aberto, 2=recebido, 3=vencido
+  offset?: number;
+  limit?: number;
+  companyId?: string;
+}): Promise<TinyReceivable[]> {
+  const { companyId = "nyer", ...rest } = params;
+  const c = getTinyConfig(companyId);
+  const url = new URL(`${c.apiBaseUrl}/contas-receber`);
+  if (rest.dataInicial) url.searchParams.set("dataVencimentoInicial", rest.dataInicial);
+  if (rest.dataFinal) url.searchParams.set("dataVencimentoFinal", rest.dataFinal);
+  if (rest.situacao != null) url.searchParams.set("situacao", String(rest.situacao));
+  url.searchParams.set("limit", String(rest.limit ?? 100));
+  url.searchParams.set("offset", String(rest.offset ?? 0));
+
+  const res = await tinyFetch(url.toString(), {}, companyId);
+  if (!res.ok) throw new Error(`Tiny contas-receber ${res.status}: ${(await res.text()).slice(0, 300)}`);
+
+  const json = (await res.json()) as Record<string, any>;
+  const items: any[] = json.itens ?? json.data ?? (Array.isArray(json) ? json : []);
+
+  return items.map((item: any): TinyReceivable => {
+    const rawDesc: string = item.historico ?? item.descricao ?? item.observacoes ?? item.complemento ?? "";
+    const customer =
+      (item.cliente?.nome ??
+      item.contato?.nome ??
+      item.nomeCliente ??
+      rawDesc.slice(0, 60)) ||
+      "—";
+    return {
+      tiny_id: String(item.id ?? ""),
+      customer,
+      description: rawDesc || null,
+      value: parseFloat(String(item.valor ?? item.valorOriginal ?? 0)) || 0,
+      issue_date: parseTinyDate(item.dataEmissao ?? item.dataCriacao ?? item.dataLancamento),
+      due_date: parseTinyDate(item.dataVencimento ?? item.vencimento) ?? "",
+      received_at: parseTinyDate(item.dataPagamento ?? item.dataBaixa ?? item.dataRecebimento),
+      category: item.categoria?.descricao ?? item.categoria ?? null,
+    };
+  }).filter((r) => r.due_date);
+}
