@@ -48,12 +48,17 @@ export default async function PayablePage({
   const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const mes = searchParams.mes ?? defaultMes;
 
+  const [mesY, mesM] = mes.split("-").map(Number);
+  const proximoMes = mesM === 12
+    ? `${mesY + 1}-01-01`
+    : `${mesY}-${String(mesM + 1).padStart(2, "0")}-01`;
+
   const sb = getSupabaseAdmin();
   const { data: rows } = await sb
     .from("payables")
     .select("*")
     .gte("due_date", `${mes}-01`)
-    .lte("due_date", `${mes}-31`)
+    .lt("due_date", proximoMes)
     .order("due_date", { ascending: true });
 
   const payables: Payable[] = rows ?? [];

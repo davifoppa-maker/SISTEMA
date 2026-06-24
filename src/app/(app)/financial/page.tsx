@@ -49,12 +49,18 @@ export default async function FinancialPage({
   const mes = searchParams.mes ?? defaultMes;
   const q = (searchParams.q ?? "").toLowerCase();
 
+  // Calcula o primeiro dia do mês seguinte para filtro preciso (evita datas inválidas como 2025-02-31).
+  const [mesY, mesM] = mes.split("-").map(Number);
+  const proximoMes = mesM === 12
+    ? `${mesY + 1}-01-01`
+    : `${mesY}-${String(mesM + 1).padStart(2, "0")}-01`;
+
   const sb = getSupabaseAdmin();
   const { data: rows } = await sb
     .from("receivables")
     .select("*")
     .gte("due_date", `${mes}-01`)
-    .lte("due_date", `${mes}-31`)
+    .lt("due_date", proximoMes)
     .order("due_date", { ascending: true });
 
   const all: Receivable[] = rows ?? [];
