@@ -295,57 +295,80 @@ function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
 }
 
 /**
- * Aba "produto acabado": tabelas lado a lado.
- * Layout real da planilha: LABSKULL em col D (3,4), NYER em col G (6,7).
- * Detecta as colunas dinamicamente procurando pelos cabeçalhos "LABSKULL" e "NYER".
+ * Aba "produto acabado": duas tabelas lado a lado.
+ * Layout real confirmado da planilha:
+ *   cols 0,1 → NYER produtos acabados (tabela principal)
+ *   cols 2,3 → tabela secundária: LAB SKULL, EMBALAGEM, NYER REFIS
+ *              as seções são separadas por cabeçalhos em col 2 (ex: "LABSKULL", "NYER", "EMBALAGEM")
  */
 function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
 
-  // Detecta colunas procurando pelos cabeçalhos nas linhas
-  let labCol = -1;
-  let nyerCol = -1;
-  for (const row of rows) {
-    for (let c = 0; c < row.length; c++) {
-      const cell = (row[c] ?? "").trim().toUpperCase().replace(/\s+/g, "");
-      if (cell === "LABSKULL" && labCol === -1) labCol = c;
-      if (cell === "NYER" && nyerCol === -1) nyerCol = c;
-    }
-    if (labCol >= 0 && nyerCol >= 0) break;
-  }
-  // Fallback: posições conhecidas da planilha (D=3, G=6)
-  if (labCol === -1) labCol = 3;
-  if (nyerCol === -1) nyerCol = 6;
+  // Palavras que indicam cabeçalhos de linha (não são itens)
+  const isRowHeader = (s: string) =>
+    /^(nome|labskull|nyer|un|quantidade|embalagens?|kg|item)$/i.test(s.trim());
 
-  const blocos: { col: number; grupo: string; marca: Marca }[] = [
-    { col: labCol, grupo: "LAB SKULL", marca: "LAB SKULL" },
-    { col: nyerCol, grupo: "Produto acabado NYER", marca: "NYER" },
-  ];
-
+  // --- Tabela principal: cols 0,1 → NYER produtos acabados ---
   for (const row of rows) {
-    for (const b of blocos) {
-      const name = (row[b.col] ?? "").trim();
-      const rawQtd = (row[b.col + 1] ?? "").trim();
-      if (!name || isHeaderName(name)) continue;
-      if (/^(nome|labskull|nyer|un|quantidade)$/i.test(name)) continue;
-      const qtd = parseQtd(rawQtd);
-      if (qtd == null) continue;
-      const nome = name.replace(/\s+/g, " ");
-      const c = custoDe(nome, overrides, b.grupo === "Produto acabado NYER");
-      itens.push({
-        nome,
-        quantidade: qtd,
-        unidade: "un",
-        grupo: b.grupo,
-        categoria: "produto_acabado",
-        marca: b.marca,
-        custoUnit: c?.custo,
-        custoFonte: c?.fonte,
-        valor: c != null ? c.custo * qtd : undefined,
-        rawQtd,
-      });
-    }
+    const name = (row[0] ?? "").trim();
+    const rawQtd = (row[1] ?? "").trim();
+    if (!name || isRowHeader(name) || isHeaderName(name)) continue;
+    const qtd = parseQtd(rawQtd);
+    if (qtd == null) continue;
+    const nome = name.replace(/\s+/g, " ");
+    const c = custoDe(nome, overrides, true);
+    itens.push({
+      nome,
+      quantidade: qtd,
+      unidade: "un",
+      grupo: "Produto acabado NYER",
+      categoria: "produto_acabado",
+      marca: "NYER",
+      custoUnit: c?.custo,
+      custoFonte: c?.fonte,
+      valor: c != null ? c.custo * qtd : undefined,
+      rawQtd,
+    });
   }
+
+  // --- Tabela secundária: cols 2,3 → LAB SKULL / EMBALAGEM / NYER refis ---
+  // Os cabeçalhos de seção aparecem em col 2 com qty vazia em col 3.
+  let grupoSecundario = "LAB SKULL";
+  for (const row of rows) {
+    const name = (row[2] ?? "").trim();
+    const rawQtd = (row[3] ?? "").trim();
+    if (!name) continue;
+    // Se col 3 não tem número é um cabeçalho de seção → atualiza grupo
+    const qtd = parseQtd(rawQtd);
+    if (qtd == null) {
+      if (!isHeaderName(name) && !isRowHeader(name)) {
+        // Normaliza nome da seção para um grupo legível
+        const upper = name.toUpperCase().replace(/\s+/g, " ");
+        if (upper.includes("LABSKULL") || upper === "LAB SKULL") grupoSecundario = "LAB SKULL";
+        else if (upper.includes("EMBALAGEM")) grupoSecundario = "Embalagens";
+        else if (upper === "NYER") grupoSecundario = "NYER Refis / Rótulos";
+        else grupoSecundario = name.replace(/\s+/g, " ");
+      }
+      continue;
+    }
+    if (isRowHeader(name)) continue;
+    const nome = name.replace(/\s+/g, " ");
+    const isNyer = grupoSecundario.toUpperCase().includes("NYER");
+    const c = custoDe(nome, overrides, isNyer);
+    itens.push({
+      nome,
+      quantidade: qtd,
+      unidade: "un",
+      grupo: grupoSecundario,
+      categoria: "produto_acabado",
+      marca: grupoSecundario === "LAB SKULL" ? "LAB SKULL" : "NYER",
+      custoUnit: c?.custo,
+      custoFonte: c?.fonte,
+      valor: c != null ? c.custo * qtd : undefined,
+      rawQtd,
+    });
+  }
+
   return itens;
 }
 
