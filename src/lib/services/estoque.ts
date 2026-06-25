@@ -255,26 +255,41 @@ function isHeaderName(name: string): boolean {
 /** Aba "matéria prima": pares (NOME, QNT) com seções (AROMA, MATERIA 2/3/4). */
 function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
-  let grupo = "Matéria-prima";
-  for (let i = 0; i < rows.length; i++) {
-    const name = (rows[i][0] ?? "").trim();
-    const rawQtd = (rows[i][1] ?? "").trim();
-    if (!name) continue;
-    if (/^nome$/i.test(name)) continue; // cabeçalho da planilha
-    const qtd = parseQtd(rawQtd);
-    if (qtd == null) {
-      // Linha sem quantidade válida → é um título de seção (AROMA, MATERIA 3...).
-      if (!isHeaderName(name)) grupo = name.replace(/\s+/g, " ");
-      continue;
+  // Determina quantas colunas existem (em pares de 2: nome + quantidade)
+  const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  const numGroups = Math.ceil(maxCols / 2);
+
+  // Um grupo por par de colunas (col 0,1 / 2,3 / 4,5 ...)
+  const grupos: string[] = Array(numGroups).fill("Matéria-prima");
+  const visto = new Set<string>(); // evita duplicatas entre colunas
+
+  for (const row of rows) {
+    for (let g = 0; g < numGroups; g++) {
+      const nameCol = g * 2;
+      const qtdCol = g * 2 + 1;
+      const name = (row[nameCol] ?? "").trim();
+      const rawQtd = (row[qtdCol] ?? "").trim();
+      if (!name) continue;
+      if (/^(nome|kg|quantidade)$/i.test(name)) continue;
+      const qtd = parseQtd(rawQtd);
+      if (qtd == null) {
+        // Linha de seção (ex: "AROMA", "MATERIA 2")
+        if (!isHeaderName(name)) grupos[g] = name.replace(/\s+/g, " ");
+        continue;
+      }
+      const nome = name.replace(/\s+/g, " ");
+      const key = `${g}:${nome}`;
+      if (visto.has(key)) continue;
+      visto.add(key);
+      itens.push({
+        nome,
+        quantidade: qtd,
+        unidade: "kg",
+        grupo: grupos[g],
+        categoria: "materia_prima",
+        rawQtd,
+      });
     }
-    itens.push({
-      nome: name.replace(/\s+/g, " "),
-      quantidade: qtd,
-      unidade: "kg",
-      grupo,
-      categoria: "materia_prima",
-      rawQtd,
-    });
   }
   return itens;
 }
