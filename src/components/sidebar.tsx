@@ -48,7 +48,15 @@ const nav = [
       { href: "/orders/lancar", label: "Lançar pedido (IA)" },
     ],
   },
-  { href: "/estoque", label: "Estoque", icon: Warehouse },
+  {
+    href: "/estoque",
+    label: "Estoque",
+    icon: Warehouse,
+    children: [
+      { href: "/estoque", label: "Relatórios" },
+      { href: "/estoque/custos", label: "Editar custos" },
+    ],
+  },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
   { href: "/inventory", label: "Estoque", icon: Package2 },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },

@@ -20,9 +20,13 @@ export const ESTOQUE_SHEET_ID =
 
 const TAB_MATERIA = process.env.ESTOQUE_TAB_MATERIA || "matéria prima";
 const TAB_PRODUTO = process.env.ESTOQUE_TAB_PRODUTO || "produto acabado";
+// Aba opcional com custos editáveis (colunas NOME, CUSTO). Se existir, os custos
+// digitados lá têm prioridade sobre os custos derivados do catálogo do sistema.
+const TAB_CUSTOS = process.env.ESTOQUE_TAB_CUSTOS || "custos";
 
 export type Categoria = "materia_prima" | "produto_acabado";
 export type Marca = "NYER" | "LAB SKULL";
+export type CustoFonte = "planilha" | "catalogo";
 
 export interface EstoqueItem {
   nome: string;
@@ -32,6 +36,7 @@ export interface EstoqueItem {
   categoria: Categoria;
   marca?: Marca;
   custoUnit?: number;
+  custoFonte?: CustoFonte;
   valor?: number;
   rawQtd: string;
 }
@@ -40,6 +45,7 @@ export interface EstoqueReport {
   itens: EstoqueItem[];
   fetchedAt: string;
   sheetUrl: string;
+  custosTab: string;
   resumo: {
     totalItens: number;
     produtoAcabadoUnidades: number;
@@ -82,6 +88,15 @@ async function fetchTab(tab: string): Promise<string[][]> {
     );
   }
   return parseCSV(text);
+}
+
+/** Lê uma aba opcional; devolve [] se a aba não existir ou der qualquer erro. */
+async function fetchTabOptional(tab: string): Promise<string[][]> {
+  try {
+    return await fetchTab(tab);
+  } catch {
+    return [];
+  }
 }
 
 /** Parser de CSV (RFC 4180): respeita aspas e vírgulas dentro de células. */
@@ -177,10 +192,53 @@ const COST_RULES: { re: RegExp; cost: number }[] = [
   { re: /^magnesio/, cost: catalogCost(/magnesio/) || 23 },
 ];
 
-function custoDe(nome: string): number | undefined {
+/** Custos digitados pela usuária na aba "custos": norm(nome) → custo. */
+export type CustoOverrides = Map<string, number>;
+
+/** Converte "R$ 55,00", "55.9", "57,90" → número. */
+function parseDinheiro(raw: string | undefined): number | null {
+  if (raw == null) return null;
+  let s = raw.replace(/r\$/gi, "").replace(/\s+/g, "").trim();
+  if (!s) return null;
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Lê a aba "custos" (NOME, CUSTO) e devolve o mapa de overrides. */
+function parseCustosTab(rows: string[][]): CustoOverrides {
+  const map: CustoOverrides = new Map();
+  for (const row of rows) {
+    const nome = (row[0] ?? "").trim();
+    if (!nome || /^(nome|produto|item)$/i.test(nome)) continue;
+    const custo = parseDinheiro(row[1]);
+    if (custo == null) continue;
+    map.set(norm(nome), custo);
+  }
+  return map;
+}
+
+/**
+ * Resolve o custo de um item: primeiro a aba "custos" (editável pela usuária),
+ * depois as regras derivadas do catálogo do sistema (só para produtos NYER).
+ */
+function custoDe(
+  nome: string,
+  overrides: CustoOverrides,
+  usarCatalogo: boolean,
+): { custo: number; fonte: CustoFonte } | undefined {
   const n = norm(nome);
-  const rule = COST_RULES.find((r) => r.re.test(n));
-  return rule ? rule.cost : undefined;
+  const override = overrides.get(n);
+  if (override != null) return { custo: override, fonte: "planilha" };
+  if (usarCatalogo) {
+    const rule = COST_RULES.find((r) => r.re.test(n));
+    if (rule) return { custo: rule.cost, fonte: "catalogo" };
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +285,7 @@ function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
  *   colunas 2,3 → LAB SKULL
  *   colunas 4,5 → NYER (refis / embalagens / rótulos)
  */
-function parseProdutoAcabado(rows: string[][]): EstoqueItem[] {
+function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
   const blocos: { col: number; grupo: string; marca: Marca }[] = [
     { col: 0, grupo: "Produto acabado NYER", marca: "NYER" },
@@ -242,16 +300,20 @@ function parseProdutoAcabado(rows: string[][]): EstoqueItem[] {
       if (/^(nome|labskull|nyer)$/i.test(name)) continue; // cabeçalhos
       const qtd = parseQtd(rawQtd);
       if (qtd == null) continue;
-      const custoUnit = b.grupo === "Produto acabado NYER" ? custoDe(name) : undefined;
+      const nome = name.replace(/\s+/g, " ");
+      // Catálogo só vale para o produto acabado NYER vendável; nos demais
+      // blocos o custo só existe se a usuária preencher a aba "custos".
+      const c = custoDe(nome, overrides, b.grupo === "Produto acabado NYER");
       itens.push({
-        nome: name.replace(/\s+/g, " "),
+        nome,
         quantidade: qtd,
         unidade: "un",
         grupo: b.grupo,
         categoria: "produto_acabado",
         marca: b.marca,
-        custoUnit,
-        valor: custoUnit != null ? custoUnit * qtd : undefined,
+        custoUnit: c?.custo,
+        custoFonte: c?.fonte,
+        valor: c != null ? c.custo * qtd : undefined,
         rawQtd,
       });
     }
@@ -291,6 +353,7 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
     itens,
     fetchedAt: new Date().toISOString(),
     sheetUrl: SHEET_URL,
+    custosTab: TAB_CUSTOS,
     resumo: {
       totalItens: itens.length,
       produtoAcabadoUnidades: produtos.reduce((s, i) => s + i.quantidade, 0),
@@ -306,12 +369,14 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
 
 /** Lê a planilha ao vivo e devolve o relatório estruturado. */
 export async function getEstoqueReport(): Promise<EstoqueReport> {
-  const [materiaRows, produtoRows] = await Promise.all([
+  const [materiaRows, produtoRows, custosRows] = await Promise.all([
     fetchTab(TAB_MATERIA),
     fetchTab(TAB_PRODUTO),
+    fetchTabOptional(TAB_CUSTOS),
   ]);
+  const overrides = parseCustosTab(custosRows);
   const itens = [
-    ...parseProdutoAcabado(produtoRows),
+    ...parseProdutoAcabado(produtoRows, overrides),
     ...parseMateriaPrima(materiaRows),
   ];
   if (itens.length === 0) {
