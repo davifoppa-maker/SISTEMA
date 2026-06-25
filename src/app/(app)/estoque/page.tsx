@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DollarSign, ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { getEstoqueReport, EstoqueIndisponivelError } from "@/lib/services/estoque";
@@ -27,12 +27,6 @@ export default async function EstoquePage() {
         title="Estoque"
         description="Relatórios do estoque lidos ao vivo da planilha BALANCO ESTOQUE (Google Drive)."
       >
-        <Link
-          href="/estoque/custos"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          <DollarSign className="h-4 w-4" /> Editar custos
-        </Link>
         <RefreshButton />
       </PageHeader>
 
