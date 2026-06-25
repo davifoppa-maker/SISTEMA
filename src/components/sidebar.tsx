@@ -54,11 +54,9 @@ const nav = [
     icon: Warehouse,
     children: [
       { href: "/estoque", label: "Relatórios" },
-      { href: "/estoque/custos", label: "Editar custos" },
     ],
   },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
-  { href: "/inventory", label: "Estoque", icon: Package2 },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
   {
@@ -70,7 +68,7 @@ const nav = [
       { href: "/financial", label: "Contas a receber" },
       { href: "/financial/payable", label: "Contas a pagar" },
       { href: "/financial/caixa", label: "Caixa" },
-      { href: "/financial/stock-value", label: "Valor do estoque" },
+      { href: "/estoque/custos", label: "Custos do estoque" },
     ],
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },

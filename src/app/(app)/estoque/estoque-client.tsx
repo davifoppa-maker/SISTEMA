@@ -6,7 +6,6 @@ import {
   Package,
   Beaker,
   AlertTriangle,
-  DollarSign,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -102,13 +101,6 @@ export function EstoqueClient({ report }: { report: EstoqueReport }) {
           icon={Beaker}
           label="Matéria-prima"
           value={`${r.materiaPrimaKg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`}
-          tone="emerald"
-        />
-        <Kpi
-          icon={DollarSign}
-          label="Valor estimado (custo)"
-          value={brl(r.valorEstimado)}
-          sub={`${r.itensComCusto} itens com custo · ${r.itensSemCusto} sem`}
           tone="emerald"
         />
         <Kpi
