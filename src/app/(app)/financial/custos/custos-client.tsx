@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils/cn";
 export interface CustoLinha {
   nome: string;
   grupo: string;
+  categoria: string;
   quantidade: number;
+  unidade: "un" | "kg";
   custoUnit?: number;
   custoFonte?: "planilha" | "catalogo";
 }
@@ -167,7 +169,7 @@ export function CustosClient({
                         <div className="text-[11px] font-normal text-slate-400">{l.grupo}</div>
                       </Td>
                       <Td className="text-right tabular-nums text-slate-600">
-                        {l.quantidade.toLocaleString("pt-BR")} un
+                        {l.quantidade.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {l.unidade}
                       </Td>
                       <Td>
                         <Input

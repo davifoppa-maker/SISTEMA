@@ -17,15 +17,15 @@ export default async function CustosPage() {
     const report = await getEstoqueReport();
     sheetUrl = report.sheetUrl;
     custosTab = report.custosTab;
-    linhas = report.itens
-      .filter((i) => i.categoria === "produto_acabado")
-      .map((i) => ({
-        nome: i.nome,
-        grupo: i.grupo,
-        quantidade: i.quantidade,
-        custoUnit: i.custoUnit,
-        custoFonte: i.custoFonte,
-      }));
+    linhas = report.itens.map((i) => ({
+      nome: i.nome,
+      grupo: i.grupo,
+      categoria: i.categoria,
+      quantidade: i.quantidade,
+      unidade: i.unidade,
+      custoUnit: i.custoUnit,
+      custoFonte: i.custoFonte,
+    }));
   } catch (e) {
     erro =
       e instanceof EstoqueIndisponivelError
