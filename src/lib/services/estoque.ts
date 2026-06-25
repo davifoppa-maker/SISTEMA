@@ -1,13 +1,9 @@
 /**
  * Leitura ao vivo do estoque a partir da planilha do Google Drive
- * "BALANCO ESTOQUE" (Nyer). A planilha tem duas abas:
- *   - "matéria prima"   → insumos em KG (aromas, WPC, albumina, malto, etc.)
- *   - "produto acabado" → produtos em unidades (3 tabelas lado a lado:
- *                          NYER, LAB SKULL e refis/embalagens/rótulos NYER).
- *
- * Os dados na planilha são "soltos" (unidades misturadas com os números, ex.
- * "45KG", "90,00", "160 kg"; várias tabelas na mesma aba). Este serviço lê o
- * CSV público de cada aba, normaliza tudo e devolve um relatório estruturado.
+ * "BALANCO ESTOQUE" (Nyer). A planilha tem três abas:
+ *   - "matéria prima"   → insumos em KG (col A = nome, col B = quantidade)
+ *   - "produto acabado" → produtos NYER em unidades (col A = nome, col B = quantidade)
+ *   - "EMBALAGENS"      → LAB SKULL, embalagens, refis, rótulos (col A = nome, col B = quantidade)
  *
  * Leitura sem credencial: usa o endpoint público de export do Google Sheets,
  * então a planilha precisa estar como "Qualquer pessoa com o link pode ver".
@@ -20,11 +16,12 @@ export const ESTOQUE_SHEET_ID =
 
 const TAB_MATERIA = process.env.ESTOQUE_TAB_MATERIA || "matéria prima";
 const TAB_PRODUTO = process.env.ESTOQUE_TAB_PRODUTO || "produto acabado";
+const TAB_EMBALAGENS = process.env.ESTOQUE_TAB_EMBALAGENS || "EMBALAGENS";
 // Aba opcional com custos editáveis (colunas NOME, CUSTO). Se existir, os custos
 // digitados lá têm prioridade sobre os custos derivados do catálogo do sistema.
 const TAB_CUSTOS = process.env.ESTOQUE_TAB_CUSTOS || "custos";
 
-export type Categoria = "materia_prima" | "produto_acabado";
+export type Categoria = "materia_prima" | "produto_acabado" | "embalagens";
 export type Marca = "NYER" | "LAB SKULL";
 export type CustoFonte = "planilha" | "catalogo";
 
@@ -50,6 +47,7 @@ export interface EstoqueReport {
     totalItens: number;
     produtoAcabadoUnidades: number;
     materiaPrimaKg: number;
+    embalagemItens: number;
     itensZerados: number;
     valorEstimado: number;
     itensComCusto: number;
@@ -296,96 +294,69 @@ function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
 
 /**
  * Aba "produto acabado": duas tabelas lado a lado.
- * Layout real confirmado da planilha:
- *   cols 0,1 → NYER produtos acabados (tabela principal)
- *   cols 2,3 → tabela secundária: LAB SKULL, EMBALAGEM, NYER REFIS
- *              as seções são separadas por cabeçalhos em col 2 (ex: "LABSKULL", "NYER", "EMBALAGEM")
+ * Aba "produto acabado": col A = nome, col B = quantidade (simples, só NYER).
  */
 function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
-
-  // Palavras que indicam cabeçalhos de linha (não são itens)
-  const isRowHeader = (s: string) =>
-    /^(nome|labskull|nyer|un|quantidade|embalagens?|kg|item)$/i.test(s.trim());
-
-  // --- Tabela principal: cols 0,1 → NYER produtos acabados ---
-  // Col 0 pode conter itens LAB SKULL, rótulos e refis de embalagem misturados.
-  // Classifica pelo nome para separar os grupos.
+  let grupo = "Produto acabado NYER";
   for (const row of rows) {
     const name = (row[0] ?? "").trim();
     const rawQtd = (row[1] ?? "").trim();
-    if (!name || isRowHeader(name) || isHeaderName(name)) continue;
+    if (!name) continue;
+    if (/^(nome|quantidade)$/i.test(name)) continue;
     const qtd = parseQtd(rawQtd);
-    if (qtd == null) continue;
-    const nome = name.replace(/\s+/g, " ");
-    const upper = nome.toUpperCase();
-
-    let grupo: string;
-    let marca: Marca;
-    if (upper.includes("LAB SKULL")) {
-      grupo = "LAB SKULL";
-      marca = "LAB SKULL";
-    } else if (/^ROTULO/i.test(upper)) {
-      grupo = "Rótulos NYER";
-      marca = "NYER";
-    } else if (/^REFIL\b/i.test(upper)) {
-      grupo = "Embalagens / Refis";
-      marca = "NYER";
-    } else {
-      grupo = "Produto acabado NYER";
-      marca = "NYER";
+    if (qtd == null) {
+      if (!isHeaderName(name)) grupo = name.replace(/\s+/g, " ");
+      continue;
     }
-
-    const isNyer = marca === "NYER" && grupo === "Produto acabado NYER";
-    const c = custoDe(nome, overrides, isNyer);
+    const nome = name.replace(/\s+/g, " ");
+    const c = custoDe(nome, overrides, true);
     itens.push({
       nome,
       quantidade: qtd,
       unidade: "un",
       grupo,
       categoria: "produto_acabado",
-      marca,
+      marca: "NYER",
       custoUnit: c?.custo,
       custoFonte: c?.fonte,
       valor: c != null ? c.custo * qtd : undefined,
       rawQtd,
     });
   }
+  return itens;
+}
 
-  // --- Tabela secundária: cols 2,3 no CSV (col C vazia é pulada pelo gviz) ---
-  // Col D da planilha = índice 2 no CSV. Cabeçalhos de seção: LABSKULL e NYER.
-  let grupoSecundario = "LAB SKULL";
+/**
+ * Aba "EMBALAGENS": col A = nome, col B = quantidade.
+ * Seções separadas por cabeçalhos (ex: "LABSKULL", "NYER", "EMBALAGEM HIDRO").
+ */
+function parseEmbalagens(rows: string[][]): EstoqueItem[] {
+  const itens: EstoqueItem[] = [];
+  let grupo = "Embalagens";
   for (const row of rows) {
-    const name = (row[2] ?? "").trim();
-    const rawQtd = (row[3] ?? "").trim();
+    const name = (row[0] ?? "").trim();
+    const rawQtd = (row[1] ?? "").trim();
     if (!name) continue;
-    const upper = name.toUpperCase().replace(/\s+/g, " ");
+    if (/^(nome|quantidade|un)$/i.test(name)) continue;
     const qtd = parseQtd(rawQtd);
     if (qtd == null) {
-      // Detecta cabeçalhos de seção antes de qualquer outro filtro
-      if (upper === "LABSKULL" || upper === "LAB SKULL") { grupoSecundario = "LAB SKULL"; }
-      else if (upper === "NYER") { grupoSecundario = "NYER – Embalagens / Refis"; }
+      if (!isHeaderName(name)) grupo = name.replace(/\s+/g, " ");
       continue;
     }
-    // Ignora linhas de cabeçalho com texto mas sem quantidade real
-    if (/^(nome|un|quantidade|embalagens?)$/i.test(name)) continue;
     const nome = name.replace(/\s+/g, " ");
-    const isNyer = grupoSecundario.toUpperCase().includes("NYER");
-    const c = custoDe(nome, overrides, isNyer);
+    const upper = nome.toUpperCase();
+    const marca: Marca = upper.includes("LAB SKULL") || upper.includes("LAB ") ? "LAB SKULL" : "NYER";
     itens.push({
       nome,
       quantidade: qtd,
       unidade: "un",
-      grupo: grupoSecundario,
-      categoria: "produto_acabado",
-      marca: grupoSecundario === "LAB SKULL" ? "LAB SKULL" : "NYER",
-      custoUnit: c?.custo,
-      custoFonte: c?.fonte,
-      valor: c != null ? c.custo * qtd : undefined,
+      grupo,
+      categoria: "embalagens",
+      marca,
       rawQtd,
     });
   }
-
   return itens;
 }
 
@@ -395,6 +366,7 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
 
   const valorEstimado = produtos.reduce((s, i) => s + (i.valor ?? 0), 0);
   const itensComCusto = produtos.filter((i) => i.valor != null).length;
+  const embalagens = itens.filter((i) => i.categoria === "embalagens");
 
   // Agrupa preservando a ordem em que os grupos apareceram.
   const ordem: string[] = [];
@@ -426,6 +398,7 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
       totalItens: itens.length,
       produtoAcabadoUnidades: produtos.reduce((s, i) => s + i.quantidade, 0),
       materiaPrimaKg: materias.reduce((s, i) => s + i.quantidade, 0),
+      embalagemItens: embalagens.length,
       itensZerados: itens.filter((i) => i.quantidade === 0).length,
       valorEstimado,
       itensComCusto,
@@ -437,14 +410,16 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
 
 /** Lê a planilha ao vivo e devolve o relatório estruturado. */
 export async function getEstoqueReport(): Promise<EstoqueReport> {
-  const [materiaRows, produtoRows, custosRows] = await Promise.all([
+  const [materiaRows, produtoRows, embalagemRows, custosRows] = await Promise.all([
     fetchTab(TAB_MATERIA),
     fetchTab(TAB_PRODUTO),
+    fetchTabOptional(TAB_EMBALAGENS),
     fetchTabOptional(TAB_CUSTOS),
   ]);
   const overrides = parseCustosTab(custosRows);
   const itens = [
     ...parseProdutoAcabado(produtoRows, overrides),
+    ...parseEmbalagens(embalagemRows),
     ...parseMateriaPrima(materiaRows),
   ];
   if (itens.length === 0) {
