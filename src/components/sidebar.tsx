@@ -33,6 +33,7 @@ import {
   BarChart2,
   Menu,
   X,
+  Package2,
 } from "lucide-react";
 
 const nav = [
@@ -57,6 +58,7 @@ const nav = [
     ],
   },
   { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
+  { href: "/inventory", label: "Estoque", icon: Package2 },
   { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
   {
