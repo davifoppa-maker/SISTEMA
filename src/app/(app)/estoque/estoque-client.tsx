@@ -64,6 +64,7 @@ function Kpi({
 
 export function EstoqueClient({ report }: { report: EstoqueReport }) {
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [alertaFiltro, setAlertaFiltro] = useState<Filtro>("todos");
   const [busca, setBusca] = useState("");
   const [limite, setLimite] = useState(10);
 
@@ -79,10 +80,14 @@ export function EstoqueClient({ report }: { report: EstoqueReport }) {
       .filter((g) => g.itens.length > 0);
   }, [report.grupos, filtro, termo]);
 
-  const zerados = useMemo(() => report.itens.filter((i) => i.quantidade === 0), [report.itens]);
+  const alertaItens = useMemo(
+    () => report.itens.filter((i) => alertaFiltro === "todos" || i.categoria === alertaFiltro),
+    [report.itens, alertaFiltro],
+  );
+  const zerados = useMemo(() => alertaItens.filter((i) => i.quantidade === 0), [alertaItens]);
   const baixos = useMemo(
-    () => report.itens.filter((i) => i.quantidade > 0 && i.quantidade <= limite),
-    [report.itens, limite],
+    () => alertaItens.filter((i) => i.quantidade > 0 && i.quantidade <= limite),
+    [alertaItens, limite],
   );
 
   const r = report.resumo;
@@ -120,16 +125,38 @@ export function EstoqueClient({ report }: { report: EstoqueReport }) {
               <AlertTriangle className="h-4 w-4 text-amber-600" />
               Alertas de reposição
             </div>
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              Estoque baixo: ≤
-              <Input
-                type="number"
-                value={limite}
-                min={0}
-                onChange={(e) => setLimite(Math.max(0, Number(e.target.value) || 0))}
-                className="h-8 w-20"
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
+                {(
+                  [
+                    ["todos", "Todos"],
+                    ["produto_acabado", "Produto acabado"],
+                    ["materia_prima", "Matéria-prima"],
+                  ] as [Filtro, string][]
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setAlertaFiltro(id)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                      alertaFiltro === id ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:text-slate-800",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                Estoque baixo: ≤
+                <Input
+                  type="number"
+                  value={limite}
+                  min={0}
+                  onChange={(e) => setLimite(Math.max(0, Number(e.target.value) || 0))}
+                  className="h-8 w-20"
+                />
+              </label>
+            </div>
           </div>
 
           {zerados.length === 0 && baixos.length === 0 ? (
