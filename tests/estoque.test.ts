@@ -29,11 +29,13 @@ LEITINHO 1KG POTE ,651,,,REFIL 900 NYER MORANGO ,2400
 DARK PUMP LIMAO,950,,,,
 CREATINA 300 REFIL ,5450,,,,`;
 
-function mockFetch(materia: string, produto: string) {
+function mockFetch(materia: string, produto: string, custos = "") {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
-      const body = url.includes(encodeURIComponent("matéria")) ? materia : produto;
+      let body = produto;
+      if (url.includes(encodeURIComponent("matéria"))) body = materia;
+      else if (url.includes("sheet=custos")) body = custos;
       return new Response(body, { status: 200 });
     }),
   );
@@ -109,6 +111,23 @@ describe("getEstoqueReport — parsing da planilha de estoque", () => {
 
     expect(r.resumo.valorEstimado).toBeGreaterThan(0);
     expect(r.resumo.itensComCusto).toBeGreaterThanOrEqual(3);
+  });
+
+  it("aba 'custos' sobrescreve o catálogo e precifica itens novos", async () => {
+    const CUSTOS_CSV = `NOME,CUSTO
+WHEY NYER REFIL 900g CHOCOLATE,"60,00"
+REFIL LAB SKULL 420G MORANGO,"12,5"`;
+    mockFetch(MATERIA_CSV, PRODUTO_CSV, CUSTOS_CSV);
+    const r = await getEstoqueReport();
+
+    const whey900 = r.itens.find((i) => i.nome === "WHEY NYER REFIL 900g CHOCOLATE");
+    expect(whey900!.custoUnit).toBe(60); // override da planilha vence o catálogo
+    expect(whey900!.custoFonte).toBe("planilha");
+
+    // item LAB SKULL ganhou custo só porque a usuária preencheu na aba custos
+    const labskull = r.itens.find((i) => i.nome === "REFIL LAB SKULL 420G MORANGO");
+    expect(labskull!.custoUnit).toBe(12.5);
+    expect(labskull!.valor).toBe(12.5 * 800);
   });
 
   it("erro amigável quando a planilha não é pública (HTML em vez de CSV)", async () => {
