@@ -280,29 +280,42 @@ function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
 }
 
 /**
- * Aba "produto acabado": 3 tabelas lado a lado.
- *   colunas 0,1 → NYER (produto acabado vendável)
- *   colunas 2,3 → LAB SKULL
- *   colunas 4,5 → NYER (refis / embalagens / rótulos)
+ * Aba "produto acabado": tabelas lado a lado.
+ * Layout real da planilha: LABSKULL em col D (3,4), NYER em col G (6,7).
+ * Detecta as colunas dinamicamente procurando pelos cabeçalhos "LABSKULL" e "NYER".
  */
 function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
+
+  // Detecta colunas procurando pelos cabeçalhos nas linhas
+  let labCol = -1;
+  let nyerCol = -1;
+  for (const row of rows) {
+    for (let c = 0; c < row.length; c++) {
+      const cell = (row[c] ?? "").trim().toUpperCase().replace(/\s+/g, "");
+      if (cell === "LABSKULL" && labCol === -1) labCol = c;
+      if (cell === "NYER" && nyerCol === -1) nyerCol = c;
+    }
+    if (labCol >= 0 && nyerCol >= 0) break;
+  }
+  // Fallback: posições conhecidas da planilha (D=3, G=6)
+  if (labCol === -1) labCol = 3;
+  if (nyerCol === -1) nyerCol = 6;
+
   const blocos: { col: number; grupo: string; marca: Marca }[] = [
-    { col: 0, grupo: "Produto acabado NYER", marca: "NYER" },
-    { col: 2, grupo: "LAB SKULL", marca: "LAB SKULL" },
-    { col: 4, grupo: "Refis / Embalagens / Rótulos NYER", marca: "NYER" },
+    { col: labCol, grupo: "LAB SKULL", marca: "LAB SKULL" },
+    { col: nyerCol, grupo: "Produto acabado NYER", marca: "NYER" },
   ];
+
   for (const row of rows) {
     for (const b of blocos) {
       const name = (row[b.col] ?? "").trim();
       const rawQtd = (row[b.col + 1] ?? "").trim();
       if (!name || isHeaderName(name)) continue;
-      if (/^(nome|labskull|nyer)$/i.test(name)) continue; // cabeçalhos
+      if (/^(nome|labskull|nyer|un|quantidade)$/i.test(name)) continue;
       const qtd = parseQtd(rawQtd);
       if (qtd == null) continue;
       const nome = name.replace(/\s+/g, " ");
-      // Catálogo só vale para o produto acabado NYER vendável; nos demais
-      // blocos o custo só existe se a usuária preencher a aba "custos".
       const c = custoDe(nome, overrides, b.grupo === "Produto acabado NYER");
       itens.push({
         nome,
