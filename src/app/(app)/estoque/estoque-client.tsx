@@ -22,7 +22,8 @@ type Filtro = "todos" | "produto_acabado" | "materia_prima";
 function fmtQtd(item: EstoqueItem): string {
   const n = item.quantidade;
   const s = Number.isInteger(n) ? n.toLocaleString("pt-BR") : n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-  return item.unidade === "kg" ? `${s} kg` : `${s} un`;
+  const unit = item.categoria === "materia_prima" ? "kg" : (item.unidade === "kg" ? "kg" : "un");
+  return `${s} ${unit}`;
 }
 
 function Kpi({
