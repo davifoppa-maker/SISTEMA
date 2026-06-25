@@ -14,11 +14,12 @@ import { CATALOG } from "@/lib/product-costs";
 export const ESTOQUE_SHEET_ID =
   process.env.ESTOQUE_SHEET_ID || "1Q3PaZbBrCmq_MeXGdnnIOVf3JmwJXrqpAUx92qNWNto";
 
-const TAB_MATERIA = process.env.ESTOQUE_TAB_MATERIA || "matéria prima";
-const TAB_PRODUTO = process.env.ESTOQUE_TAB_PRODUTO || "produto acabado";
-const TAB_EMBALAGENS = process.env.ESTOQUE_TAB_EMBALAGENS || "EMBALAGENS";
-// Aba opcional com custos editáveis (colunas NOME, CUSTO). Se existir, os custos
-// digitados lá têm prioridade sobre os custos derivados do catálogo do sistema.
+// GIDs fixos das abas (mais confiável que o nome: gviz retorna a aba 0 silenciosamente
+// quando o nome não é encontrado, mas gid= sempre localiza a aba correta).
+const GID_MATERIA   = process.env.ESTOQUE_GID_MATERIA   || "0";
+const GID_PRODUTO   = process.env.ESTOQUE_GID_PRODUTO   || "1972969779";
+const GID_EMBALAGENS = process.env.ESTOQUE_GID_EMBALAGENS || "1514759055";
+// Aba de custos ainda por nome (opcional, sem GID fixo).
 const TAB_CUSTOS = process.env.ESTOQUE_TAB_CUSTOS || "custos";
 
 export type Categoria = "materia_prima" | "produto_acabado" | "embalagens";
@@ -60,14 +61,18 @@ export class EstoqueIndisponivelError extends Error {}
 
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${ESTOQUE_SHEET_ID}/edit`;
 
-function csvUrl(tab: string): string {
+function csvUrl(gid: string): string {
+  return `https://docs.google.com/spreadsheets/d/${ESTOQUE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`;
+}
+
+function csvUrlByName(tab: string): string {
   return `https://docs.google.com/spreadsheets/d/${ESTOQUE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
 }
 
-async function fetchTab(tab: string): Promise<string[][]> {
+async function fetchTab(url: string): Promise<string[][]> {
   let res: Response;
   try {
-    res = await fetch(csvUrl(tab), { cache: "no-store" });
+    res = await fetch(url, { cache: "no-store" });
   } catch (e) {
     throw new EstoqueIndisponivelError(
       `Não foi possível acessar a planilha de estoque (${(e as Error).message}).`,
@@ -89,9 +94,9 @@ async function fetchTab(tab: string): Promise<string[][]> {
 }
 
 /** Lê uma aba opcional; devolve [] se a aba não existir ou der qualquer erro. */
-async function fetchTabOptional(tab: string): Promise<string[][]> {
+async function fetchTabOptional(url: string): Promise<string[][]> {
   try {
-    return await fetchTab(tab);
+    return await fetchTab(url);
   } catch {
     return [];
   }
@@ -411,10 +416,10 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
 /** Lê a planilha ao vivo e devolve o relatório estruturado. */
 export async function getEstoqueReport(): Promise<EstoqueReport> {
   const [materiaRows, produtoRows, embalagemRows, custosRows] = await Promise.all([
-    fetchTab(TAB_MATERIA),
-    fetchTab(TAB_PRODUTO),
-    fetchTabOptional(TAB_EMBALAGENS),
-    fetchTabOptional(TAB_CUSTOS),
+    fetchTab(csvUrl(GID_MATERIA)),
+    fetchTab(csvUrl(GID_PRODUTO)),
+    fetchTabOptional(csvUrl(GID_EMBALAGENS)),
+    fetchTabOptional(csvUrlByName(TAB_CUSTOS)),
   ]);
 
   // gviz silently returns the first tab when a tab name isn't found.
