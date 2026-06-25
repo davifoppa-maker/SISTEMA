@@ -177,8 +177,8 @@ export default async function OrdersPage({
                       <Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>
                         {v.order.order_origin ?? CHANNEL_LABELS[v.order.channel] ?? v.order.channel}
                       </Badge>
-                      <span className="text-[10px] font-medium text-slate-400">
-                        {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NYER"}
+                      <span className="text-[10px] font-medium text-slate-500">
+                        Empresa: {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NYER"}
                       </span>
                     </div>
                   </Td>
