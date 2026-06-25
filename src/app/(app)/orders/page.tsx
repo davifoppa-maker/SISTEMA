@@ -61,11 +61,12 @@ function StatusPill({ status }: { status: string | null }) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; channel?: string; status?: string };
+  searchParams: { q?: string; channel?: string; status?: string; empresa?: string };
 }) {
   const q = (searchParams.q ?? "").toLowerCase();
   const channel = searchParams.channel ?? "";
   const status = searchParams.status ?? "";
+  const empresa = searchParams.empresa ?? "";
 
   const allViews = await listOrderViewsFast();
   const channelOptions = buildChannelOptions(allViews);
@@ -82,6 +83,7 @@ export default async function OrdersPage({
   }
   if (channel) views = views.filter((v) => v.order.channel === channel);
   if (status) views = views.filter((v) => v.order.tiny_status === status);
+  if (empresa) views = views.filter((v) => ((v.order as any).empresa ?? "nyer") === empresa);
 
   return (
     <>
@@ -106,6 +108,14 @@ export default async function OrdersPage({
                 placeholder="Pedido, NF, cliente, CNPJ, nº externo…"
                 className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600"
               />
+            </div>
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Empresa</label>
+              <select name="empresa" defaultValue={empresa} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
+                <option value="">Todas</option>
+                <option value="nyer">NYER</option>
+                <option value="ecopro">Ecopro</option>
+              </select>
             </div>
             <div className="min-w-[160px]">
               <label className="mb-1 block text-xs font-medium text-slate-600">Canal</label>
@@ -164,8 +174,12 @@ export default async function OrdersPage({
                   <Td className="text-slate-500">{v.order.external_order_number ?? "—"}</Td>
                   <Td>
                     <div className="flex flex-col gap-0.5">
-                      <Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>{v.order.order_origin ?? CHANNEL_LABELS[v.order.channel]}</Badge>
-                      {(v.order as any).empresa === "ecopro" && <Badge variant="warning">Ecopro</Badge>}
+                      <Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>
+                        {v.order.order_origin ?? CHANNEL_LABELS[v.order.channel] ?? v.order.channel}
+                      </Badge>
+                      <span className="text-[10px] font-medium text-slate-400">
+                        {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NYER"}
+                      </span>
                     </div>
                   </Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
