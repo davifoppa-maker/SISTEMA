@@ -16,15 +16,29 @@ const CATEGORY_LABELS: Record<string, string> = {
   rotulo: "Rótulos / Refis",
 };
 
-const CATEGORY_TABS = [
-  { key: "all", label: "Todos" },
-  { key: "aroma", label: "Aromas" },
-  { key: "materia_prima", label: "Matéria-Prima" },
-  { key: "produto_nyer", label: "Prod. NYER" },
-  { key: "produto_lab", label: "Prod. LAB" },
-  { key: "embalagem", label: "Embalagem" },
-  { key: "rotulo", label: "Rótulo" },
+// Página 1: Matéria Prima | Página 2: Produto Acabado
+const PAGE_TABS = [
+  { key: "materia_prima_page", label: "Matéria Prima" },
+  { key: "produto_acabado_page", label: "Produto Acabado" },
 ];
+
+const MATERIA_PRIMA_CATS = ["aroma", "materia_prima"];
+const PRODUTO_ACABADO_CATS = ["produto_nyer", "produto_lab", "embalagem", "rotulo"];
+
+const SUB_TABS: Record<string, { key: string; label: string }[]> = {
+  materia_prima_page: [
+    { key: "all", label: "Todos" },
+    { key: "aroma", label: "Aromas" },
+    { key: "materia_prima", label: "Matéria-Prima" },
+  ],
+  produto_acabado_page: [
+    { key: "all", label: "Todos" },
+    { key: "produto_nyer", label: "Prod. NYER" },
+    { key: "produto_lab", label: "Prod. LAB" },
+    { key: "embalagem", label: "Embalagem" },
+    { key: "rotulo", label: "Rótulo" },
+  ],
+};
 
 function formatQty(item: StockItem): string {
   const n = Number(item.quantity);
@@ -51,30 +65,27 @@ interface EditState {
 export function StockClient({ items: initial }: { items: StockItem[] }) {
   const [items, setItems] = useState<StockItem[]>(initial);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activePage, setActivePage] = useState("materia_prima_page");
+  const [activeSubCat, setActiveSubCat] = useState("all");
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [edit, setEdit] = useState<EditState | null>(null);
 
   const totalItems = items.length;
   const zeroItems = items.filter((i) => Number(i.quantity) === 0).length;
 
+  const pageCats = activePage === "materia_prima_page" ? MATERIA_PRIMA_CATS : PRODUTO_ACABADO_CATS;
+
   const filtered = items.filter((item) => {
-    const matchCat =
-      activeCategory === "all" || item.category === activeCategory;
-    const matchSearch =
-      !search || item.name.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
+    const inPage = pageCats.includes(item.category);
+    const matchCat = activeSubCat === "all" || item.category === activeSubCat;
+    const matchSearch = !search || item.name.toLowerCase().includes(search.toLowerCase());
+    return inPage && matchCat && matchSearch;
   });
 
-  // Group by category (preserve order of categories)
-  const categoryOrder = [
-    "aroma",
-    "materia_prima",
-    "produto_nyer",
-    "produto_lab",
-    "embalagem",
-    "rotulo",
-  ];
+  const categoryOrder = activePage === "materia_prima_page"
+    ? MATERIA_PRIMA_CATS
+    : PRODUTO_ACABADO_CATS;
+
   const grouped: Record<string, StockItem[]> = {};
   for (const cat of categoryOrder) {
     const catItems = filtered.filter((i) => i.category === cat);
@@ -144,15 +155,33 @@ export function StockClient({ items: initial }: { items: StockItem[] }) {
         className="w-full max-w-sm rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
       />
 
-      {/* Category tabs */}
-      <div className="flex flex-wrap gap-2">
-        {CATEGORY_TABS.map((tab) => (
+      {/* Page tabs (Matéria Prima / Produto Acabado) */}
+      <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+        {PAGE_TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveCategory(tab.key)}
+            onClick={() => { setActivePage(tab.key); setActiveSubCat("all"); }}
+            className={cn(
+              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+              activePage === tab.key
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-500 hover:text-slate-700",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-category pills */}
+      <div className="flex flex-wrap gap-2">
+        {SUB_TABS[activePage].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSubCat(tab.key)}
             className={cn(
               "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-              activeCategory === tab.key
+              activeSubCat === tab.key
                 ? "bg-brand-700 text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200",
             )}
