@@ -416,9 +416,15 @@ export async function getEstoqueReport(): Promise<EstoqueReport> {
     fetchTabOptional(TAB_EMBALAGENS),
     fetchTabOptional(TAB_CUSTOS),
   ]);
+
+  // gviz silently returns the first tab when a tab name isn't found.
+  // The "produto acabado" tab starts with "NOME" in col A; matéria prima starts with "".
+  // If we got the wrong tab, skip parsing to avoid AROMA items showing as produtos acabados.
+  const produtoTabOk = (produtoRows[0]?.[0] ?? "").trim().toLowerCase() === "nome";
+
   const overrides = parseCustosTab(custosRows);
   const itens = [
-    ...parseProdutoAcabado(produtoRows, overrides),
+    ...(produtoTabOk ? parseProdutoAcabado(produtoRows, overrides) : []),
     ...parseEmbalagens(embalagemRows),
     ...parseMateriaPrima(materiaRows),
   ];
