@@ -41,7 +41,7 @@ export function getTinyConfig(companyId = "nyer"): TinyConfig {
     clientSecret: process.env[`${prefix}TINY_CLIENT_SECRET`] || "",
     redirectUri:
       process.env[`${prefix}TINY_REDIRECT_URI`] ||
-      `${appUrl.replace(/\/$/, "")}/api/auth/tiny/callback${isEcopro ? "?empresa=ecopro" : ""}`,
+      `${appUrl.replace(/\/$/, "")}/api/auth/tiny/callback`,
     authUrl: process.env.TINY_AUTH_URL || DEFAULTS.authUrl,
     tokenUrl: process.env.TINY_TOKEN_URL || DEFAULTS.tokenUrl,
     apiBaseUrl: (process.env.TINY_API_BASE_URL || DEFAULTS.apiBaseUrl).replace(/\/$/, ""),
