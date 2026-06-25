@@ -162,7 +162,12 @@ export default async function OrdersPage({
                     </Link>
                   </Td>
                   <Td className="text-slate-500">{v.order.external_order_number ?? "—"}</Td>
-                  <Td><Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>{v.order.order_origin ?? CHANNEL_LABELS[v.order.channel]}</Badge></Td>
+                  <Td>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>{v.order.order_origin ?? CHANNEL_LABELS[v.order.channel]}</Badge>
+                      {(v.order as any).empresa === "ecopro" && <Badge variant="warning">Ecopro</Badge>}
+                    </div>
+                  </Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
                   <Td className="text-slate-500">{v.order.city ? `${v.order.city}/${v.order.state}` : "—"}</Td>
                   <Td className="text-right">{brl(v.order.total_value)}</Td>

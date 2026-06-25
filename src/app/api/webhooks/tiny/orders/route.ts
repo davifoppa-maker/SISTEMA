@@ -34,6 +34,8 @@ async function readBody(req: Request): Promise<any> {
 // responde 200 — o Tiny reenvia em caso de não-200, e o bruto fica salvo para
 // reprocesso/inspeção em /raw-payload.
 export async function POST(req: Request) {
+  const empresaParam = new URL(req.url).searchParams.get("empresa");
+  const companyId = empresaParam === "ecopro" ? "ecopro" : "nyer";
   // Tudo dentro de try/catch: o webhook NUNCA devolve 5xx. Sob rajada, se uma
   // leitura/escrita do banco falhar, respondemos 200 (o Tiny não re-tenta em
   // massa) e o sync/cron/botão reprocessa depois. Evita o alerta de 5xx.
@@ -73,10 +75,10 @@ export async function POST(req: Request) {
     const tinyId = String(entity?.id ?? entity?.idPedido ?? "");
     // Rajadas (vários pedidos movidos de uma vez) podem esbarrar em rate limit do
     // Tiny — tenta de novo após uma pausa antes de cair no fallback.
-    let full = tinyId ? await fetchOrderById(tinyId).catch(() => null) : null;
+    let full = tinyId ? await fetchOrderById(tinyId, companyId).catch(() => null) : null;
     if (!full && tinyId) {
       await sleep(1200);
-      full = await fetchOrderById(tinyId).catch(() => null);
+      full = await fetchOrderById(tinyId, companyId).catch(() => null);
     }
     if (!full) {
       // Sem detalhe (Tiny indisponível): aplica ao menos o STATUS que veio no
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
       (full as Record<string, unknown>).situacao = String(situacaoEvento).toLowerCase().replace(/_/g, " ");
     }
 
-    const order = ingestOrder(store, tinyOrderSchema.parse(full));
+    const order = ingestOrder(store, tinyOrderSchema.parse(full), companyId);
 
     // Tempo real: se entrou em expedição (B2B "enviado") e ainda não tem NF,
     // puxa a nota agora (número + chave + frete + prazo) para o checkout já funcionar.

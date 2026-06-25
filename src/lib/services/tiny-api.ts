@@ -1092,8 +1092,8 @@ export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean }
 }
 
 /** Busca um pedido específico por id na API V3 e devolve normalizado. */
-export async function fetchOrderById(id: string): Promise<TinyOrderPayload | null> {
-  const c = getTinyConfig();
+export async function fetchOrderById(id: string, companyId = "nyer"): Promise<TinyOrderPayload | null> {
+  const c = getTinyConfig(companyId);
   const res = await tinyFetch(`${c.apiBaseUrl}${c.ordersPath}/${encodeURIComponent(id)}`);
   if (res.status === 404) return null;
   if (!res.ok) {

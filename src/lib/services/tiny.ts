@@ -252,7 +252,7 @@ function applyStatusFlow(store: DataStore, order: Order, target: import("@/lib/t
  * Upsert de pedido a partir do payload do Tiny. Detecta canal por regras,
  * cria/atualiza cliente, pedido e itens. Idempotente por numero do pedido.
  */
-export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order {
+export function ingestOrder(store: DataStore, payload: TinyOrderPayload, companyId = "nyer"): Order {
   const { channel } = detectChannel(payload, store.channel_detection_rules);
   const customer = upsertCustomer(store, payload, channel);
 
@@ -300,10 +300,11 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload): Order 
       tiny_id: str(payload.id),
       order_number: orderNumber,
       logistic_status: "aguardando_separacao",
+      empresa: companyId,
       created_at: nowIso(),
       updated_at: nowIso(),
       ...fields,
-    } as Order;
+    } as unknown as Order;
     store.orders.push(order);
 
     (payload.itens ?? []).forEach((it) => {
