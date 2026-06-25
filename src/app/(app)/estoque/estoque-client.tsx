@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
-import { brl, dateTime } from "@/lib/utils/format";
+import { dateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import type { EstoqueReport, EstoqueItem, Categoria } from "@/lib/services/estoque";
 
@@ -245,7 +245,6 @@ export function EstoqueClient({ report }: { report: EstoqueReport }) {
                   <tr>
                     <Th>Item</Th>
                     <Th className="text-right">Quantidade</Th>
-                    {g.categoria === "produto_acabado" && <Th className="text-right">Valor (custo)</Th>}
                   </tr>
                 </Thead>
                 <tbody>
@@ -261,11 +260,6 @@ export function EstoqueClient({ report }: { report: EstoqueReport }) {
                             <span className="tabular-nums">{fmtQtd(i)}</span>
                           )}
                         </Td>
-                        {g.categoria === "produto_acabado" && (
-                          <Td className="text-right tabular-nums text-slate-600">
-                            {i.valor != null ? brl(i.valor) : <span className="text-slate-300">—</span>}
-                          </Td>
-                        )}
                       </Tr>
                     );
                   })}

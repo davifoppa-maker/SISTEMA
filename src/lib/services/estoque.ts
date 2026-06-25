@@ -309,6 +309,8 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
     /^(nome|labskull|nyer|un|quantidade|embalagens?|kg|item)$/i.test(s.trim());
 
   // --- Tabela principal: cols 0,1 → NYER produtos acabados ---
+  // Col 0 pode conter itens LAB SKULL, rótulos e refis de embalagem misturados.
+  // Classifica pelo nome para separar os grupos.
   for (const row of rows) {
     const name = (row[0] ?? "").trim();
     const rawQtd = (row[1] ?? "").trim();
@@ -316,14 +318,33 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
     const qtd = parseQtd(rawQtd);
     if (qtd == null) continue;
     const nome = name.replace(/\s+/g, " ");
-    const c = custoDe(nome, overrides, true);
+    const upper = nome.toUpperCase();
+
+    let grupo: string;
+    let marca: Marca;
+    if (upper.includes("LAB SKULL")) {
+      grupo = "LAB SKULL";
+      marca = "LAB SKULL";
+    } else if (/^ROTULO/i.test(upper)) {
+      grupo = "Rótulos NYER";
+      marca = "NYER";
+    } else if (/^REFIL\b/i.test(upper)) {
+      grupo = "Embalagens / Refis";
+      marca = "NYER";
+    } else {
+      grupo = "Produto acabado NYER";
+      marca = "NYER";
+    }
+
+    const isNyer = marca === "NYER" && grupo === "Produto acabado NYER";
+    const c = custoDe(nome, overrides, isNyer);
     itens.push({
       nome,
       quantidade: qtd,
       unidade: "un",
-      grupo: "Produto acabado NYER",
+      grupo,
       categoria: "produto_acabado",
-      marca: "NYER",
+      marca,
       custoUnit: c?.custo,
       custoFonte: c?.fonte,
       valor: c != null ? c.custo * qtd : undefined,
