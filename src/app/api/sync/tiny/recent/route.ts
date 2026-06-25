@@ -22,6 +22,8 @@ export async function POST(req: Request) {
   const sp = new URL(req.url).searchParams;
   const dataInicial = sp.get("inicio") || undefined;
   const dataFinal = sp.get("fim") || undefined;
+  // Se ?empresa= informado, sincroniza só essa empresa; senão sincroniza todas.
+  const empresaFilter = sp.get("empresa") || null;
 
   const results: { order_id: string; channel: string; empresa: string }[] = [];
 
@@ -34,10 +36,13 @@ export async function POST(req: Request) {
     }
   } else {
     // Sincroniza cada empresa conectada
-    const companies: Array<{ id: string; label: string }> = [
+    const allCompanies: Array<{ id: string; label: string }> = [
       { id: "nyer", label: "NYER" },
       { id: "ecopro", label: "Ecopro" },
     ];
+    const companies = empresaFilter
+      ? allCompanies.filter((c) => c.id === empresaFilter)
+      : allCompanies;
 
     for (const company of companies) {
       const connected = await isTinyConnected(company.id).catch(() => false);
