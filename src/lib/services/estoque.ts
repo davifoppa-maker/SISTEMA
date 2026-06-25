@@ -157,10 +157,8 @@ function parseQtd(raw: string | undefined): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// Custos: estima o valor do estoque (a vista de custo) cruzando os nomes da
-// planilha com regras derivadas do catálogo de custos do sistema.
-// Só os produtos acabados vendáveis recebem custo; refis/embalagens/rótulos e
-// itens LAB SKULL ficam sem custo (não temos esse dado) e são listados à parte.
+// Custos: mapa exato nome→custo para todos os itens (produto acabado,
+// embalagens e matéria-prima). Fonte: catálogo fornecido pela usuária.
 // ---------------------------------------------------------------------------
 
 function norm(s: string): string {
@@ -172,28 +170,129 @@ function norm(s: string): string {
     .trim();
 }
 
-function catalogCost(re: RegExp): number {
-  const found = CATALOG.find((p) => re.test(norm(p.name)));
-  return found?.cost ?? 0;
-}
-
-const COST_RULES: { re: RegExp; cost: number }[] = [
-  { re: /whey nyer refil 900g/, cost: catalogCost(/whey refill 900g/) || 55 },
-  { re: /whey nyer refil 420g/, cost: catalogCost(/whey refill 420g/) || 26 },
-  { re: /whey nyer refil 1kg/, cost: catalogCost(/whey refill 1kg/) || 57.9 },
-  { re: /1kg pote/, cost: catalogCost(/whey gourmet 1kg/) || 62 },
-  { re: /pure ?bust/, cost: catalogCost(/purebust/) || 21.48 },
-  { re: /dark ?pump/, cost: catalogCost(/darkpump/) || 23.48 },
-  { re: /^diuretico/, cost: catalogCost(/diuretico/) || 23 },
-  { re: /creatina 500 refil/, cost: catalogCost(/creatina refill 500g/) || 30 },
-  { re: /creatina 300 refil/, cost: catalogCost(/creatina refill 300g/) || 13.9 },
-  { re: /creatina 300 pote/, cost: catalogCost(/creatina pote 300g/) || 13.9 },
-  { re: /creatina 150 refil/, cost: catalogCost(/creatina refill 150g/) || 9.9 },
-  { re: /^termogenico/, cost: catalogCost(/termogenico/) || 18.15 },
-  { re: /^multivitaminico/, cost: catalogCost(/multivitaminico/) || 18.15 },
-  { re: /hidro (original|maltado|chocolate|morango) 820/, cost: catalogCost(/hydro protein 820g/) || 48 },
-  { re: /^magnesio/, cost: catalogCost(/magnesio/) || 23 },
-];
+const COST_MAP: Record<string, number> = (() => {
+  const raw: [string, number][] = [
+    // Produto acabado NYER
+    ["WHEY NYER REFIL 900g CHOCOLATE", 90],
+    ["WHEY NYER REFIL 900g MORANGO", 90],
+    ["WHEY NYER REFIL 900g LEITINHO", 90],
+    ["WHEY NYER REFIL 420g CHOCOLATE", 39.9],
+    ["WHEY NYER REFIL 420g MORANGO", 39.9],
+    ["WHEY NYER REFIL 420g LEITINHO", 39.9],
+    ["WHEY NYER REFIL 1Kg CHOCOLATE", 95],
+    ["WHEY NYER REFIL 1Kg MORANGO", 95],
+    ["WHEY NYER REFIL 1Kg DOCE DE LEITE", 95],
+    ["WHEY NYER REFIL 1Kg COOKIES", 95],
+    ["WHEY NYER REFIL 1Kg BAUNILHA", 95],
+    ["LEITINHO 1KG POTE", 95],
+    ["MORANGO 1KG POTE", 95],
+    ["CHOCOLATE 1KG POTE", 95],
+    ["MARACUJA 1KG POTE", 95],
+    ["AÇAÍ 1KG POTE", 95],
+    ["CHOCOLATE MALTADO 1KG POTE", 95],
+    ["PURE BUST LIMAO", 35],
+    ["PURE BUST RED", 35],
+    ["PURE BUST UVA", 35],
+    ["DARK PUMP LIMAO", 39.9],
+    ["DARK PUMP UVA", 39.9],
+    ["DARK PUMP RED", 39.9],
+    ["DIURETICO", 35],
+    ["CREATINA 500 REFIL", 39.9],
+    ["CREATINA 300 REFIL", 25],
+    ["CREATINA 300 POTE", 25],
+    ["CREATINA 150 REFIL", 15],
+    ["TERMOGENICO", 29.9],
+    ["MULTIVITAMINICO", 29.9],
+    ["HYDRO ORIGINAL 820", 55],
+    ["HYDRO MALTADO 820", 55],
+    ["HYDRO CHOCOLATE 820", 55],
+    ["HYDRO MORANGO 820", 55],
+    ["CREATINA SLEEVE", 30],
+    ["MAGNESIO", 45],
+    // Embalagens LAB SKULL
+    ["REFIL LAB SKULL 420G MORANGO", 2],
+    ["REFIL LAB SKULL 420G CHOCOLATE", 2],
+    ["REFIL LAB SKULL 420G COOKIES", 2],
+    ["REFIL LAB SKULL 420G LEITINHO", 2],
+    ["REFIL LAB SKULL 420G DOCE DE LEITE", 2],
+    ["REFIL LAB SKULL 900G COOKIES", 2],
+    ["REFIL LAB SKULL 900G CHOCOLATE", 2],
+    ["REFIL LAB SKULL 900G DOCE DE LEITE", 2],
+    ["REFIL LAB SKULL 900G LEITINHO", 2],
+    ["REFIL LAB SKULL 900G MORANGO", 2],
+    ["REFIL PRE TREINO LAB 150G RED", 2],
+    ["REFIL PRE TREINO LAB 150G UVA", 2],
+    ["REFIL PRE TREINO LAB 150G LIMAO", 2],
+    ["REFIL PRE TREINO LAB 420G MORANGO", 2],
+    ["REFIL PRE TREINO LAB 420G UVA", 2],
+    ["REFIL PRE TREINO LAB 420 LIMAO", 2],
+    ["CREATINA LAB SKULL 420", 2],
+    // Embalagens NYER
+    ["EMBALAGEM HIDRO MORANGO", 2],
+    ["EMBALAGEM HIDRO CHOCOLATE", 2],
+    ["EMBALAGEM HIDRO LEITINHO", 2],
+    ["EMBALAGEM HIDRO MALTADO", 2],
+    ["REFIL 900 NYER MORANGO", 2],
+    ["REFIL 900 NYER LEITINHO", 2],
+    ["REFIL 900 NYER CHOCOLATE", 2],
+    ["REFIL 1KG NYER COOKIES", 2],
+    ["REFIL 1KG NYER DOCE DE LEITE", 2],
+    ["REFIL 1KG NYER CHOCOLATE", 2],
+    ["REFIL 1KG NYER MORANGO", 2],
+    ["REFIL 1KG NYER BAUNILHA", 2],
+    ["REFIL 420 NYER ANTIGO LEITINHO", 2],
+    ["REFIL 900 NYER ANTIGO MORANGO", 2],
+    ["REFIL 900 NYER ANTIGO LEITINHO", 2],
+    ["REFIL 900 NYER ANTIGO CHOCOLATE", 2],
+    ["REFIL 500G CREATINA", 2],
+    ["REFIL 150G CREATINA", 2],
+    ["REFIL 300G CREATINA", 2],
+    ["REFIL CREATINA 500", 2],
+    ["ROTULO SLEEVE NYER AÇAÍ", 2],
+    ["ROTULO SLEEVE NYER MALTADO", 2],
+    ["ROTULO SLEEVE NYER LEITE", 2],
+    ["ROTULO SLEEVE NYER MORANGO", 2],
+    ["ROTULO SLEEVE NYER MARACUJÁ", 2],
+    ["ROTULO SLEEVE NYER CHOCOLATE", 2],
+    // Matéria-prima
+    ["AROMA CHOCOLATE", 69.9],
+    ["AROMA LEITINHO", 69.9],
+    ["AROMA DOCE DE LEITE", 69.9],
+    ["AROMA BAUNILHA", 69.9],
+    ["AROMA LIMÃO", 69.9],
+    ["AROMA UVA", 69.9],
+    ["AROMA MORANGO", 69.9],
+    ["AROMA AÇAÍ", 69.9],
+    ["AROMA MARACUJÁ", 69.9],
+    ["AROMA CHOCOLATE MALTADO", 69.9],
+    ["AROMA ABACAXI", 69.9],
+    ["AROMA CAFÉ SOLUVEL EXX", 0],
+    ["AROMA DOCE DE LEITE EXX", 0],
+    ["AROMA MORANGO EXX", 0],
+    ["GLICINA", 23],
+    ["TAURINA", 23],
+    ["WPC 80", 140],
+    ["WPC 34", 20],
+    ["WPC 60 EXX", 0],
+    ["SUCRALOSE", 140],
+    ["EMULS 511", 50],
+    ["ACIDO CITRICO", 20],
+    ["LECITIONA DE SOJA", 30],
+    ["ARGININA", 28],
+    ["ERVA", 40],
+    ["CMC", 50],
+    ["DIOXIDO", 27],
+    ["MALTO", 7.5],
+    ["CREAMY FEEL", 50],
+    ["TFT BLOCK", 50],
+    ["CACAU", 35],
+    ["CREATINA GRANEL", 20],
+    ["PREMIX PRÉ TREINO UVA", 27],
+    ["PREMIX PRÉ TREINO RED FRUITS", 27],
+    ["PREMIX PRÉ TREINO LIMÃO", 27],
+  ];
+  return Object.fromEntries(raw.map(([k, v]) => [norm(k), v]));
+})();
 
 /** Custos digitados pela usuária na aba "custos": norm(nome) → custo. */
 export type CustoOverrides = Map<string, number>;
@@ -226,21 +325,18 @@ function parseCustosTab(rows: string[][]): CustoOverrides {
 }
 
 /**
- * Resolve o custo de um item: primeiro a aba "custos" (editável pela usuária),
- * depois as regras derivadas do catálogo do sistema (só para produtos NYER).
+ * Resolve o custo de um item: primeiro a aba "custos" (overrides da planilha),
+ * depois o catálogo fixo do sistema (COST_MAP).
  */
 function custoDe(
   nome: string,
   overrides: CustoOverrides,
-  usarCatalogo: boolean,
 ): { custo: number; fonte: CustoFonte } | undefined {
   const n = norm(nome);
   const override = overrides.get(n);
   if (override != null) return { custo: override, fonte: "planilha" };
-  if (usarCatalogo) {
-    const rule = COST_RULES.find((r) => r.re.test(n));
-    if (rule) return { custo: rule.cost, fonte: "catalogo" };
-  }
+  const catalogoVal = COST_MAP[n];
+  if (catalogoVal != null) return { custo: catalogoVal, fonte: "catalogo" };
   return undefined;
 }
 
@@ -256,7 +352,7 @@ function isHeaderName(name: string): boolean {
 }
 
 /** Aba "matéria prima": pares (NOME, QNT) com seções (AROMA, MATERIA 2/3/4). */
-function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
+function parseMateriaPrima(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
   // Determina quantas colunas existem (em pares de 2: nome + quantidade)
   const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
@@ -284,12 +380,16 @@ function parseMateriaPrima(rows: string[][]): EstoqueItem[] {
       const key = `${g}:${nome}`;
       if (visto.has(key)) continue;
       visto.add(key);
+      const c = custoDe(nome, overrides);
       itens.push({
         nome,
         quantidade: qtd,
         unidade: "kg",
         grupo: grupos[g],
         categoria: "materia_prima",
+        custoUnit: c?.custo,
+        custoFonte: c?.fonte,
+        valor: c != null ? c.custo * qtd : undefined,
         rawQtd,
       });
     }
@@ -315,7 +415,7 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
       continue;
     }
     const nome = name.replace(/\s+/g, " ");
-    const c = custoDe(nome, overrides, true);
+    const c = custoDe(nome, overrides);
     itens.push({
       nome,
       quantidade: qtd,
@@ -336,7 +436,7 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
  * Aba "EMBALAGENS": col A = nome, col B = quantidade.
  * Seções separadas por cabeçalhos (ex: "LABSKULL", "NYER", "EMBALAGEM HIDRO").
  */
-function parseEmbalagens(rows: string[][]): EstoqueItem[] {
+function parseEmbalagens(rows: string[][], overrides: CustoOverrides): EstoqueItem[] {
   const itens: EstoqueItem[] = [];
   let grupo = "Embalagens";
   for (const row of rows) {
@@ -352,6 +452,7 @@ function parseEmbalagens(rows: string[][]): EstoqueItem[] {
     const nome = name.replace(/\s+/g, " ");
     const upper = nome.toUpperCase();
     const marca: Marca = upper.includes("LAB SKULL") || upper.includes("LAB ") ? "LAB SKULL" : "NYER";
+    const c = custoDe(nome, overrides);
     itens.push({
       nome,
       quantidade: qtd,
@@ -359,6 +460,9 @@ function parseEmbalagens(rows: string[][]): EstoqueItem[] {
       grupo,
       categoria: "embalagens",
       marca,
+      custoUnit: c?.custo,
+      custoFonte: c?.fonte,
+      valor: c != null ? c.custo * qtd : undefined,
       rawQtd,
     });
   }
@@ -369,8 +473,8 @@ function montarRelatorio(itens: EstoqueItem[]): EstoqueReport {
   const produtos = itens.filter((i) => i.categoria === "produto_acabado");
   const materias = itens.filter((i) => i.categoria === "materia_prima");
 
-  const valorEstimado = produtos.reduce((s, i) => s + (i.valor ?? 0), 0);
-  const itensComCusto = produtos.filter((i) => i.valor != null).length;
+  const valorEstimado = itens.reduce((s, i) => s + (i.valor ?? 0), 0);
+  const itensComCusto = itens.filter((i) => i.custoUnit != null).length;
   const embalagens = itens.filter((i) => i.categoria === "embalagens");
 
   // Agrupa preservando a ordem em que os grupos apareceram.
@@ -425,8 +529,8 @@ export async function getEstoqueReport(): Promise<EstoqueReport> {
   const overrides = parseCustosTab(custosRows);
   const itens = [
     ...parseProdutoAcabado(produtoRows, overrides),
-    ...parseEmbalagens(embalagemRows),
-    ...parseMateriaPrima(materiaRows),
+    ...parseEmbalagens(embalagemRows, overrides),
+    ...parseMateriaPrima(materiaRows, overrides),
   ];
   if (itens.length === 0) {
     throw new EstoqueIndisponivelError(
