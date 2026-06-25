@@ -68,7 +68,7 @@ const nav = [
       { href: "/financial", label: "Contas a receber" },
       { href: "/financial/payable", label: "Contas a pagar" },
       { href: "/financial/caixa", label: "Caixa" },
-      { href: "/estoque/custos", label: "Custos do estoque" },
+      { href: "/financial/custos", label: "Custos do estoque" },
     ],
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
