@@ -799,8 +799,8 @@ export interface FetchRecentParams {
 }
 
 /** Busca pedidos na API V3 por intervalo de datas e devolve já normalizados. */
-export async function fetchRecentOrders(params: FetchRecentParams = {}): Promise<TinyOrderPayload[]> {
-  const c = getTinyConfig();
+export async function fetchRecentOrders(params: FetchRecentParams = {}, companyId = "nyer"): Promise<TinyOrderPayload[]> {
+  const c = getTinyConfig(companyId);
   const url = new URL(`${c.apiBaseUrl}${c.ordersPath}`);
   if (params.dataInicial) url.searchParams.set("dataInicial", params.dataInicial);
   if (params.dataFinal) url.searchParams.set("dataFinal", params.dataFinal);
@@ -808,7 +808,7 @@ export async function fetchRecentOrders(params: FetchRecentParams = {}): Promise
   url.searchParams.set("limit", String(params.limit ?? 100));
   url.searchParams.set("offset", String(params.offset ?? 0));
 
-  const res = await tinyFetch(url.toString());
+  const res = await tinyFetch(url.toString(), {}, companyId);
   if (!res.ok) {
     throw new Error(`Tiny pedidos ${res.status}: ${(await res.text()).slice(0, 300)}`);
   }
