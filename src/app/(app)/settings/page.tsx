@@ -85,7 +85,7 @@ export default async function SettingsPage({
                 <span className="text-xs text-slate-400">Configure as credenciais para habilitar a conexão.</span>
               )}
             </div>
-            {company.id === "nyer" && company.connected && <SyncTinyButton />}
+            {company.connected && <SyncTinyButton companyId={company.id} label={company.label} />}
           </CardContent>
         </Card>
       ))}

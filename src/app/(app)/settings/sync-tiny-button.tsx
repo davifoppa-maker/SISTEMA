@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function SyncTinyButton() {
+export function SyncTinyButton({ companyId = "nyer", label }: { companyId?: string; label?: string }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -12,7 +12,7 @@ export function SyncTinyButton() {
     setMsg(null);
     setError(false);
     try {
-      const res = await fetch(`/api/sync/tiny/recent`, { method: "POST" });
+      const res = await fetch(`/api/sync/tiny/recent?empresa=${companyId}`, { method: "POST" });
       let json: Record<string, unknown> | null = null;
       const text = await res.text();
       try { json = JSON.parse(text); } catch { /* não é JSON */ }
@@ -33,7 +33,9 @@ export function SyncTinyButton() {
 
   return (
     <div className="w-full space-y-3 rounded-lg border border-slate-100 bg-slate-50/50 p-3">
-      <div className="text-xs font-medium text-slate-600">Sincronizar todos os pedidos do Olist Tiny</div>
+      <div className="text-xs font-medium text-slate-600">
+        Sincronizar pedidos {label ? `— ${label}` : "do Olist Tiny"}
+      </div>
       <button
         onClick={sync}
         disabled={loading}
