@@ -16,8 +16,8 @@ export const ESTOQUE_SHEET_ID =
 
 // GIDs fixos das abas (mais confiável que o nome: gviz retorna a aba 0 silenciosamente
 // quando o nome não é encontrado, mas gid= sempre localiza a aba correta).
-const GID_MATERIA   = process.env.ESTOQUE_GID_MATERIA   || "0";
-const GID_PRODUTO   = process.env.ESTOQUE_GID_PRODUTO   || "1972969779";
+const GID_MATERIA   = process.env.ESTOQUE_GID_MATERIA   || "1972969779";
+const GID_PRODUTO   = process.env.ESTOQUE_GID_PRODUTO   || "0";
 const GID_EMBALAGENS = process.env.ESTOQUE_GID_EMBALAGENS || "1514759055";
 // Aba de custos ainda por nome (opcional, sem GID fixo).
 const TAB_CUSTOS = process.env.ESTOQUE_TAB_CUSTOS || "custos";
