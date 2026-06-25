@@ -40,10 +40,10 @@ export default async function CustosPage() {
         description="Defina o custo unitário de cada produto para estimar o valor do estoque."
       >
         <Link
-          href="/estoque"
+          href="/financial"
           className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800"
         >
-          <ArrowLeft className="h-4 w-4" /> Voltar ao estoque
+          <ArrowLeft className="h-4 w-4" /> Voltar ao financeiro
         </Link>
       </PageHeader>
 
