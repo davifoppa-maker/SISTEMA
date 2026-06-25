@@ -65,6 +65,10 @@ async function fetchAllSheets(): Promise<{ name: string; rows: Array<Array<{ raw
   return results;
 }
 
+export async function GET() {
+  return POST();
+}
+
 export async function POST() {
   try {
     const sheets = await fetchAllSheets();
