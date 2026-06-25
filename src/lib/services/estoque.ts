@@ -352,27 +352,23 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
     });
   }
 
-  // --- Tabela secundária: cols 2,3 → LAB SKULL / EMBALAGEM / NYER refis ---
-  // Os cabeçalhos de seção aparecem em col 2 com qty vazia em col 3.
+  // --- Tabela secundária: cols 2,3 no CSV (col C vazia é pulada pelo gviz) ---
+  // Col D da planilha = índice 2 no CSV. Cabeçalhos de seção: LABSKULL e NYER.
   let grupoSecundario = "LAB SKULL";
   for (const row of rows) {
     const name = (row[2] ?? "").trim();
     const rawQtd = (row[3] ?? "").trim();
     if (!name) continue;
-    // Se col 3 não tem número é um cabeçalho de seção → atualiza grupo
+    const upper = name.toUpperCase().replace(/\s+/g, " ");
     const qtd = parseQtd(rawQtd);
     if (qtd == null) {
-      if (!isHeaderName(name) && !isRowHeader(name)) {
-        // Normaliza nome da seção para um grupo legível
-        const upper = name.toUpperCase().replace(/\s+/g, " ");
-        if (upper.includes("LABSKULL") || upper === "LAB SKULL") grupoSecundario = "LAB SKULL";
-        else if (upper.includes("EMBALAGEM")) grupoSecundario = "Embalagens";
-        else if (upper === "NYER") grupoSecundario = "NYER Refis / Rótulos";
-        else grupoSecundario = name.replace(/\s+/g, " ");
-      }
+      // Detecta cabeçalhos de seção antes de qualquer outro filtro
+      if (upper === "LABSKULL" || upper === "LAB SKULL") { grupoSecundario = "LAB SKULL"; }
+      else if (upper === "NYER") { grupoSecundario = "NYER – Embalagens / Refis"; }
       continue;
     }
-    if (isRowHeader(name)) continue;
+    // Ignora linhas de cabeçalho com texto mas sem quantidade real
+    if (/^(nome|un|quantidade|embalagens?)$/i.test(name)) continue;
     const nome = name.replace(/\s+/g, " ");
     const isNyer = grupoSecundario.toUpperCase().includes("NYER");
     const c = custoDe(nome, overrides, isNyer);
