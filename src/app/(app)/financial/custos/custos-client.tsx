@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, ExternalLink, Search } from "lucide-react";
+import { Check, Copy, ExternalLink, Save, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ export interface CustoLinha {
   quantidade: number;
   unidade: "un" | "kg";
   custoUnit?: number;
-  custoFonte?: "planilha" | "catalogo";
+  custoFonte?: "planilha" | "catalogo" | "salvo";
 }
 
 function parseCusto(s: string): number | null {
@@ -43,6 +43,9 @@ export function CustosClient({
   const [busca, setBusca] = useState("");
   const [soSemCusto, setSoSemCusto] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [salvou, setSalvou] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   const termo = busca.trim().toLowerCase();
 
@@ -66,6 +69,31 @@ export function CustosClient({
   );
 
   const comCusto = linhas.filter((l) => parseCusto(valores[l.nome] ?? "") != null).length;
+
+  async function salvar() {
+    setSalvando(true);
+    setErroSalvar(null);
+    const payload: Record<string, number> = {};
+    for (const l of linhas) {
+      const c = parseCusto(valores[l.nome] ?? "");
+      if (c != null) payload[l.nome] = c;
+    }
+    try {
+      const res = await fetch("/api/financial/custos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao salvar");
+      setSalvou(true);
+      setTimeout(() => setSalvou(false), 3000);
+    } catch (e) {
+      setErroSalvar((e as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  }
 
   function copiarParaPlanilha() {
     const linhasTxt = linhas
@@ -113,10 +141,17 @@ export function CustosClient({
             ({comCusto}/{linhas.length} itens com custo)
           </span>
         </div>
-        <Button onClick={copiarParaPlanilha} variant={copiado ? "secondary" : "primary"}>
-          {copiado ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-          {copiado ? "Copiado!" : "Copiar para a planilha"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {erroSalvar && <span className="text-xs text-red-600">{erroSalvar}</span>}
+          <Button onClick={salvar} disabled={salvando} variant={salvou ? "secondary" : "primary"}>
+            {salvou ? <Check className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+            {salvou ? "Salvo!" : salvando ? "Salvando..." : "Salvar custos"}
+          </Button>
+          <Button onClick={copiarParaPlanilha} variant="secondary">
+            {copiado ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+            {copiado ? "Copiado!" : "Copiar para planilha"}
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -186,7 +221,9 @@ export function CustosClient({
                         {valor != null ? brl(valor) : <span className="text-slate-300">—</span>}
                       </Td>
                       <Td>
-                        {l.custoFonte === "planilha" ? (
+                        {l.custoFonte === "salvo" ? (
+                          <Badge variant="success">Salvo</Badge>
+                        ) : l.custoFonte === "planilha" ? (
                           <Badge variant="success">Planilha</Badge>
                         ) : l.custoFonte === "catalogo" ? (
                           <Badge variant="info">Catálogo</Badge>
