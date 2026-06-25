@@ -16,6 +16,11 @@ export async function PATCH(
         ? null
         : Number(body.min_stock);
   if (body.notes !== undefined) allowed.notes = body.notes;
+  if (body.unit_cost !== undefined)
+    allowed.unit_cost =
+      body.unit_cost === "" || body.unit_cost === null
+        ? null
+        : Number(body.unit_cost);
   allowed.updated_at = new Date().toISOString();
 
   const sb = getSupabaseAdmin();
