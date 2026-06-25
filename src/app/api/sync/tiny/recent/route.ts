@@ -1,42 +1,42 @@
 import { loadStore, commitStore } from "@/lib/db";
-import { ok, fail } from "@/lib/api";
-import { ingestOrder, enrichExpeditionNFs, resyncProcessingB2bOrders, reprocessPendingWebhooks, enrichOrderDates, enrichOrderItems } from "@/lib/services/tiny";
+import { ok } from "@/lib/api";
+import { ingestOrder, reprocessPendingWebhooks } from "@/lib/services/tiny";
 import { runSlaAndTrackingChecks } from "@/lib/services/automation";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 
-export const maxDuration = 60;
+// Hobby plan: 10s max. Mantemos o pedido dentro do tempo buscando 1 página
+// (até 100 pedidos) por empresa, com janela de 60 dias por padrão.
+export const maxDuration = 10;
 
-// Ressincroniza pedidos recentes de todas as empresas conectadas (NYER + Ecopro).
+function defaultDataInicial(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 60);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
 export async function POST(req: Request) {
   const store = await loadStore();
 
   let body: unknown = null;
-  try {
-    body = await req.json();
-  } catch {
-    /* sem corpo: tenta a API real abaixo */
-  }
+  try { body = await req.json(); } catch { /* sem corpo */ }
 
   const sp = new URL(req.url).searchParams;
-  const dataInicial = sp.get("inicio") || undefined;
+  const dataInicial = sp.get("inicio") || defaultDataInicial();
   const dataFinal = sp.get("fim") || undefined;
-  // Se ?empresa= informado, sincroniza só essa empresa; senão sincroniza todas.
   const empresaFilter = sp.get("empresa") || null;
 
   const results: { order_id: string; channel: string; empresa: string }[] = [];
 
   if (Array.isArray(body) && body.length > 0) {
-    // Modo simulação: usa os pedidos do corpo (sem empresa definida)
     for (const item of body) {
       const parsed = tinyOrderSchema.parse(item);
       const order = ingestOrder(store, parsed);
       results.push({ order_id: order.id, channel: order.channel, empresa: (order as any).empresa ?? "nyer" });
     }
   } else {
-    // Sincroniza cada empresa conectada
-    const allCompanies: Array<{ id: string; label: string }> = [
+    const allCompanies = [
       { id: "nyer", label: "NYER" },
       { id: "ecopro", label: "Ecopro" },
     ];
@@ -49,15 +49,9 @@ export async function POST(req: Request) {
       if (!connected) continue;
 
       try {
-        const collected: unknown[] = [];
-        const MAX = 600;
-        for (let offset = 0; offset < MAX; offset += 100) {
-          const page = await fetchRecentOrders({ dataInicial, dataFinal, limit: 100, offset }, company.id);
-          collected.push(...page);
-          if (page.length < 100) break;
-        }
-
-        for (const item of collected) {
+        // 1 página apenas (100 pedidos) para não estourar o timeout de 10s
+        const page = await fetchRecentOrders({ dataInicial, dataFinal, limit: 100, offset: 0 }, company.id);
+        for (const item of page) {
           const parsed = tinyOrderSchema.parse(item);
           const order = ingestOrder(store, parsed, company.id);
           results.push({ order_id: order.id, channel: order.channel, empresa: company.id });
@@ -73,18 +67,10 @@ export async function POST(req: Request) {
         });
       }
     }
-
-    if (results.length === 0 && !(await isTinyConnected("nyer").catch(() => false)) && !(await isTinyConnected("ecopro").catch(() => false))) {
-      await commitStore(store);
-      return ok({ synced: 0, results: [], note: "Nenhuma empresa conectada ao Tiny." });
-    }
   }
 
-  const webhooksReprocessed = await reprocessPendingWebhooks(store, 30).catch(() => 0);
-  const datesEnriched = await enrichOrderDates(store, 40).catch(() => 0);
-  const itemsEnriched = await enrichOrderItems(store, 50).catch(() => 0);
-  const b2bResynced = await resyncProcessingB2bOrders(store, 60).catch(() => 0);
-  const nfEnriched = await enrichExpeditionNFs(store, 50).catch(() => 0);
+  // Reprocessa webhooks pendentes e reavalia SLA (rápido, sem API externa)
+  await reprocessPendingWebhooks(store, 5).catch(() => 0);
   runSlaAndTrackingChecks(store);
 
   store.api_sync_logs.push({
@@ -92,10 +78,10 @@ export async function POST(req: Request) {
     source: "tiny",
     operation: "sync_recent",
     ok: true,
-    detail: `${results.length} pedidos${dataInicial ? ` (${dataInicial} a ${dataFinal ?? dataInicial})` : ""}, ${b2bResynced} B2B re-sync, ${nfEnriched} NF, ${webhooksReprocessed} webhooks reprocessados, ${itemsEnriched} itens enriquecidos`,
+    detail: `${results.length} pedidos (${dataInicial} a ${dataFinal ?? "hoje"})`,
     created_at: nowIso(),
   });
 
   await commitStore(store);
-  return ok({ synced: results.length, b2bResynced, nfEnriched, webhooksReprocessed, itemsEnriched, results });
+  return ok({ synced: results.length, results });
 }
