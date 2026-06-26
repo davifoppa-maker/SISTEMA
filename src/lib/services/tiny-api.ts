@@ -725,7 +725,7 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
   };
   const endereco = cliente.endereco ?? {};
   const ecommerce = v3.ecommerce ?? (v3.nomeEcommerce ? { nome: v3.nomeEcommerce } : undefined);
-  const itensRaw: any[] = v3.itens ?? v3.items ?? [];
+  const itensRaw: any[] = v3.itens ?? v3.itensPedido ?? v3.items ?? v3.produtos ?? [];
 
   // A V3 usa `situacao` (numérico) na listagem, mas o endpoint de detalhe
   // (busca por id) devolve `codigoSituacao`/`descricaoSituacao` (ex.: "enviado").
@@ -778,10 +778,10 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
       v3.vencimento ??
       undefined,
     itens: itensRaw.map((it: any) => ({
-      codigo: it.codigo ?? it.sku ?? it.produto?.codigo ?? it.produto?.sku,
-      descricao: it.descricao ?? it.produto?.descricao ?? it.nome,
-      quantidade: it.quantidade ?? it.qtd,
-      valor_unitario: it.valorUnitario ?? it.valor_unitario ?? it.valor,
+      codigo: it.codigo ?? it.sku ?? it.codigoProduto ?? it.produto?.codigo ?? it.produto?.sku ?? it.produto?.codigoProduto,
+      descricao: it.descricao ?? it.nomeProduto ?? it.produto?.descricao ?? it.produto?.nome ?? it.nome,
+      quantidade: it.quantidade ?? it.qtd ?? it.qtde,
+      valor_unitario: it.valorUnitario ?? it.valor_unitario ?? it.precoUnitario ?? it.valor,
     })),
     raw_payload: v3,
   } as TinyOrderPayload;

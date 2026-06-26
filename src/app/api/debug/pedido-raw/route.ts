@@ -10,7 +10,8 @@ export const maxDuration = 30;
 export async function GET(req: Request) {
   const url = new URL(req.url);
   if (url.searchParams.get("k") !== "exxdebug") return fail("não autorizado", 403);
-  if (!(await isTinyConnected().catch(() => false))) return fail("Tiny não conectado", 400);
+  const empresa = url.searchParams.get("empresa") === "ecopro" ? "ecopro" : "nyer";
+  if (!(await isTinyConnected(empresa).catch(() => false))) return fail(`Tiny (${empresa}) não conectado`, 400);
 
   const numero = url.searchParams.get("numero");
   let tinyId = url.searchParams.get("tinyId") ?? undefined;
@@ -24,8 +25,8 @@ export async function GET(req: Request) {
   }
   if (!tinyId) return fail("Informe ?numero= ou ?tinyId=", 422);
 
-  const c = getTinyConfig();
-  const res = await tinyFetch(`${c.apiBaseUrl}/pedidos/${encodeURIComponent(tinyId)}`);
+  const c = getTinyConfig(empresa);
+  const res = await tinyFetch(`${c.apiBaseUrl}/pedidos/${encodeURIComponent(tinyId)}`, {}, empresa);
   const status = res.status;
   if (!res.ok) {
     return ok({ tinyId, status, body: (await res.text()).slice(0, 400) });
@@ -44,9 +45,14 @@ export async function GET(req: Request) {
   // Desembrulha só se for objeto (o campo `data` é a data do pedido, uma string).
   const isObj = (v: unknown) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
   const ped = isObj(raw?.pedido) ? raw.pedido : isObj(raw?.data) ? raw.data : raw;
-  const itensRaw = Array.isArray(ped?.itens) ? ped.itens : Array.isArray(ped?.items) ? ped.items : [];
+  const itensRaw =
+    Array.isArray(ped?.itens) ? ped.itens :
+    Array.isArray(ped?.itensPedido) ? ped.itensPedido :
+    Array.isArray(ped?.items) ? ped.items :
+    Array.isArray(ped?.produtos) ? ped.produtos : [];
 
   return ok({
+    empresa,
     tinyId,
     status,
     rawType,
@@ -54,9 +60,12 @@ export async function GET(req: Request) {
     pedidoKeys: ped && typeof ped === "object" ? Object.keys(ped) : [],
     situacao: ped?.situacao ?? ped?.codigoSituacao ?? null,
     idNotaFiscal: ped?.idNotaFiscal ?? null,
-    itensCampo: Array.isArray(ped?.itens) ? "itens" : Array.isArray(ped?.items) ? "items" : "(nenhum)",
+    itensCampo:
+      Array.isArray(ped?.itens) ? "itens" :
+      Array.isArray(ped?.itensPedido) ? "itensPedido" :
+      Array.isArray(ped?.items) ? "items" :
+      Array.isArray(ped?.produtos) ? "produtos" : "(nenhum)",
     itensLen: itensRaw.length,
-    // primeiros 3 itens CRUS, pra vermos os nomes exatos dos campos (sku/codigo/produto)
     itensAmostra: itensRaw.slice(0, 3),
   });
 }
