@@ -119,7 +119,7 @@ export function QuoteForm({
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <Card>
-          <CardHeader><CardTitle>Remetente (Ex Nutrition)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Remetente (NRX)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Transportadora">
               <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
