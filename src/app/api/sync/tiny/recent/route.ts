@@ -2,7 +2,7 @@ import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok, fail } from "@/lib/api";
 import { ingestOrder } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
-import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
+import { fetchRecentOrders, fetchOrderById, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 import type { DataStore } from "@/lib/types";
 
@@ -36,8 +36,13 @@ export async function POST(req: Request) {
         companies.map(async (company) => {
           const connected = await isTinyConnected(company.id).catch(() => false);
           if (!connected) return { company: company.id, items: [] as unknown[] };
-          const items = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id).catch(() => []);
-          return { company: company.id, items };
+          // Lista retorna dados leves (sem itens). Busca detalhes completos em paralelo.
+          const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 8, offset: 0 }, company.id).catch(() => []);
+          const ids = list.map((o: any) => String(o.id ?? "")).filter(Boolean);
+          const items = await Promise.all(
+            ids.map((id) => fetchOrderById(id, company.id).catch(() => null))
+          );
+          return { company: company.id, items: items.filter(Boolean) };
         })
       ),
       loadStoreFor(tables),
