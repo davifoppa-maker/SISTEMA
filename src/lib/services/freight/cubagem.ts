@@ -25,6 +25,7 @@ export const CAIXAS: Caixa[] = [
   { nome: "Caixa 2", comprimentoCm: 26.5, larguraCm: 23.5, alturaCm: 13.5 },
   { nome: "Caixa 3", comprimentoCm: 26.5, larguraCm: 26.5, alturaCm: 26.5 },
   { nome: "Caixa 4", comprimentoCm: 44.5, larguraCm: 30, alturaCm: 25 },
+  { nome: "Caixa 5", comprimentoCm: 50, larguraCm: 35, alturaCm: 30 },
 ];
 
 // Quanto do volume da caixa dá pra ocupar de fato (espaços vazios entre itens).
