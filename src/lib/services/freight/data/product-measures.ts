@@ -192,4 +192,51 @@ export const PRODUCT_MEASURES: Record<string, ProductMeasure> = {
   "minibag01": { desc: "Mini Bag - Exx Nutrition", larguraCm: 10.0, alturaCm: 10.0, comprimentoCm: 10.0 },
   "wheychocolatebranco900g": { desc: "Whey 100% Concentrado POTE 900g  -  Exx Nutrition - Chocolate Branco", larguraCm: 15.5, alturaCm: 26.0, comprimentoCm: 15.5 },
   "wheycookies900g": { desc: "Whey 100% Concentrado POTE 900g  -  Exx Nutrition - Cookies & Cream", larguraCm: 15.5, alturaCm: 26.0, comprimentoCm: 15.5 },
+
+  // ── NYER Nutrition — Caixas de expedição (1 unidade = 1 caixa fechada) ──────
+  // caixa10 (10un) 450×320×170mm
+  "NYER26001": { desc: "Whey Nyer Refil 900g - Chocolate",         larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26002": { desc: "Whey Nyer Refil 900g - Morango",           larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26003": { desc: "Whey Nyer Refil 900g - Leitinho",          larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  // caixa09 (10un) 355×235×160mm
+  "NYER26004": { desc: "Whey Nyer Refil 420g - Chocolate",         larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  "NYER26005": { desc: "Whey Nyer Refil 420g - Morango",           larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  "NYER26006": { desc: "Whey Nyer Refil 420g - Leitinho",          larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  // caixa10 (10un) 450×320×170mm
+  "NYER26007": { desc: "Whey Nyer Refil 1kg - Chocolate",          larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26008": { desc: "Whey Nyer Refil 1kg - Morango",            larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26009": { desc: "Whey Nyer Refil 1kg - Doce de Leite",      larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26010": { desc: "Whey Nyer Refil 1kg - Cookies",            larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER26011": { desc: "Whey Nyer Refil 1kg - Baunilha",           larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  // caixa08 (4un) 310×305×255mm — potes 1kg
+  "NYER26012": { desc: "Whey Nyer Pote 1kg - Leitinho",            larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER26013": { desc: "Whey Nyer Pote 1kg - Morango",             larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER26014": { desc: "Whey Nyer Pote 1kg - Chocolate",           larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER26015": { desc: "Whey Nyer Pote 1kg - Maracujá",            larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER26016": { desc: "Whey Nyer Pote 1kg - Açaí",               larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER26017": { desc: "Whey Nyer Pote 1kg - Chocolate Maltado",   larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  // caixa06 (8un) 230×225×223mm
+  "NYER26018": { desc: "Pure Bust - Limão",                        larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26019": { desc: "Pure Bust - Red",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26020": { desc: "Pure Bust - Uva",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26021": { desc: "Dark Pump - Limão",                        larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26022": { desc: "Dark Pump - Uva",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26023": { desc: "Dark Pump - Red",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26024": { desc: "Diurético",                                larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  // caixa09 (10un) 355×235×160mm — creatinas refil
+  "NYER26025": { desc: "Creatina Refil Nyer 150g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  "NYER26026": { desc: "Creatina Pote Nyer 300g",                  larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  "NYER26027": { desc: "Creatina Sleeve Nyer",                     larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26028": { desc: "Magnésio",                                  larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26029": { desc: "Creatina Refil Nyer 300g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  "NYER26030": { desc: "Creatina Refil Nyer 500g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
+  // caixa07 (8un) 260×133×117mm
+  "NYER26031": { desc: "Termogênico",                              larguraCm: 13.3, alturaCm: 11.7, comprimentoCm: 26.0 },
+  "NYER26032": { desc: "Multivitamínico",                          larguraCm: 13.3, alturaCm: 11.7, comprimentoCm: 26.0 },
+  // caixa10 (10un) 450×320×170mm — Hydro Protein 820g
+  "NYER260430": { desc: "Hydro Protein Nyer Refil 820g - Chocolate Maltado", larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260431": { desc: "Hydro Protein Nyer Refil 820g - Original",          larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260432": { desc: "Hydro Protein Nyer Refil 820g - Chocolate",         larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260433": { desc: "Hydro Protein Nyer Refil 820g - Milkshake de Morango", larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260434": { desc: "Hydro Protein Nyer Refil 820g - Morango",           larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
 };
