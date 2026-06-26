@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ok, fail, parseBody } from "@/lib/api";
 import { getProvider } from "@/lib/services/freight/registry";
 
-export const maxDuration = 30;
+export const maxDuration = 10;
 
 const cubagemSchema = z.object({
   altura: z.coerce.number().positive(),

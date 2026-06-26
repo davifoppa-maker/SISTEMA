@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { readStore } from "@/lib/queries";
+import { loadStoreFor } from "@/lib/db";
 import { fetchOrderWeight, isTinyConfigured } from "@/lib/services/tiny-api";
 import { getBraspressConfig } from "@/lib/services/braspress";
 import { providerOptions } from "@/lib/services/freight/registry";
@@ -9,9 +9,10 @@ import { calcularCubagem, cubagemParaLinhas } from "@/lib/services/freight/cubag
 import { QuoteForm } from "./quote-form";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 10;
 
 export default async function CotacaoPage({ params }: { params: { id: string } }) {
-  const store = await readStore();
+  const store = await loadStoreFor(["orders", "customers", "order_items"]);
   const order = store.orders.find((o) => o.id === params.id);
   if (!order) notFound();
   const customer = store.customers.find((c) => c.id === order.customer_id);
