@@ -1,77 +1,61 @@
 import { loadStore, commitStore } from "@/lib/db";
 import { ok } from "@/lib/api";
-import { ingestOrder, reprocessPendingWebhooks } from "@/lib/services/tiny";
-import { runSlaAndTrackingChecks } from "@/lib/services/automation";
+import { ingestOrder } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 
-// Hobby plan: 10s max. Mantemos o pedido dentro do tempo buscando 1 página
-// (até 100 pedidos) por empresa, com janela de 60 dias por padrão.
+// Hobby plan: 10s. Buscamos apenas 20 pedidos recentes por empresa, sem
+// nenhum enriquecimento extra (NF, rastreio, etc.). Rápido e dentro do limite.
 export const maxDuration = 10;
 
 function defaultDataInicial(): string {
   const d = new Date();
-  d.setDate(d.getDate() - 60);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function POST(req: Request) {
-  const store = await loadStore();
-
-  let body: unknown = null;
-  try { body = await req.json(); } catch { /* sem corpo */ }
-
   const sp = new URL(req.url).searchParams;
   const dataInicial = sp.get("inicio") || defaultDataInicial();
   const dataFinal = sp.get("fim") || undefined;
   const empresaFilter = sp.get("empresa") || null;
 
-  const results: { order_id: string; channel: string; empresa: string }[] = [];
+  const allCompanies = [
+    { id: "nyer", label: "NYER" },
+    { id: "ecopro", label: "Ecopro" },
+  ];
+  const companies = empresaFilter
+    ? allCompanies.filter((c) => c.id === empresaFilter)
+    : allCompanies;
 
-  if (Array.isArray(body) && body.length > 0) {
-    for (const item of body) {
-      const parsed = tinyOrderSchema.parse(item);
-      const order = ingestOrder(store, parsed);
-      results.push({ order_id: order.id, channel: order.channel, empresa: (order as any).empresa ?? "nyer" });
-    }
-  } else {
-    const allCompanies = [
-      { id: "nyer", label: "NYER" },
-      { id: "ecopro", label: "Ecopro" },
-    ];
-    const companies = empresaFilter
-      ? allCompanies.filter((c) => c.id === empresaFilter)
-      : allCompanies;
-
-    for (const company of companies) {
+  // Verifica conexão e busca pedidos em paralelo (antes de loadStore para ganhar tempo)
+  const fetched: { company: string; items: unknown[] }[] = [];
+  await Promise.all(
+    companies.map(async (company) => {
       const connected = await isTinyConnected(company.id).catch(() => false);
-      if (!connected) continue;
+      if (!connected) return;
+      const page = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id).catch(() => []);
+      if (page.length > 0) fetched.push({ company: company.id, items: page });
+    })
+  );
 
-      try {
-        // 1 página apenas (100 pedidos) para não estourar o timeout de 10s
-        const page = await fetchRecentOrders({ dataInicial, dataFinal, limit: 100, offset: 0 }, company.id);
-        for (const item of page) {
-          const parsed = tinyOrderSchema.parse(item);
-          const order = ingestOrder(store, parsed, company.id);
-          results.push({ order_id: order.id, channel: order.channel, empresa: company.id });
-        }
-      } catch (err) {
-        store.api_sync_logs.push({
-          id: uuid(),
-          source: "tiny",
-          operation: "sync_recent",
-          ok: false,
-          detail: `${company.label}: ${err instanceof Error ? err.message : "erro"}`,
-          created_at: nowIso(),
-        });
-      }
-    }
+  if (fetched.length === 0) {
+    return ok({ synced: 0, results: [], note: "Nenhum pedido encontrado." });
   }
 
-  // Reprocessa webhooks pendentes e reavalia SLA (rápido, sem API externa)
-  await reprocessPendingWebhooks(store, 5).catch(() => 0);
-  runSlaAndTrackingChecks(store);
+  const store = await loadStore();
+  const results: { order_id: string; empresa: string }[] = [];
+
+  for (const { company, items } of fetched) {
+    for (const item of items) {
+      try {
+        const parsed = tinyOrderSchema.parse(item);
+        const order = ingestOrder(store, parsed, company);
+        results.push({ order_id: order.id, empresa: company });
+      } catch { /* ignora pedido inválido */ }
+    }
+  }
 
   store.api_sync_logs.push({
     id: uuid(),
