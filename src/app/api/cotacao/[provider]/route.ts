@@ -12,10 +12,10 @@ const cubagemSchema = z.object({
 });
 
 const schema = z.object({
-  cnpjDestinatario: z.string().min(1),
+  cnpjDestinatario: z.string().optional().default(""),
   cepDestino: z.string().min(1),
   vlrMercadoria: z.coerce.number().nonnegative(),
-  peso: z.coerce.number().positive(),
+  peso: z.coerce.number().nonnegative(),
   volumes: z.coerce.number().int().positive(),
   cubagem: z.array(cubagemSchema).min(1),
   cnpjRemetente: z.string().optional(),

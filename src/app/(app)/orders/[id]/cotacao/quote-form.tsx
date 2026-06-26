@@ -85,6 +85,9 @@ export function QuoteForm({
     setError(null);
     setResult(null);
     try {
+      const cubagemPayload = cubagemToPayload(cubagem).filter(
+        (d) => d.altura > 0 && d.largura > 0 && d.comprimento > 0 && d.volumes > 0,
+      );
       const payload = {
         cnpjRemetente,
         cepOrigem,
@@ -95,7 +98,7 @@ export function QuoteForm({
         volumes: totalVolumes,
         modal,
         tipoFrete,
-        cubagem: cubagemToPayload(cubagem),
+        cubagem: cubagemPayload.length > 0 ? cubagemPayload : [{ altura: 0.1, largura: 0.1, comprimento: 0.1, volumes: totalVolumes }],
       };
       const res = await fetch(`/api/cotacao/${provider}`, {
         method: "POST",
@@ -106,7 +109,8 @@ export function QuoteForm({
       if (res.ok && json.ok) {
         setResult(json.data as Result);
       } else {
-        setError(json.error ?? "Falha ao cotar.");
+        const detail = json.detail ? ` — ${JSON.stringify(json.detail)}` : "";
+        setError((json.error ?? "Falha ao cotar.") + detail);
       }
     } catch {
       setError("Falha de rede ao cotar.");
