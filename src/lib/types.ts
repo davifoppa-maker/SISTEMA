@@ -130,6 +130,8 @@ export interface Order {
   order_date: string | null;
   /** Data de vencimento do boleto (formasPagamento[0].vencimento). */
   due_date: string | null;
+  /** Natureza de operação (campo `nat_operacao` do Tiny). */
+  nat_operacao?: string | null;
   tags: string[];
   raw_payload: unknown;
   created_at: string;
