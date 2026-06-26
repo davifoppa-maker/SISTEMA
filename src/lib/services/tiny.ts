@@ -318,7 +318,7 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
       });
     });
   } else {
-    Object.assign(order, fields, { updated_at: nowIso() });
+    Object.assign(order, fields, { empresa: companyId, updated_at: nowIso() });
     // Se o pedido já existe mas agora temos itens (e não tínhamos antes), adicionar
     const existingItems = store.order_items.filter((i) => i.order_id === order!.id);
     const newItems = (payload.itens ?? []).filter((it) => it.codigo || it.descricao);
