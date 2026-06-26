@@ -110,6 +110,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             <Row label="Valor">{brl(order.total_value)}</Row>
             <Row label="Frete">{order.freight_value != null ? brl(order.freight_value) : "—"}</Row>
             <Row label="Prazo (entrega)">{order.expected_delivery_at ? dateTime(order.expected_delivery_at) : "—"}</Row>
+            <Row label="Nat. operação">{(order as any).nat_operacao ?? "—"}</Row>
             <Row label="Origem">{order.order_origin ?? "—"}</Row>
             <Row label="Vendedor">{order.seller ?? "—"}</Row>
             <Row label="Lista de preço">{order.price_list ?? "—"}</Row>

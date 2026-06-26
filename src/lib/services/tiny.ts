@@ -286,6 +286,7 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
     price_list: str(payload.lista_preco),
     order_origin: str(payload.ecommerce?.nome),
     carrier_name: str(payload.transportadora),
+    nat_operacao: str((payload as Record<string, unknown>).nat_operacao),
     order_date: tinyDateToIso((payload as Record<string, unknown>).data),
     due_date: tinyDateToIso((payload as Record<string, unknown>).vencimento),
     tags: marcador ? [marcador] : [],
