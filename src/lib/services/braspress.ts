@@ -18,8 +18,8 @@ import type {
 const BRASPRESS_API_BASE = process.env.BRASPRESS_API_BASE_URL || "https://api.braspress.com";
 
 /** CNPJ e CEP de origem do remetente (Ex Nutrition) — fixos, com override por env. */
-const REMETENTE_CNPJ = onlyDigits(process.env.BRASPRESS_CNPJ_REMETENTE || "33042107000151");
-const ORIGEM_CEP = onlyDigits(process.env.BRASPRESS_CEP_ORIGEM || "88750000");
+const REMETENTE_CNPJ = onlyDigits(process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114");
+const ORIGEM_CEP = onlyDigits(process.env.BRASPRESS_CEP_ORIGEM || "88352501");
 
 function onlyDigits(v: string | number | null | undefined): string {
   return String(v ?? "").replace(/\D/g, "");
