@@ -320,10 +320,13 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
     });
   } else {
     Object.assign(order, fields, { empresa: companyId, updated_at: nowIso() });
-    // Se o pedido já existe mas agora temos itens (e não tínhamos antes), adicionar
-    const existingItems = store.order_items.filter((i) => i.order_id === order!.id);
+    // Sempre atualiza itens quando chegam dados completos do detalhe do pedido.
     const newItems = (payload.itens ?? []).filter((it) => it.codigo || it.descricao);
-    if (existingItems.length === 0 && newItems.length > 0) {
+    if (newItems.length > 0) {
+      // Remove itens antigos e substitui pelos novos (sync completo).
+      const idx = store.order_items.filter((i) => i.order_id !== order!.id);
+      store.order_items.length = 0;
+      store.order_items.push(...idx);
       newItems.forEach((it) => {
         store.order_items.push({
           id: uuid(),
