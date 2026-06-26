@@ -13,6 +13,7 @@ import { isBraspressConfigured, quoteFreight, trackByNf } from "@/lib/services/b
 import { isArleteConfigured, quoteArlete, trackArlete } from "@/lib/services/freight/arlete";
 import { isJadlogConfigured, quoteJadlog, trackJadlog } from "@/lib/services/freight/jadlog";
 import { isLenoirConfigured, quoteLenoir, trackLenoir } from "@/lib/services/freight/lenoir";
+import { isMultitransConfigured, quoteMultitrans, trackMultitrans } from "@/lib/services/freight/multitrans";
 
 const braspress: FreightProvider = {
   id: "braspress",
@@ -46,11 +47,20 @@ const lenoir: FreightProvider = {
   track: trackLenoir,
 };
 
+const multitrans: FreightProvider = {
+  id: "multitrans",
+  label: "Multitrans",
+  isConfigured: isMultitransConfigured,
+  quote: quoteMultitrans,
+  track: (nf) => trackMultitrans(nf),
+};
+
 const PROVIDERS: Record<string, FreightProvider> = {
   [braspress.id]: braspress,
   [arlete.id]: arlete,
   [jadlog.id]: jadlog,
   [lenoir.id]: lenoir,
+  [multitrans.id]: multitrans,
 };
 
 /** Transportadora padrão quando nenhuma é especificada. */
@@ -78,6 +88,7 @@ export function providerIdForCarrierName(name?: string | null): string | null {
   if (n.includes("jadlog") || n.includes("jadelog")) return "jadlog";
   if (n.includes("arlete")) return "arlete";
   if (n.includes("lenoir")) return "lenoir";
+  if (n.includes("multitrans")) return "multitrans";
   return null;
 }
 
