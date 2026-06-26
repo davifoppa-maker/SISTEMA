@@ -228,6 +228,7 @@ export const PRODUCT_MEASURES: Record<string, ProductMeasure> = {
   "NYER26026": { desc: "Creatina Pote Nyer 300g",                  larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
   "NYER26027": { desc: "Creatina Sleeve Nyer",                     larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26028": { desc: "Magnésio",                                  larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "NYER26060": { desc: "Magnésio Inositol Pote 250g",              larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26029": { desc: "Creatina Refil Nyer 300g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
   "NYER26030": { desc: "Creatina Refil Nyer 500g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
   // caixa07 (8un) 260×133×117mm
