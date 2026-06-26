@@ -31,11 +31,11 @@ function onlyDigits(v: string | number | null | undefined): string {
 export function getJadlogConfig() {
   return {
     token: process.env.JADLOG_TOKEN || "",
-    cnpj: onlyDigits(process.env.JADLOG_CNPJ || "33042107000151"),
+    cnpj: onlyDigits(process.env.JADLOG_CNPJ || "51579683000114"),
     conta: process.env.JADLOG_CONTA || "123966",
     contrato: process.env.JADLOG_CONTRATO || "",
     modalidade: Number(process.env.JADLOG_MODALIDADE || "3"), // 3 = .Package
-    cepOrigem: onlyDigits(process.env.JADLOG_CEP_ORIGEM || "88750000"),
+    cepOrigem: onlyDigits(process.env.JADLOG_CEP_ORIGEM || "88352501"),
     pontoEmissor: process.env.JADLOG_PONTO_EMISSOR || "0890",
     apiBaseUrl: JADLOG_API_BASE.replace(/\/$/, ""),
   };
