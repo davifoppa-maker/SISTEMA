@@ -14,6 +14,8 @@ import { isArleteConfigured, quoteArlete, trackArlete } from "@/lib/services/fre
 import { isJadlogConfigured, quoteJadlog, trackJadlog } from "@/lib/services/freight/jadlog";
 import { isLenoirConfigured, quoteLenoir, trackLenoir } from "@/lib/services/freight/lenoir";
 import { isMultitransConfigured, quoteMultitrans, trackMultitrans } from "@/lib/services/freight/multitrans";
+import { isBrudamConfigured, quoteBrudam, trackBrudam } from "@/lib/services/freight/brudam";
+import { isBbmConfigured, quoteBbm, trackBbm } from "@/lib/services/freight/bbm";
 
 const braspress: FreightProvider = {
   id: "braspress",
@@ -55,12 +57,30 @@ const multitrans: FreightProvider = {
   track: (nf) => trackMultitrans(nf),
 };
 
+const brudam: FreightProvider = {
+  id: "brudam",
+  label: "Brudam (Multi)",
+  isConfigured: isBrudamConfigured,
+  quote: quoteBrudam,
+  track: (nf) => trackBrudam(nf),
+};
+
+const bbm: FreightProvider = {
+  id: "bbm",
+  label: "BBM / Translovato",
+  isConfigured: isBbmConfigured,
+  quote: quoteBbm,
+  track: (nf) => trackBbm(nf),
+};
+
 const PROVIDERS: Record<string, FreightProvider> = {
   [braspress.id]: braspress,
   [arlete.id]: arlete,
   [jadlog.id]: jadlog,
   [lenoir.id]: lenoir,
   [multitrans.id]: multitrans,
+  [brudam.id]: brudam,
+  [bbm.id]: bbm,
 };
 
 /** Transportadora padrão quando nenhuma é especificada. */
@@ -89,6 +109,8 @@ export function providerIdForCarrierName(name?: string | null): string | null {
   if (n.includes("arlete")) return "arlete";
   if (n.includes("lenoir")) return "lenoir";
   if (n.includes("multitrans")) return "multitrans";
+  if (n.includes("brudam") || n.includes("multi ")) return "brudam";
+  if (n.includes("translovato") || n.includes("bbm")) return "bbm";
   return null;
 }
 
