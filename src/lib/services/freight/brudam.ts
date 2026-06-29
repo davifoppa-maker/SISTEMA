@@ -39,24 +39,47 @@ export function isBrudamConfigured(): boolean {
 }
 
 /**
- * Headers de autenticação da Multi (Brudam). O token é a credencial principal;
- * a Multi aceita o token no header `Authorization`. Mandamos também usuário/senha
- * no header como fallback, caso a conta exija.
+ * Gera um token novo autenticando com usuário+senha (a Multi exige token fresco;
+ * o token fixo de env serve só como fallback). Tenta os endpoints de login mais
+ * comuns da Multi.
  */
-function brudamAuthHeaders(): Record<string, string> {
+async function brudamToken(): Promise<{ ok: true; token: string } | { ok: false; error: string; status?: number; detail?: unknown }> {
   const c = getBrudamConfig();
-  const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
-  if (c.token) h.Authorization = c.token;
-  if (c.usuario) h.usuario = c.usuario;
-  if (c.senha) h.senha = c.senha;
-  return h;
+  if (!c.usuario || !c.senha) {
+    if (c.token) return { ok: true, token: c.token };
+    return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO e BRUDAM_SENHA)." };
+  }
+  const endpoints = ["/login", "/usuarios/autenticar", "/auth/login", "/autenticar"];
+  let lastErr = "Brudam: falha ao autenticar.";
+  let lastStatus: number | undefined;
+  let lastDetail: unknown;
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(`${c.apiBaseUrl}${ep}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ usuario: c.usuario, senha: c.senha }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 404) { lastErr = `Brudam auth ${ep} 404`; continue; }
+      if (!res.ok) { lastErr = `Brudam auth ${res.status}`; lastStatus = res.status; lastDetail = json; continue; }
+      const token = json?.data?.token ?? json?.token ?? json?.access_token ?? json?.data?.access_token;
+      if (token) return { ok: true, token: String(token) };
+      lastErr = "Brudam: token não retornado na autenticação."; lastDetail = json;
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : "Erro de rede (Brudam auth)";
+    }
+  }
+  return { ok: false, error: lastErr, status: lastStatus, detail: lastDetail };
 }
 
 export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   const c = getBrudamConfig();
   if (!isBrudamConfigured()) {
-    return { ok: false, error: "Brudam não configurada (defina BRUDAM_TOKEN)." };
+    return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
   }
+  const auth = await brudamToken();
+  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status, detail: auth.detail };
 
   const cepDestino = onlyDigits(params.cepDestino);
   const cepOrigem = onlyDigits(params.cepOrigem) || c.cepOrigem;
@@ -90,7 +113,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   try {
     const res = await fetch(`${c.apiBaseUrl}/cotacoes`, {
       method: "POST",
-      headers: brudamAuthHeaders(),
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: auth.token },
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
@@ -116,12 +139,14 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
 export async function trackBrudam(notaFiscal: string): Promise<TrackingOutcome> {
   const c = getBrudamConfig();
   if (!isBrudamConfigured()) {
-    return { ok: false, error: "Brudam não configurada (defina BRUDAM_TOKEN)." };
+    return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
   }
+  const auth = await brudamToken();
+  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status };
 
   try {
     const res = await fetch(`${c.apiBaseUrl}/rastreios/${encodeURIComponent(notaFiscal)}`, {
-      headers: brudamAuthHeaders(),
+      headers: { Accept: "application/json", Authorization: auth.token },
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: `Brudam rastreio ${res.status}`, status: res.status, detail: json };
