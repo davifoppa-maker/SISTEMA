@@ -41,6 +41,18 @@ export async function GET(req: Request) {
     { nome: "login body usuario+senha+token", ep: "/login", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, senha: c.senha, token: c.token } },
   ];
 
+  // Hipótese form-urlencoded e query-string (em vez de JSON).
+  const formHeaders = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
+  const credForm = `usuario=${encodeURIComponent(c.usuario)}&senha=${encodeURIComponent(c.senha)}`;
+  const credQuery = `?usuario=${encodeURIComponent(c.usuario)}&senha=${encodeURIComponent(c.senha)}`;
+  const extras: Array<{ nome: string; url: string; method: string; headers: Record<string, string>; rawBody?: string }> = [
+    { nome: "FORM cotacoes usuario+senha", url: `${base}/cotacoes`, method: "POST", headers: formHeaders, rawBody: `${credForm}&cep_origem=${c.cepOrigem}&cep_destino=01001000` },
+    { nome: "FORM login usuario+senha", url: `${base}/login`, method: "POST", headers: formHeaders, rawBody: credForm },
+    { nome: "QUERY cotacoes (json body)", url: `${base}/cotacoes${credQuery}`, method: "POST", headers: jsonHeaders, rawBody: JSON.stringify({ cep_origem: c.cepOrigem, cep_destino: "01001000" }) },
+    { nome: "QUERY login GET", url: `${base}/login${credQuery}`, method: "GET", headers: jsonHeaders },
+    { nome: "BASIC cotacoes", url: `${base}/cotacoes`, method: "POST", headers: { ...jsonHeaders, Authorization: `Basic ${Buffer.from(`${c.usuario}:${c.senha}`).toString("base64")}` }, rawBody: JSON.stringify({ cep_origem: c.cepOrigem, cep_destino: "01001000" }) },
+  ];
+
   const resultados = [];
   for (const t of tentativas) {
     try {
@@ -56,8 +68,18 @@ export async function GET(req: Request) {
         method: t.method,
         enviou: t.body ? "body" : "headers",
         status: res.status,
-        resposta: text.slice(0, 350),
+        resposta: text.slice(0, 200),
       });
+    } catch (err) {
+      resultados.push({ nome: t.nome, erro: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  for (const t of extras) {
+    try {
+      const res = await fetch(t.url, { method: t.method, headers: t.headers, body: t.rawBody });
+      const text = await res.text();
+      resultados.push({ nome: t.nome, endpoint: t.url.replace(base, ""), method: t.method, enviou: "extra", status: res.status, resposta: text.slice(0, 200) });
     } catch (err) {
       resultados.push({ nome: t.nome, erro: err instanceof Error ? err.message : String(err) });
     }
