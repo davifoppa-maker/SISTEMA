@@ -15,6 +15,7 @@ export async function GET(req: Request) {
 
   const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json" };
   const authHeaders = { ...jsonHeaders, usuario: c.usuario, senha: c.senha };
+  const tokenHeaders = { ...jsonHeaders, usuario: c.usuario, token: c.token };
 
   // Variações de endpoint + método + onde manda usuário/senha (body vs headers).
   const tentativas: Array<{
@@ -30,7 +31,11 @@ export async function GET(req: Request) {
     { nome: "autenticar headers", ep: "/usuarios/autenticar", method: "POST", headers: authHeaders },
     { nome: "token headers", ep: "/token", method: "POST", headers: authHeaders },
     { nome: "raiz headers GET", ep: "", method: "GET", headers: authHeaders },
-    { nome: "cotacoes headers (sem login)", ep: "/cotacoes", method: "POST", headers: authHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "cotacoes usuario+senha", ep: "/cotacoes", method: "POST", headers: authHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    // Hipótese principal: usuario + token nos headers (sem login).
+    { nome: "cotacoes usuario+token", ep: "/cotacoes", method: "POST", headers: tokenHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "login usuario+token headers", ep: "/login", method: "POST", headers: tokenHeaders },
+    { nome: "raiz usuario+token GET", ep: "", method: "GET", headers: tokenHeaders },
   ];
 
   const resultados = [];
