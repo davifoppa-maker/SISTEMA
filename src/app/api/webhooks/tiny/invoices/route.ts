@@ -41,6 +41,8 @@ function mapInvoice(e: any) {
 
 // Ativa o fluxo logístico quando a NF é emitida. Tolerante a formato; sempre 200.
 export async function POST(req: Request) {
+  const empresaParam = new URL(req.url).searchParams.get("empresa");
+  const companyId = empresaParam === "ecopro" ? "ecopro" : "nyer";
   const payload = await readBody(req);
 
   const store = await loadStore();
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
 
   try {
     const entity = payload?.dados ?? payload?.notaFiscal ?? payload?.nota ?? payload;
-    const result = ingestInvoice(store, tinyInvoiceSchema.parse(mapInvoice(entity)));
+    const result = ingestInvoice(store, tinyInvoiceSchema.parse(mapInvoice(entity)), companyId);
     event.status = result ? "processed" : "error";
     event.processed_at = nowIso();
     if (!result) event.error_message = "Pedido não encontrado para a NF.";

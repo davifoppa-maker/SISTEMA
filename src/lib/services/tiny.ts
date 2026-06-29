@@ -599,9 +599,14 @@ export async function reprocessPendingWebhooks(store: DataStore, cap = 30): Prom
 export function ingestInvoice(
   store: DataStore,
   payload: TinyInvoicePayload,
+  companyId = "nyer",
 ): { invoice: Invoice; shipment: Shipment } | null {
   const orderNumber = str(payload.pedido_numero);
-  const order = store.orders.find((o) => o.order_number === orderNumber);
+  // Busca o pedido na MESMA empresa (NYER e Ecopro podem ter o mesmo número).
+  const order =
+    store.orders.find(
+      (o) => o.order_number === orderNumber && ((o as any).empresa ?? "nyer") === companyId,
+    ) ?? store.orders.find((o) => o.order_number === orderNumber);
   if (!order) return null;
 
   const invoiceNumber = str(payload.numero)!;
