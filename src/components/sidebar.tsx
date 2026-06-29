@@ -46,6 +46,7 @@ const nav = [
       { href: "/orders", label: "Todos os pedidos" },
       { href: "/orders/margem", label: "Margem de pedidos" },
       { href: "/orders/lancar", label: "Lançar pedido (IA)" },
+      { href: "/quotes", label: "Cotações" },
     ],
   },
   {
