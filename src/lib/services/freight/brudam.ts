@@ -39,38 +39,16 @@ export function isBrudamConfigured(): boolean {
 }
 
 /**
- * Gera um token novo autenticando com usuário+senha (a Multi exige token fresco;
- * o token fixo de env serve só como fallback). Tenta os endpoints de login mais
- * comuns da Multi.
+ * Headers de autenticação da Multi (Brudam): a API lê `usuario` e `senha`
+ * diretamente dos HEADERS de cada requisição (não há etapa de login/token).
  */
-async function brudamToken(): Promise<{ ok: true; token: string } | { ok: false; error: string; status?: number; detail?: unknown }> {
+function brudamHeaders(): Record<string, string> {
   const c = getBrudamConfig();
-  if (!c.usuario || !c.senha) {
-    if (c.token) return { ok: true, token: c.token };
-    return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO e BRUDAM_SENHA)." };
-  }
-  const endpoints = ["/login", "/usuarios/autenticar", "/auth/login", "/autenticar"];
-  let lastErr = "Brudam: falha ao autenticar.";
-  let lastStatus: number | undefined;
-  let lastDetail: unknown;
-  for (const ep of endpoints) {
-    try {
-      const res = await fetch(`${c.apiBaseUrl}${ep}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ usuario: c.usuario, senha: c.senha }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (res.status === 404) { lastErr = `Brudam auth ${ep} 404`; continue; }
-      if (!res.ok) { lastErr = `Brudam auth ${res.status}`; lastStatus = res.status; lastDetail = json; continue; }
-      const token = json?.data?.token ?? json?.token ?? json?.access_token ?? json?.data?.access_token;
-      if (token) return { ok: true, token: String(token) };
-      lastErr = "Brudam: token não retornado na autenticação."; lastDetail = json;
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : "Erro de rede (Brudam auth)";
-    }
-  }
-  return { ok: false, error: lastErr, status: lastStatus, detail: lastDetail };
+  const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  if (c.usuario) h.usuario = c.usuario;
+  if (c.senha) h.senha = c.senha;
+  if (c.token) h.token = c.token;
+  return h;
 }
 
 export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
@@ -78,8 +56,6 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   if (!isBrudamConfigured()) {
     return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
   }
-  const auth = await brudamToken();
-  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status, detail: auth.detail };
 
   const cepDestino = onlyDigits(params.cepDestino);
   const cepOrigem = onlyDigits(params.cepOrigem) || c.cepOrigem;
@@ -113,7 +89,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   try {
     const res = await fetch(`${c.apiBaseUrl}/cotacoes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: auth.token },
+      headers: brudamHeaders(),
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
@@ -141,12 +117,9 @@ export async function trackBrudam(notaFiscal: string): Promise<TrackingOutcome> 
   if (!isBrudamConfigured()) {
     return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
   }
-  const auth = await brudamToken();
-  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status };
-
   try {
     const res = await fetch(`${c.apiBaseUrl}/rastreios/${encodeURIComponent(notaFiscal)}`, {
-      headers: { Accept: "application/json", Authorization: auth.token },
+      headers: brudamHeaders(),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: `Brudam rastreio ${res.status}`, status: res.status, detail: json };
