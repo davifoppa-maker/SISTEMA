@@ -51,6 +51,12 @@ export async function GET(req: Request) {
     { nome: "QUERY cotacoes (json body)", url: `${base}/cotacoes${credQuery}`, method: "POST", headers: jsonHeaders, rawBody: JSON.stringify({ cep_origem: c.cepOrigem, cep_destino: "01001000" }) },
     { nome: "QUERY login GET", url: `${base}/login${credQuery}`, method: "GET", headers: jsonHeaders },
     { nome: "BASIC cotacoes", url: `${base}/cotacoes`, method: "POST", headers: { ...jsonHeaders, Authorization: `Basic ${Buffer.from(`${c.usuario}:${c.senha}`).toString("base64")}` }, rawBody: JSON.stringify({ cep_origem: c.cepOrigem, cep_destino: "01001000" }) },
+    // Cotação SEM body (tudo na query) — a API só autentica requisições sem corpo.
+    { nome: "GET cotacoes query full", url: `${base}/cotacoes${credQuery}&cep_origem=${c.cepOrigem}&cep_destino=01001000&peso=5&valor=100&volumes=1`, method: "GET", headers: jsonHeaders },
+    { nome: "POST cotacoes query sem body", url: `${base}/cotacoes${credQuery}&cep_origem=${c.cepOrigem}&cep_destino=01001000&peso=5&valor=100&volumes=1`, method: "POST", headers: jsonHeaders },
+    // Endpoint de token: GET com query, para ver se devolve um token.
+    { nome: "GET token query", url: `${base}/token${credQuery}`, method: "GET", headers: jsonHeaders },
+    { nome: "GET autenticar query", url: `${base}/usuarios/autenticar${credQuery}`, method: "GET", headers: jsonHeaders },
   ];
 
   const resultados = [];
