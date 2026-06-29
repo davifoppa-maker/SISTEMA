@@ -21,6 +21,7 @@ interface Prefill {
   vlrMercadoria: number;
   peso: number;
   volumes: number;
+  empresa?: string;
 }
 
 interface Result {
@@ -98,6 +99,7 @@ export function QuoteForm({
         volumes: totalVolumes,
         modal,
         tipoFrete,
+        empresa: prefill.empresa,
         cubagem: cubagemPayload.length > 0 ? cubagemPayload : [{ altura: 0.1, largura: 0.1, comprimento: 0.1, volumes: totalVolumes }],
       };
       const res = await fetch(`/api/cotacao/${provider}`, {
@@ -123,7 +125,7 @@ export function QuoteForm({
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <Card>
-          <CardHeader><CardTitle>Remetente (NRX)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Remetente ({prefill.empresa === "ecopro" ? "Ecopro" : "NRX"})</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Transportadora">
               <Select value={provider} onChange={(e) => setProvider(e.target.value)}>

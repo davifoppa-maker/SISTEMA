@@ -17,20 +17,30 @@ import type {
 
 const BRASPRESS_API_BASE = process.env.BRASPRESS_API_BASE_URL || "https://api.braspress.com";
 
-/** CNPJ e CEP de origem do remetente (Ex Nutrition) — fixos, com override por env. */
-const REMETENTE_CNPJ = onlyDigits(process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114");
-const ORIGEM_CEP = onlyDigits(process.env.BRASPRESS_CEP_ORIGEM || "88352501");
-
 function onlyDigits(v: string | number | null | undefined): string {
   return String(v ?? "").replace(/\D/g, "");
 }
 
-export function getBraspressConfig() {
+// CNPJ de origem por empresa (públicos; usuário/senha vêm só de env vars).
+const CNPJ_PADRAO: Record<string, string> = {
+  nyer: "51579683000114",
+  ecopro: "54369810000149",
+};
+
+/**
+ * Config da Braspress por empresa. NYER e Ecopro têm contratos/credenciais
+ * distintos na Braspress. Para a Ecopro, defina as env vars com prefixo
+ * `ECOPRO_` (ECOPRO_BRASPRESS_USER, ECOPRO_BRASPRESS_PASSWORD, ...).
+ */
+export function getBraspressConfig(companyId = "nyer") {
+  const isEcopro = companyId === "ecopro";
+  const prefix = isEcopro ? "ECOPRO_" : "";
+  const cnpjPadrao = CNPJ_PADRAO[companyId] ?? CNPJ_PADRAO.nyer;
   return {
-    user: process.env.BRASPRESS_USER || "",
-    password: process.env.BRASPRESS_PASSWORD || "",
-    cnpjRemetente: REMETENTE_CNPJ,
-    cepOrigem: ORIGEM_CEP,
+    user: process.env[`${prefix}BRASPRESS_USER`] || "",
+    password: process.env[`${prefix}BRASPRESS_PASSWORD`] || "",
+    cnpjRemetente: onlyDigits(process.env[`${prefix}BRASPRESS_CNPJ_REMETENTE`] || cnpjPadrao),
+    cepOrigem: onlyDigits(process.env[`${prefix}BRASPRESS_CEP_ORIGEM`] || process.env.BRASPRESS_CEP_ORIGEM || "88352501"),
     apiBaseUrl: BRASPRESS_API_BASE.replace(/\/$/, ""),
   };
 }
@@ -43,7 +53,7 @@ export function isBraspressConfigured(): boolean {
 
 /** Cota o frete na Braspress. Retorna outcome (não lança) para a rota tratar o erro. */
 export async function quoteFreight(params: QuoteParams): Promise<QuoteOutcome> {
-  const c = getBraspressConfig();
+  const c = getBraspressConfig(params.empresa);
   if (!c.user || !c.password) {
     return { ok: false, error: "Braspress não configurada (defina BRASPRESS_USER e BRASPRESS_PASSWORD)." };
   }
@@ -153,12 +163,15 @@ function normalizeShipment(c: any): TrackingShipment {
  * Observação: a Braspress só retorna NFs dos últimos 90 dias (data de emissão).
  */
 export async function trackByNf(notaFiscal: string, cnpj?: string): Promise<TrackingOutcome> {
-  const c = getBraspressConfig();
+  // Seleciona a empresa pelo CNPJ informado (cada conta tem credenciais próprias).
+  const cnpjIn = onlyDigits(cnpj);
+  const empresa = cnpjIn && cnpjIn === CNPJ_PADRAO.ecopro ? "ecopro" : "nyer";
+  const c = getBraspressConfig(empresa);
   if (!c.user || !c.password) {
     return { ok: false, error: "Braspress não configurada (defina BRASPRESS_USER e BRASPRESS_PASSWORD)." };
   }
   const nf = onlyDigits(notaFiscal);
-  const cnpjRem = onlyDigits(cnpj) || c.cnpjRemetente;
+  const cnpjRem = cnpjIn || c.cnpjRemetente;
   if (!nf) return { ok: false, error: "Nota fiscal ausente." };
 
   const auth = Buffer.from(`${c.user}:${c.password}`).toString("base64");

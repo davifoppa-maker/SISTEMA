@@ -22,6 +22,7 @@ const schema = z.object({
   cepOrigem: z.string().optional(),
   modal: z.string().optional(),
   tipoFrete: z.string().optional(),
+  empresa: z.string().optional(),
 });
 
 export async function POST(req: Request, { params }: { params: { provider: string } }) {
