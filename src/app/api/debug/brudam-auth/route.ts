@@ -13,33 +13,45 @@ export async function GET(req: Request) {
   const c = getBrudamConfig();
   const base = c.apiBaseUrl;
 
-  // Variações de endpoint + corpo, para mapear o que a Multi aceita.
-  const tentativas: Array<{ ep: string; body: Record<string, unknown> }> = [
-    { ep: "/login", body: { usuario: c.usuario, senha: c.senha } },
-    { ep: "/usuarios/autenticar", body: { usuario: c.usuario, senha: c.senha } },
-    { ep: "/auth/login", body: { usuario: c.usuario, senha: c.senha } },
-    { ep: "/autenticar", body: { usuario: c.usuario, senha: c.senha } },
-    { ep: "/login", body: { user: c.usuario, password: c.senha } },
-    { ep: "/token", body: { usuario: c.usuario, senha: c.senha } },
+  const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json" };
+  const authHeaders = { ...jsonHeaders, usuario: c.usuario, senha: c.senha };
+
+  // Variações de endpoint + método + onde manda usuário/senha (body vs headers).
+  const tentativas: Array<{
+    nome: string;
+    ep: string;
+    method: string;
+    headers: Record<string, string>;
+    body?: Record<string, unknown>;
+  }> = [
+    { nome: "login body", ep: "/login", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, senha: c.senha } },
+    { nome: "login headers", ep: "/login", method: "POST", headers: authHeaders },
+    { nome: "login GET headers", ep: "/login", method: "GET", headers: authHeaders },
+    { nome: "autenticar headers", ep: "/usuarios/autenticar", method: "POST", headers: authHeaders },
+    { nome: "token headers", ep: "/token", method: "POST", headers: authHeaders },
+    { nome: "raiz headers GET", ep: "", method: "GET", headers: authHeaders },
+    { nome: "cotacoes headers (sem login)", ep: "/cotacoes", method: "POST", headers: authHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
   ];
 
   const resultados = [];
   for (const t of tentativas) {
     try {
       const res = await fetch(`${base}${t.ep}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(t.body),
+        method: t.method,
+        headers: t.headers,
+        body: t.body ? JSON.stringify(t.body) : undefined,
       });
       const text = await res.text();
       resultados.push({
-        endpoint: t.ep,
-        bodyKeys: Object.keys(t.body),
+        nome: t.nome,
+        endpoint: t.ep || "(raiz)",
+        method: t.method,
+        enviou: t.body ? "body" : "headers",
         status: res.status,
-        resposta: text.slice(0, 400),
+        resposta: text.slice(0, 350),
       });
     } catch (err) {
-      resultados.push({ endpoint: t.ep, erro: err instanceof Error ? err.message : String(err) });
+      resultados.push({ nome: t.nome, erro: err instanceof Error ? err.message : String(err) });
     }
   }
 
