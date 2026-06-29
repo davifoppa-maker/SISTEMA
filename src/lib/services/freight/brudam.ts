@@ -38,31 +38,25 @@ export function isBrudamConfigured(): boolean {
   return Boolean(c.token || (c.usuario && c.senha));
 }
 
-/** Autentica e devolve um token Bearer (usa BRUDAM_TOKEN se já configurado). */
-async function brudamToken(): Promise<{ ok: true; token: string } | { ok: false; error: string; status?: number }> {
+/**
+ * Headers de autenticação da Multi (Brudam). O token é a credencial principal;
+ * a Multi aceita o token no header `Authorization`. Mandamos também usuário/senha
+ * no header como fallback, caso a conta exija.
+ */
+function brudamAuthHeaders(): Record<string, string> {
   const c = getBrudamConfig();
-  if (c.token) return { ok: true, token: c.token };
-  if (!c.usuario || !c.senha) return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA ou BRUDAM_TOKEN)." };
-  try {
-    const res = await fetch(`${c.apiBaseUrl}/usuarios/autenticar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ usuario: c.usuario, senha: c.senha }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `Brudam auth ${res.status}`, status: res.status };
-    const token = json?.data?.token ?? json?.token ?? json?.access_token;
-    if (!token) return { ok: false, error: "Brudam: token não retornado na autenticação." };
-    return { ok: true, token: String(token) };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (Brudam auth)" };
-  }
+  const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  if (c.token) h.Authorization = c.token;
+  if (c.usuario) h.usuario = c.usuario;
+  if (c.senha) h.senha = c.senha;
+  return h;
 }
 
 export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   const c = getBrudamConfig();
-  const auth = await brudamToken();
-  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status };
+  if (!isBrudamConfigured()) {
+    return { ok: false, error: "Brudam não configurada (defina BRUDAM_TOKEN)." };
+  }
 
   const cepDestino = onlyDigits(params.cepDestino);
   const cepOrigem = onlyDigits(params.cepOrigem) || c.cepOrigem;
@@ -96,11 +90,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   try {
     const res = await fetch(`${c.apiBaseUrl}/cotacoes`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${auth.token}`,
-      },
+      headers: brudamAuthHeaders(),
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
@@ -125,12 +115,13 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
 
 export async function trackBrudam(notaFiscal: string): Promise<TrackingOutcome> {
   const c = getBrudamConfig();
-  const auth = await brudamToken();
-  if (!auth.ok) return { ok: false, error: auth.error, status: auth.status };
+  if (!isBrudamConfigured()) {
+    return { ok: false, error: "Brudam não configurada (defina BRUDAM_TOKEN)." };
+  }
 
   try {
     const res = await fetch(`${c.apiBaseUrl}/rastreios/${encodeURIComponent(notaFiscal)}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${auth.token}` },
+      headers: brudamAuthHeaders(),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: `Brudam rastreio ${res.status}`, status: res.status, detail: json };
