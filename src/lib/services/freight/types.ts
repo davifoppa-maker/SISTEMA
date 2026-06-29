@@ -34,6 +34,8 @@ export interface QuoteParams {
   modal?: string;
   /** Tipo de frete (ex.: "1" CIF | "2" FOB) — interpretação por provider. */
   tipoFrete?: string;
+  /** Empresa do pedido ("nyer" | "ecopro") — seleciona credenciais/remetente. */
+  empresa?: string;
 }
 
 export interface QuoteResult {

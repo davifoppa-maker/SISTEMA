@@ -32,7 +32,8 @@ export default async function CotacaoPage({ params }: { params: { id: string } }
     }
   }
 
-  const cfg = getBraspressConfig();
+  const empresa = (order as any).empresa ?? "nyer";
+  const cfg = getBraspressConfig(empresa);
 
   // Cubagem automática: itens do pedido → medidas por SKU → empacotamento nas caixas.
   const itens = store.order_items
@@ -66,6 +67,7 @@ export default async function CotacaoPage({ params }: { params: { id: string } }
           peso: peso ?? 0,
           // volumes da cubagem automática quando houver; senão o do Tiny.
           volumes: totalCaixas > 0 ? totalCaixas : volumes ?? 1,
+          empresa,
         }}
         cubagemAuto={cubagemAuto}
       />
