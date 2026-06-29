@@ -31,11 +31,14 @@ export async function GET(req: Request) {
     { nome: "autenticar headers", ep: "/usuarios/autenticar", method: "POST", headers: authHeaders },
     { nome: "token headers", ep: "/token", method: "POST", headers: authHeaders },
     { nome: "raiz headers GET", ep: "", method: "GET", headers: authHeaders },
-    { nome: "cotacoes usuario+senha", ep: "/cotacoes", method: "POST", headers: authHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
-    // Hipótese principal: usuario + token nos headers (sem login).
-    { nome: "cotacoes usuario+token", ep: "/cotacoes", method: "POST", headers: tokenHeaders, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
-    { nome: "login usuario+token headers", ep: "/login", method: "POST", headers: tokenHeaders },
-    { nome: "raiz usuario+token GET", ep: "", method: "GET", headers: tokenHeaders },
+    // /cotacoes com credenciais DENTRO do body (várias formas de nomear).
+    { nome: "cot body usuario+senha", ep: "/cotacoes", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, senha: c.senha, cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "cot body usuario+token", ep: "/cotacoes", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, token: c.token, cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "cot body usuario+senha+token", ep: "/cotacoes", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, senha: c.senha, token: c.token, cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "cot body acesso{}", ep: "/cotacoes", method: "POST", headers: jsonHeaders, body: { acesso: { usuario: c.usuario, senha: c.senha }, cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    { nome: "cot headers usuario+senha+token", ep: "/cotacoes", method: "POST", headers: { ...authHeaders, token: c.token }, body: { cep_origem: c.cepOrigem, cep_destino: "01001000" } },
+    // Login retornando token: tenta com body além dos headers.
+    { nome: "login body usuario+senha+token", ep: "/login", method: "POST", headers: jsonHeaders, body: { usuario: c.usuario, senha: c.senha, token: c.token } },
   ];
 
   const resultados = [];
