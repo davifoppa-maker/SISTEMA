@@ -50,9 +50,12 @@ export async function GET(req: Request) {
         }
       }
       if (itens.length > 0) {
-        itens.forEach((it: any) => {
+        // Remove itens existentes do pedido (evita duplicar em reprocessos).
+        store.order_items = store.order_items.filter((i) => i.order_id !== order.id);
+        itens.forEach((it: any, idx: number) => {
           store.order_items.push({
-            id: uuid(),
+            // ID determinístico: reinserir sobrescreve em vez de duplicar.
+            id: `${order.id}:item:${idx}`,
             order_id: order.id,
             sku: str(it.codigo),
             description: str(it.descricao) ?? "Item",
