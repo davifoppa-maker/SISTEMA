@@ -139,10 +139,10 @@ function QtyCell({ qty, onSet }: { qty: number; onSet: (v: number) => void }) {
   return (
     <button
       onClick={() => { setVal(String(qty)); setEditing(true); }}
-      className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-700 hover:border-brand-700 hover:bg-brand-50"
+      className="inline-flex items-center gap-1.5 rounded border border-white/15 bg-white/10 px-2 py-0.5 text-white hover:border-fuchsia-400 hover:bg-white/20"
     >
       <span className="text-sm font-medium">{qty}</span>
-      <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="h-3 w-3 text-violet-300/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
       </svg>
     </button>
@@ -270,35 +270,37 @@ export function MargemClient() {
   const { level, mixPct, totalTabela, volumeProgress, nextLevel, receita, custoProdutos, custosOperacionais, lucro, margemPct, orderProducts, discount } = calculations;
 
   return (
-    <div className="flex h-full flex-col gap-0">
-      <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <h1 className="text-xl font-bold text-slate-800">Gestor de Margem</h1>
-        <p className="text-sm text-slate-500">Simule pedidos e acompanhe descontos por volume e mix</p>
+    <div className="-mx-4 -mt-16 min-h-screen bg-[radial-gradient(ellipse_at_top,_#3b0764_0%,_#1e1b4b_45%,_#0f172a_100%)] px-4 pt-16 text-white sm:-mx-6 sm:px-6 md:-mt-6 md:pt-6">
+      <div className="mb-4">
+        <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight text-white">
+          <span className="text-3xl">🎮</span> Gestor de Margem
+        </h1>
+        <p className="text-sm text-violet-200/80">Monte o pedido, some pontos e bata a meta! 🚀</p>
       </div>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
+      <div className="flex flex-1 flex-col gap-4 pb-8 lg:flex-row">
         {/* Left panel */}
-        <div className="flex flex-1 flex-col gap-4 lg:overflow-hidden" style={{ flex: "2 1 0" }}>
+        <div className="flex flex-1 flex-col gap-4" style={{ flex: "2 1 0" }}>
           {/* Search with autocomplete */}
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar produto por nome ou SKU..."
+              placeholder="🔎 Buscar produto por nome ou SKU..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
               onFocus={() => setShowDropdown(true)}
               onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
+              className="w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm text-white placeholder-violet-200/60 shadow-lg outline-none backdrop-blur-md focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-400"
             />
             {showDropdown && filteredCatalog.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-white/15 bg-slate-900/95 shadow-2xl backdrop-blur-md">
                 {filteredCatalog.map((product) => {
                   const qty = getQty(product.sku);
                   const netPrice = product.tabela * (1 - discount);
                   return (
                     <div
                       key={product.sku}
-                      className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50"
+                      className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-white/10"
                       onMouseDown={() => {
                         setQty(product.sku, qty + 1);
                         setSearch("");
@@ -307,14 +309,14 @@ export function MargemClient() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-[10px] text-slate-400">{product.sku}</span>
+                          <span className="font-mono text-[10px] text-violet-300/70">{product.sku}</span>
                           <TypeBadge type={product.type} />
                         </div>
-                        <p className="text-xs font-medium text-slate-800">{product.name}</p>
+                        <p className="text-xs font-medium text-white">{product.name}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-[10px] text-slate-400 line-through">{fmtBRL(product.tabela)}</div>
-                        <div className="text-sm font-semibold text-emerald-600">{fmtBRL(netPrice)}</div>
+                        <div className="text-[10px] text-violet-300/50 line-through">{fmtBRL(product.tabela)}</div>
+                        <div className="text-sm font-semibold text-emerald-400">{fmtBRL(netPrice)}</div>
                       </div>
                     </div>
                   );
@@ -325,9 +327,9 @@ export function MargemClient() {
 
           {/* Order table */}
           {orderProducts.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-slate-800">Itens do pedido</h2>
+            <div className="rounded-xl border border-white/15 bg-white/5 shadow-lg backdrop-blur-md">
+              <div className="border-b border-white/10 px-4 py-3">
+                <h2 className="text-sm font-semibold text-white">🛒 Itens do pedido</h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -399,8 +401,8 @@ export function MargemClient() {
         {/* Right panel */}
         <div className="flex flex-col gap-4 lg:overflow-y-auto" style={{ flex: "1 1 0", minWidth: "280px", maxWidth: "100%" }}>
           {/* Sistema de Pontos */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Sistema de Pontos</h2>
+          <div className="rounded-xl border border-white/15 bg-white/5 p-4 shadow-lg backdrop-blur-md">
+            <h2 className="mb-3 text-sm font-semibold text-white">🏅 Sistema de Pontos</h2>
             <div className="mb-3 flex items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-sm font-bold ${level.bg} ${level.color}`}>
                 {level.name}
