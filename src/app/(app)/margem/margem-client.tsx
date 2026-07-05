@@ -275,7 +275,7 @@ export function MargemClient() {
         <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight text-white">
           <span className="text-3xl">🎮</span> Gestor de Margem
         </h1>
-        <p className="text-sm text-violet-200/80">Monte o pedido, some pontos e bata a meta! 🚀</p>
+        <p className="text-sm text-violet-200/80">Monte o pedido e some o máximo de pontos! Mínimo {PONTOS_MIN} pra aprovar. 🚀</p>
       </div>
 
       <div className="flex flex-1 flex-col gap-4 pb-8 lg:flex-row">
@@ -484,7 +484,7 @@ export function MargemClient() {
                       {pontos}
                     </div>
                     <div className="text-sm font-semibold text-white/80">
-                      de {PONTOS_MIN} pontos
+                      pontos {aprovado ? "· acima do mínimo! 🔥" : `· mínimo ${PONTOS_MIN}`}
                     </div>
                   </div>
 
@@ -520,7 +520,7 @@ export function MargemClient() {
                   </div>
 
                   <p className="mt-3 text-center text-[11px] text-white/70">
-                    Meta: {PONTOS_MIN} pontos para aprovar. Mais mix não-proteico e volume = mais pontos. 🚀
+                    Mínimo {PONTOS_MIN} pontos para aprovar — <span className="font-semibold text-white/90">quanto mais pontos, melhor!</span> 🚀
                   </p>
                 </div>
               </div>

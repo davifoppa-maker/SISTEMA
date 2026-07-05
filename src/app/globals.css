@@ -3,9 +3,54 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   TEMA ESCURO GLOBAL
+   O app foi escrito com classes claras (bg-white, text-slate-*, border-slate-*).
+   Em vez de reescrever todas as telas, remapeamos essas utilidades para tons
+   escuros aqui — carregado DEPOIS das utilities do Tailwind, então vence pela
+   ordem de origem (mesma especificidade). Cores de destaque (badges bg-*-100,
+   emerald, red, violet, etc.) permanecem intactas.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Superfícies */
+.bg-white { background-color: #0f172a !important; }        /* cards → slate-900 */
+.bg-slate-50 { background-color: #0b1220 !important; }
+.bg-slate-100 { background-color: #1e293b !important; }
+.bg-slate-50\/60,
+.bg-slate-50\/80 { background-color: rgba(30, 41, 59, 0.6) !important; }
+
+/* Textos */
+.text-slate-900,
+.text-slate-800 { color: #f1f5f9 !important; }             /* títulos/valores */
+.text-slate-700 { color: #e2e8f0 !important; }
+.text-slate-600 { color: #cbd5e1 !important; }
+.text-slate-500 { color: #94a3b8 !important; }
+.text-slate-400 { color: #64748b !important; }
+
+/* Bordas */
+.border-slate-200,
+.border-slate-100,
+.border-slate-300 { border-color: #1e293b !important; }
+
+/* Inputs/selects herdam o fundo escuro e texto claro */
+input, select, textarea {
+  color: #f1f5f9;
+}
+input::placeholder, textarea::placeholder { color: #64748b; }
+
+/* Hover sutis em listas */
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover { background-color: rgba(30, 41, 59, 0.7) !important; }
+
+/* Divisórias de tabela */
+.divide-slate-50 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
 }
