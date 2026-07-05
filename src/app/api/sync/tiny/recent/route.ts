@@ -14,6 +14,12 @@ function defaultDataInicial(): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Permite rodar o sync pelo navegador (GET) para diagnóstico — mesmo comportamento
+// do POST. Ex.: /api/sync/tiny/recent?empresa=ecopro
+export async function GET(req: Request) {
+  return POST(req);
+}
+
 export async function POST(req: Request) {
   try {
     const sp = new URL(req.url).searchParams;
