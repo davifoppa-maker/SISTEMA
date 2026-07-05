@@ -2,7 +2,7 @@ import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok, fail } from "@/lib/api";
 import { ingestOrder } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
-import { fetchRecentOrders, fetchOrderById, isTinyConnected } from "@/lib/services/tiny-api";
+import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 import type { DataStore } from "@/lib/types";
 
@@ -40,34 +40,22 @@ export async function POST(req: Request) {
     // Carrega o store primeiro para saber quais pedidos JÁ existem (evita rebuscar
     // detalhe do que já temos — é o que estourava os 10s do Hobby).
     const store = await loadStoreFor(tables);
-    const jaExiste = (numero: string, empresa: string) =>
-      store.orders.some(
-        (o) => o.order_number === numero && ((o as any).empresa ?? "nyer") === empresa,
-      );
 
     const diag: Record<string, unknown> = {};
     const fetched = await Promise.all(
       companies.map(async (company) => {
         const connected = await isTinyConnected(company.id).catch(() => false);
         if (!connected) { diag[company.id] = { connected: false }; return { company: company.id, items: [] as unknown[] }; }
-        const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id)
+        // Grava direto da LISTA leve (rápido, sem buscar detalhe um a um — que
+        // estoura os 10s do Hobby). Os itens entram depois pelo webhook/detalhe.
+        const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 30, offset: 0 }, company.id)
           .catch((e) => { diag[`${company.id}_listErr`] = e instanceof Error ? e.message : String(e); return []; });
-        // Só busca o detalhe (lento) dos pedidos AINDA não gravados. Máx. 4 por vez
-        // para caber no limite de 10s; rode de novo para pegar mais.
-        const novos = list
-          .filter((o: any) => !jaExiste(String(o.numero ?? o.id ?? ""), company.id))
-          .slice(0, 4);
-        const items = await Promise.all(
-          novos.map((o: any) => fetchOrderById(String(o.id ?? ""), company.id).catch(() => null)),
-        );
         diag[company.id] = {
           connected: true,
           listCount: list.length,
           primeirosNumeros: list.slice(0, 5).map((o: any) => o.numero ?? o.id),
-          novosCount: novos.length,
-          detalheOk: items.filter(Boolean).length,
         };
-        return { company: company.id, items: items.filter(Boolean) };
+        return { company: company.id, items: list };
       }),
     );
 
