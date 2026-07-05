@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/financial/caixa/sync",
+      "path": "/api/cron/keep-alive",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/financial/caixa/sync",
+      "schedule": "0 7 * * *"
     }
   ]
 }
