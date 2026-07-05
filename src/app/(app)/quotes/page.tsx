@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { readStore } from "@/lib/queries";
+import { loadStoreFor } from "@/lib/db";
 import { providerOptions } from "@/lib/services/freight/registry";
 import { calcularCubagem, cubagemParaLinhas } from "@/lib/services/freight/cubagem";
 import { QuotesClient, type QuoteOrderOption } from "./quotes-client";
@@ -7,7 +7,7 @@ import { QuotesClient, type QuoteOrderOption } from "./quotes-client";
 export const dynamic = "force-dynamic";
 
 export default async function QuotesPage() {
-  const store = await readStore();
+  const store = await loadStoreFor(["orders", "customers", "shipments", "shipment_volumes", "order_items"]);
   const orders: QuoteOrderOption[] = store.orders
     // Pedido mais recente (maior número) no topo.
     .sort((a, b) => {
