@@ -480,8 +480,21 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
   let enriched = 0;
   for (const order of ordersWithoutItems) {
     try {
-      const payload = await fetchOrderById(order.tiny_id!, (order as any).empresa ?? "nyer");
-      const itensTiny = payload?.itens ?? [];
+      // Tenta a conta (empresa) do pedido e, se não achar, a OUTRA conta —
+      // funciona para NRX e Ecopro mesmo se a marcação de empresa estiver errada,
+      // e corrige a marcação para a conta que respondeu.
+      const empAtual = (order as any).empresa ?? "nyer";
+      const ordem = empAtual === "ecopro" ? ["ecopro", "nyer"] : ["nyer", "ecopro"];
+      let itensTiny: Array<{ codigo?: unknown; descricao?: unknown; quantidade?: unknown; valor_unitario?: unknown }> = [];
+      for (const emp of ordem) {
+        const payload = await fetchOrderById(order.tiny_id!, emp).catch(() => null);
+        const its = payload?.itens ?? [];
+        if (its.length > 0) {
+          itensTiny = its;
+          if (((order as any).empresa ?? "nyer") !== emp) (order as any).empresa = emp;
+          break;
+        }
+      }
       if (itensTiny.length > 0) {
         itensTiny.forEach((it) => {
           store.order_items.push({
