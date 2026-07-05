@@ -36,6 +36,29 @@ const LEVELS: LevelInfo[] = [
 // Pontos mínimos para o representante aprovar um pedido.
 const PONTOS_MIN = 26;
 
+// Piadas/comemorações quando o vendedor BATE a meta de pontos. 🎉
+const PIADAS_META = [
+  "🏆 Bateu a meta! Tá vendendo mais que pão na padaria!",
+  "🚀 Aprovado! Esse pedido decolou como foguete!",
+  "🔥 Tá pegando fogo, bicho! Pedido liberado!",
+  "💪 Monstro! Esse pedido passou raspando na academia dos pontos!",
+  "🤑 Dinheiro na conta! A margem agradece e o chefe também!",
+  "🎯 Na mosca! Mais um pedido pra conta do vendedor TOP!",
+  "🥇 Ouro olímpico! Esse pedido merece pódio!",
+  "😎 Fácil demais pra você, hein? Tá contratado!",
+  "🍾 Champanhe! Esse pedido é motivo de comemoração!",
+  "⚡ Rápido e certeiro! O cliente nem viu de onde veio a venda!",
+];
+
+// Frases de incentivo quando ainda FALTAM pontos. 💪
+const FRASES_FALTA = [
+  "Quase lá! Capricha no mix não-proteico! 💪",
+  "Tá chegando! Mais um empurrãozinho! 🚀",
+  "Falta pouco pro pódio! Bora! 🎯",
+  "Adiciona mais uns itens que a meta é sua! 🔥",
+  "O ouro tá logo ali! Não desiste! 🥇",
+];
+
 function getLevel(volumeTabela: number, mixPct: number): LevelInfo {
   if (volumeTabela >= 20000 && mixPct >= 50) return LEVELS[3];
   if (volumeTabela >= 10000 && mixPct >= 40) return LEVELS[2];
@@ -428,66 +451,79 @@ export function MargemClient() {
             </div>
           </div>
 
-          {/* Pontos do pedido (visão do representante) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Resultado</h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Receita</span>
-                <span className="font-medium text-slate-800">{fmtBRL(receita)}</span>
-              </div>
-            </div>
-
-            {/* Pontuação gamificada */}
-            {(() => {
-              const pontos = Math.max(0, Math.round(margemPct));
-              const aprovado = pontos >= PONTOS_MIN;
-              const faltam = Math.max(0, PONTOS_MIN - pontos);
-              const progresso = Math.min((pontos / PONTOS_MIN) * 100, 100);
-              return (
-                <div className="mt-4">
-                  <div className="mb-2 flex items-end justify-between">
-                    <span className="text-xs font-medium text-slate-500">Pontos do pedido</span>
-                    <span className={`text-3xl font-extrabold leading-none ${aprovado ? "text-emerald-600" : "text-slate-800"}`}>
-                      {pontos}
-                      <span className="text-sm font-medium text-slate-400"> / {PONTOS_MIN}</span>
-                    </span>
+          {/* Pontos do pedido (visão gamificada do representante) */}
+          {(() => {
+            const pontos = Math.max(0, Math.round(margemPct));
+            const aprovado = pontos >= PONTOS_MIN;
+            const faltam = Math.max(0, PONTOS_MIN - pontos);
+            const progresso = Math.min((pontos / PONTOS_MIN) * 100, 100);
+            // Frase determinística (pelos pontos) — evita divergência de hidratação.
+            const piada = PIADAS_META[pontos % PIADAS_META.length];
+            const incentivo = FRASES_FALTA[pontos % FRASES_FALTA.length];
+            return (
+              <div
+                className={`overflow-hidden rounded-2xl border shadow-sm transition-all ${
+                  aprovado
+                    ? "border-violet-300 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white"
+                    : "border-violet-200 bg-white"
+                }`}
+              >
+                <div className="p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className={`text-sm font-bold uppercase tracking-wide ${aprovado ? "text-white/90" : "text-violet-700"}`}>
+                      🎮 Sua pontuação
+                    </h2>
+                    <span className={`text-xs ${aprovado ? "text-white/80" : "text-slate-400"}`}>Receita {fmtBRL(receita)}</span>
                   </div>
 
-                  <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-100">
+                  {/* Número grande */}
+                  <div className="mt-3 text-center">
+                    <div className={`text-6xl font-black leading-none ${aprovado ? "text-white" : "text-violet-700"}`}>
+                      {pontos}
+                    </div>
+                    <div className={`text-sm font-semibold ${aprovado ? "text-white/80" : "text-slate-400"}`}>
+                      de {PONTOS_MIN} pontos
+                    </div>
+                  </div>
+
+                  {/* Barra de progresso */}
+                  <div className={`relative mt-4 h-5 w-full overflow-hidden rounded-full ${aprovado ? "bg-white/25" : "bg-violet-100"}`}>
                     <div
-                      className={`h-full rounded-full transition-all ${aprovado ? "bg-emerald-500" : "bg-amber-400"}`}
+                      className={`h-full rounded-full transition-all duration-500 ${aprovado ? "bg-white" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
                       style={{ width: `${progresso}%` }}
                     />
-                    {/* Marcador da meta (26 pts) */}
-                    <div className="absolute top-0 h-full w-0.5 bg-slate-600" style={{ left: "100%" }} />
+                    {progresso > 12 && (
+                      <span className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold ${aprovado ? "text-violet-700" : "text-white"}`}>
+                        {Math.round(progresso)}%
+                      </span>
+                    )}
                   </div>
 
-                  {/* Selo de status */}
-                  <div className="mt-3">
+                  {/* Mensagem / piada */}
+                  <div className="mt-4">
                     {receita <= 0 ? (
-                      <div className="rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
-                        Adicione produtos para calcular os pontos.
+                      <div className="rounded-xl bg-violet-50 px-3 py-3 text-center text-sm text-violet-500">
+                        👋 Monte o pedido buscando os produtos e veja sua pontuação subir!
                       </div>
                     ) : aprovado ? (
-                      <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700">
-                        <span className="text-lg">🎉</span> Pedido aprovado! ({pontos} pts)
+                      <div className="rounded-xl bg-white/20 px-3 py-3 text-center text-sm font-bold text-white">
+                        {piada}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700">
-                        <span className="text-lg">🔒</span> Faltam {faltam} ponto(s) para aprovar
+                      <div className="rounded-xl bg-amber-50 px-3 py-3 text-center">
+                        <p className="text-sm font-bold text-amber-700">🔒 Faltam {faltam} ponto(s)!</p>
+                        <p className="mt-0.5 text-xs text-amber-600">{incentivo}</p>
                       </div>
                     )}
                   </div>
 
-                  <p className="mt-2 text-center text-[11px] text-slate-400">
-                    Mínimo de {PONTOS_MIN} pontos para aprovar o pedido.
-                    Aumente o mix não-proteico e o volume para ganhar mais pontos.
+                  <p className={`mt-3 text-center text-[11px] ${aprovado ? "text-white/70" : "text-slate-400"}`}>
+                    Meta: {PONTOS_MIN} pontos para aprovar. Mais mix não-proteico e volume = mais pontos. 🚀
                   </p>
                 </div>
-              );
-            })()}
-          </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
