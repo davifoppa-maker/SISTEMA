@@ -480,7 +480,7 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
   let enriched = 0;
   for (const order of ordersWithoutItems) {
     try {
-      const payload = await fetchOrderById(order.tiny_id!);
+      const payload = await fetchOrderById(order.tiny_id!, (order as any).empresa ?? "nyer");
       const itensTiny = payload?.itens ?? [];
       if (itensTiny.length > 0) {
         itensTiny.forEach((it) => {
