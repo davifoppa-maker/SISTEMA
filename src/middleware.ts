@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, authCredentials, computeAuthToken } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, repCredentials, computeAuthToken, REP_ALLOWED_PREFIXES } from "@/lib/auth-token";
 
 // Rotas públicas (não exigem login):
 //  - /login e a API de autenticação
@@ -16,12 +16,30 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isPublic(pathname)) return NextResponse.next();
 
-  const { username, password } = authCredentials();
-  const expected = await computeAuthToken(username, password);
   const token = req.cookies.get(AUTH_COOKIE)?.value;
-  if (token && token === expected) return NextResponse.next();
+  const admin = authCredentials();
+  const rep = repCredentials();
+  const adminToken = await computeAuthToken(admin.username, admin.password);
+  const repToken = await computeAuthToken(rep.username, rep.password);
 
-  // API → 401; páginas → redireciona para o login preservando o destino.
+  // Admin: acesso total.
+  if (token && token === adminToken) return NextResponse.next();
+
+  // Representante: só o Gestor de Margem (e o próprio logout). Qualquer outra
+  // rota é redirecionada para /margem (páginas) ou barrada (APIs).
+  if (token && token === repToken) {
+    const repOk = REP_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    if (repOk) return NextResponse.next();
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/margem";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Não autenticado. API → 401; páginas → login preservando o destino.
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ ok: false, error: "Não autenticado" }, { status: 401 });
   }
