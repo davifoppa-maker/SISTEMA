@@ -38,13 +38,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const customer = store.customers.find((c) => c.id === order.customer_id);
 
-  // Tenta itens do store; se vazio, busca direto do Tiny agora (server-side)
+  // Tenta itens do store; se vazio, busca direto do Tiny agora (server-side),
+  // usando a conta (empresa) correta do pedido — Ecopro e NRX são contas distintas.
+  const empresa = (order as any).empresa ?? "nyer";
   let storeItems = store.order_items.filter((i) => i.order_id === order.id);
   if (storeItems.length === 0 && order.tiny_id) {
     try {
-      const tinyOk = await isTinyConnected().catch(() => false);
+      const tinyOk = await isTinyConnected(empresa).catch(() => false);
       if (tinyOk) {
-        const full = await fetchOrderById(order.tiny_id).catch(() => null);
+        const full = await fetchOrderById(order.tiny_id, empresa).catch(() => null);
         const itensTiny = (full as Record<string, unknown>)?.itens as Array<Record<string, unknown>> ?? [];
         if (itensTiny.length > 0) {
           const mutableStore = await loadStore();
