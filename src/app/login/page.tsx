@@ -27,7 +27,8 @@ function LoginForm() {
       });
       const json = await res.json();
       if (res.ok && json.ok) {
-        router.push(next);
+        // Representante vai direto para o Gestor de Margem (único acesso dele).
+        router.push(json.redirect || next);
         router.refresh();
       } else {
         setError(json.error ?? "Não foi possível entrar.");
