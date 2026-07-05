@@ -257,14 +257,22 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
   const customer = upsertCustomer(store, payload, channel);
 
   const orderNumber = str(payload.numero) ?? str(payload.id) ?? uuid();
-  // Identifica por número + source + EMPRESA: NYER e Ecopro podem ter o mesmo
-  // número de pedido (contas Tiny independentes) e não devem colidir.
-  let order = store.orders.find(
-    (o) =>
-      o.order_number === orderNumber &&
-      o.source === "tiny" &&
-      ((o as any).empresa ?? "nyer") === companyId,
-  );
+  const tinyId = str(payload.id);
+  // Identifica o pedido existente:
+  //   1º) pelo tiny_id (id único do pedido no Tiny) — o mais confiável e evita
+  //       duplicatas mesmo se o campo empresa estiver inconsistente;
+  //   2º) senão, por número + source + EMPRESA (NYER e Ecopro podem ter o mesmo
+  //       número em contas Tiny independentes e não devem colidir).
+  let order =
+    (tinyId
+      ? store.orders.find((o) => o.source === "tiny" && o.tiny_id === tinyId && ((o as any).empresa ?? "nyer") === companyId)
+      : undefined) ??
+    store.orders.find(
+      (o) =>
+        o.order_number === orderNumber &&
+        o.source === "tiny" &&
+        ((o as any).empresa ?? "nyer") === companyId,
+    );
 
   const marcador = payload.marcadores?.[0]?.descricao;
 
