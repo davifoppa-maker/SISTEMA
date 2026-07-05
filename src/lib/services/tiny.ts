@@ -496,9 +496,11 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
         }
       }
       if (itensTiny.length > 0) {
-        itensTiny.forEach((it) => {
+        // Substitui itens do pedido com IDs determinísticos (sem duplicar).
+        store.order_items = store.order_items.filter((i) => i.order_id !== order.id);
+        itensTiny.forEach((it, idx) => {
           store.order_items.push({
-            id: uuid(),
+            id: `${order.id}:item:${idx}`,
             order_id: order.id,
             sku: str(it.codigo),
             description: str(it.descricao) ?? "Item",

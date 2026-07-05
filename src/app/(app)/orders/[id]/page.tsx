@@ -64,9 +64,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             if (((mutableOrder as any).empresa ?? "nyer") !== empresaOk) {
               (mutableOrder as any).empresa = empresaOk;
             }
-            itensTiny.forEach((it) => {
+            // Substitui itens do pedido com IDs determinísticos (sem duplicar).
+            mutableStore.order_items = mutableStore.order_items.filter((i) => i.order_id !== order.id);
+            storeItems = [];
+            itensTiny.forEach((it, idx) => {
               const item = {
-                id: uuid(),
+                id: `${order.id}:item:${idx}`,
                 order_id: order.id,
                 sku: String(it.codigo ?? "").trim() || null,
                 description: String(it.descricao ?? "").trim() || "Item",
