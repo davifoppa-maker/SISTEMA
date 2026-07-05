@@ -19,7 +19,7 @@ const num = (v: unknown): number => {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   if (url.searchParams.get("k") !== "exxdebug") return fail("não autorizado", 403);
-  const max = Math.min(Number(url.searchParams.get("max") ?? "4"), 10);
+  const max = Math.min(Number(url.searchParams.get("max") ?? "8"), 20);
   const empresaFiltro = url.searchParams.get("empresa"); // opcional
 
   const tables: Array<keyof DataStore> = ["orders", "order_items"];
