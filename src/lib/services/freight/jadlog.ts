@@ -5,7 +5,7 @@
  * Cotação:  POST /embarcador/api/frete/valor   (Bearer token)
  * Rastreio: POST /embarcador/api/tracking/consultar
  *
- * Escopo Arlete/Exx: cargas fracionadas (modalidade 3 = .Package). A JadLog já
+ * Escopo Arlete/NYER: cargas fracionadas (modalidade 3 = .Package). A JadLog já
  * inclui no total as taxas aplicáveis; o peso usado é o MAIOR entre o real e o
  * cubado (fator 300 kg/m³ para fracionado).
  *

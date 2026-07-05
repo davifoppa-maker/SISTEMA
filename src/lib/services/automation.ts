@@ -56,7 +56,7 @@ function askDeliveryConfirmation(store: DataStore, order: Order, shipment: Shipm
       order_id: order.id,
       customer_id: customer?.id ?? null,
       phone,
-      content: `Olá${customer?.name ? `, ${customer.name}` : ""}! Aqui é da Exx Nutrition. Seu pedido #${order.order_number} foi enviado pela ${carrierName} e a previsão de entrega já passou. Você já recebeu tudo certinho? Se sim, responda "recebi"; se houve algum problema, conte aqui que a gente resolve. 🙏`,
+      content: `Olá${customer?.name ? `, ${customer.name}` : ""}! Aqui é da NYER. Seu pedido #${order.order_number} foi enviado pela ${carrierName} e a previsão de entrega já passou. Você já recebeu tudo certinho? Se sim, responda "recebi"; se houve algum problema, conte aqui que a gente resolve. 🙏`,
       trigger_key: "CONFIRMAR_ENTREGA",
     });
   }

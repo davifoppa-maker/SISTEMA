@@ -8,17 +8,17 @@ import { buildSeedStore } from "@/lib/db/seed";
 // Em produção, troque o driver por Supabase (ver supabase/migrations + seed.sql e
 // src/lib/db/supabase-store.ts). A interface pública usada pelo app é getStore().
 
-const globalForStore = globalThis as unknown as { __exxStore?: DataStore };
+const globalForStore = globalThis as unknown as { __nyerStore?: DataStore };
 
 export function getStore(): DataStore {
-  if (!globalForStore.__exxStore) {
-    globalForStore.__exxStore = buildSeedStore();
+  if (!globalForStore.__nyerStore) {
+    globalForStore.__nyerStore = buildSeedStore();
   }
-  return globalForStore.__exxStore;
+  return globalForStore.__nyerStore;
 }
 
 /** Reinicia o store para o seed inicial (útil em testes). */
 export function resetStore(): DataStore {
-  globalForStore.__exxStore = buildSeedStore();
-  return globalForStore.__exxStore;
+  globalForStore.__nyerStore = buildSeedStore();
+  return globalForStore.__nyerStore;
 }

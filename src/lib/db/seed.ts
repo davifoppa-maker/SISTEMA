@@ -14,8 +14,8 @@ const daysAgo = (n: number) => iso(new Date(Date.now() - n * 86400000));
 const hoursAgo = (n: number) => iso(new Date(Date.now() - n * 3600000));
 
 const users: User[] = [
-  { id: "user-admin", name: "Renato (Admin)", email: "admin@exxnutrition.com.br", role: "admin" },
-  { id: "user-exp", name: "Expedição", email: "expedicao@exxnutrition.com.br", role: "operador" },
+  { id: "user-admin", name: "Renato (Admin)", email: "admin@nyer.com.br", role: "admin" },
+  { id: "user-exp", name: "Expedição", email: "expedicao@nyer.com.br", role: "operador" },
 ];
 
 const carriers: Carrier[] = [
@@ -37,7 +37,7 @@ const channelRules: ChannelDetectionRule[] = [
 ];
 
 const templates: MessageTemplate[] = [
-  { id: "tpl-coleta", key: "pedido_coletado", name: "Coleta confirmada", trigger: "EXPEDICAO_COLETADA", audience: "cliente", active: true, body: "Olá {{cliente_nome}}! Seu pedido Exx Nutrition foi coletado pela transportadora {{transportadora}}. Acompanhe pela NF/CNPJ ou pelo link: {{link_rastreio}}." },
+  { id: "tpl-coleta", key: "pedido_coletado", name: "Coleta confirmada", trigger: "EXPEDICAO_COLETADA", audience: "cliente", active: true, body: "Olá {{cliente_nome}}! Seu pedido NYER foi coletado pela transportadora {{transportadora}}. Acompanhe pela NF/CNPJ ou pelo link: {{link_rastreio}}." },
   { id: "tpl-rastreio", key: "rastreio_disponivel", name: "Rastreio disponível", trigger: "RASTREIO_DISPONIVEL", audience: "cliente", active: true, body: "Seu pedido já tem rastreio. Código: {{codigo_rastreio}}. Consulte em {{link_rastreio}}." },
   { id: "tpl-previsao", key: "previsao_amanha", name: "Previsão para amanhã", trigger: "PREVISAO_1D", audience: "cliente", active: false, body: "Seu pedido está com previsão de entrega para amanhã. Qualquer divergência, nosso time já está acompanhando por aqui." },
   { id: "tpl-entregue", key: "pedido_entregue", name: "Entrega confirmada", trigger: "PEDIDO_ENTREGUE", audience: "cliente", active: true, body: "Seu pedido foi entregue. Conferiu se chegou tudo certinho?" },
@@ -121,7 +121,7 @@ function rawTinyPayload(spec: OrderSpec, channel: "mercos" | "nuvem") {
     numero_ecommerce: spec.ext,
     situacao: spec.state === "sem_nf" ? "aprovado" : "faturado",
     valor: spec.total,
-    ecommerce: { nome: channel === "mercos" ? "Mercos" : "Nuvemshop Exx" },
+    ecommerce: { nome: channel === "mercos" ? "Mercos" : "Nuvemshop NYER" },
     marcadores: [{ descricao: channel === "mercos" ? "Atacado/Mercos" : "Varejo/Nuvemshop" }],
     cliente: {
       nome: spec.customer.name,
@@ -212,7 +212,7 @@ export function buildSeedStore(): DataStore {
       state: spec.customer.state,
       seller: channelKind === "mercos" ? "Equipe B2B" : "Loja Online",
       price_list: channelKind === "mercos" ? "Atacado" : "Varejo",
-      order_origin: channelKind === "mercos" ? "Mercos" : "Nuvemshop Exx",
+      order_origin: channelKind === "mercos" ? "Mercos" : "Nuvemshop NYER",
       carrier_name: null,
       nf_numero: null,
       nf_chave: null,
@@ -383,7 +383,7 @@ export function buildSeedStore(): DataStore {
         trigger_key: "EXPEDICAO_COLETADA",
         phone: spec.customer.phone,
         direction: "outbound",
-        content: `Olá ${spec.customer.name}! Seu pedido Exx Nutrition foi coletado pela transportadora ${carrier.name}.`,
+        content: `Olá ${spec.customer.name}! Seu pedido NYER foi coletado pela transportadora ${carrier.name}.`,
         provider_message_id: `mock-${spec.num}`,
         status: "sent",
         sent_at: collectedAt,
