@@ -222,6 +222,7 @@ export const PRODUCT_MEASURES: Record<string, ProductMeasure> = {
   "NYER26021": { desc: "Dark Pump - Limão",                        larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26022": { desc: "Dark Pump - Uva",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26023": { desc: "Dark Pump - Red",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
+  "SITE040349": { desc: "Pré Treino Dark Pump 300g - NYER - Uva",  larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26024": { desc: "Diurético",                                larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   // caixa09 (10un) 355×235×160mm — creatinas refil
   "NYER26025": { desc: "Creatina Refil Nyer 150g",                 larguraCm: 23.5, alturaCm: 16.0, comprimentoCm: 35.5 },
