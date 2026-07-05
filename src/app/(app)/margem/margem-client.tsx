@@ -462,38 +462,38 @@ export function MargemClient() {
             const incentivo = FRASES_FALTA[pontos % FRASES_FALTA.length];
             return (
               <div
-                className={`overflow-hidden rounded-2xl border shadow-sm transition-all ${
+                className={`overflow-hidden rounded-2xl border border-violet-400 text-white shadow-lg transition-all ${
                   aprovado
-                    ? "border-violet-300 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white"
-                    : "border-violet-200 bg-white"
+                    ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                    : "bg-gradient-to-br from-violet-600 to-fuchsia-600"
                 }`}
               >
                 <div className="p-5">
                   <div className="flex items-center justify-between">
-                    <h2 className={`text-sm font-bold uppercase tracking-wide ${aprovado ? "text-white/90" : "text-violet-700"}`}>
+                    <h2 className="text-sm font-bold uppercase tracking-wide text-white/90">
                       🎮 Sua pontuação
                     </h2>
-                    <span className={`text-xs ${aprovado ? "text-white/80" : "text-slate-400"}`}>Receita {fmtBRL(receita)}</span>
+                    <span className="text-xs text-white/80">Receita {fmtBRL(receita)}</span>
                   </div>
 
                   {/* Número grande */}
                   <div className="mt-3 text-center">
-                    <div className={`text-6xl font-black leading-none ${aprovado ? "text-white" : "text-violet-700"}`}>
+                    <div className="text-6xl font-black leading-none text-white drop-shadow">
                       {pontos}
                     </div>
-                    <div className={`text-sm font-semibold ${aprovado ? "text-white/80" : "text-slate-400"}`}>
+                    <div className="text-sm font-semibold text-white/80">
                       de {PONTOS_MIN} pontos
                     </div>
                   </div>
 
                   {/* Barra de progresso */}
-                  <div className={`relative mt-4 h-5 w-full overflow-hidden rounded-full ${aprovado ? "bg-white/25" : "bg-violet-100"}`}>
+                  <div className="relative mt-4 h-5 w-full overflow-hidden rounded-full bg-white/25">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${aprovado ? "bg-white" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
+                      className="h-full rounded-full bg-white transition-all duration-500"
                       style={{ width: `${progresso}%` }}
                     />
                     {progresso > 12 && (
-                      <span className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold ${aprovado ? "text-violet-700" : "text-white"}`}>
+                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-violet-800">
                         {Math.round(progresso)}%
                       </span>
                     )}
@@ -502,22 +502,22 @@ export function MargemClient() {
                   {/* Mensagem / piada */}
                   <div className="mt-4">
                     {receita <= 0 ? (
-                      <div className="rounded-xl bg-violet-50 px-3 py-3 text-center text-sm text-violet-500">
+                      <div className="rounded-xl bg-white/20 px-3 py-3 text-center text-sm font-medium text-white">
                         👋 Monte o pedido buscando os produtos e veja sua pontuação subir!
                       </div>
                     ) : aprovado ? (
-                      <div className="rounded-xl bg-white/20 px-3 py-3 text-center text-sm font-bold text-white">
+                      <div className="rounded-xl bg-white/25 px-3 py-3 text-center text-sm font-bold text-white">
                         {piada}
                       </div>
                     ) : (
-                      <div className="rounded-xl bg-amber-50 px-3 py-3 text-center">
-                        <p className="text-sm font-bold text-amber-700">🔒 Faltam {faltam} ponto(s)!</p>
-                        <p className="mt-0.5 text-xs text-amber-600">{incentivo}</p>
+                      <div className="rounded-xl bg-white/20 px-3 py-3 text-center">
+                        <p className="text-sm font-bold text-white">🔒 Faltam {faltam} ponto(s)!</p>
+                        <p className="mt-0.5 text-xs text-white/85">{incentivo}</p>
                       </div>
                     )}
                   </div>
 
-                  <p className={`mt-3 text-center text-[11px] ${aprovado ? "text-white/70" : "text-slate-400"}`}>
+                  <p className="mt-3 text-center text-[11px] text-white/70">
                     Meta: {PONTOS_MIN} pontos para aprovar. Mais mix não-proteico e volume = mais pontos. 🚀
                   </p>
                 </div>
