@@ -9,8 +9,6 @@ export const dynamic = "force-dynamic";
 export default async function QuotesPage() {
   const store = await readStore();
   const orders: QuoteOrderOption[] = store.orders
-    // Apenas pedidos B2B (Mercos). Os B2C (Nuvemshop) não passam por cotação manual.
-    .filter((o) => o.channel === "b2b_mercos")
     // Pedido mais recente (maior número) no topo.
     .sort((a, b) => {
       const na = Number(a.order_number);
