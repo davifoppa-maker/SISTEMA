@@ -83,9 +83,11 @@ const COMPANIES: { id: Company; label: string; initial: string; color: string }[
   { id: "ecopro", label: "Ecopro", initial: "E", color: "bg-emerald-600" },
 ];
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, isRep }: { onNavigate?: () => void; isRep?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  // Representante: menu só com o Gestor de Margem.
+  const navItems = isRep ? nav.filter((i) => i.href === "/margem") : nav;
   const [activeCompany, setActiveCompanyState] = useState<Company>("nyer");
 
   useEffect(() => {
@@ -120,7 +122,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {nav.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           const parentActive = pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -193,7 +195,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ isRep }: { isRep?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -231,11 +233,11 @@ export function Sidebar() {
         >
           <X className="h-4 w-4" />
         </button>
-        <SidebarContent onNavigate={() => setOpen(false)} />
+        <SidebarContent onNavigate={() => setOpen(false)} isRep={isRep} />
       </aside>
 
       <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-        <SidebarContent />
+        <SidebarContent isRep={isRep} />
       </aside>
     </>
   );
