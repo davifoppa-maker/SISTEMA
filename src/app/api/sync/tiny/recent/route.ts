@@ -45,11 +45,13 @@ export async function POST(req: Request) {
         (o) => o.order_number === numero && ((o as any).empresa ?? "nyer") === empresa,
       );
 
+    const diag: Record<string, unknown> = {};
     const fetched = await Promise.all(
       companies.map(async (company) => {
         const connected = await isTinyConnected(company.id).catch(() => false);
-        if (!connected) return { company: company.id, items: [] as unknown[] };
-        const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id).catch(() => []);
+        if (!connected) { diag[company.id] = { connected: false }; return { company: company.id, items: [] as unknown[] }; }
+        const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id)
+          .catch((e) => { diag[`${company.id}_listErr`] = e instanceof Error ? e.message : String(e); return []; });
         // Só busca o detalhe (lento) dos pedidos AINDA não gravados. Máx. 4 por vez
         // para caber no limite de 10s; rode de novo para pegar mais.
         const novos = list
@@ -58,6 +60,13 @@ export async function POST(req: Request) {
         const items = await Promise.all(
           novos.map((o: any) => fetchOrderById(String(o.id ?? ""), company.id).catch(() => null)),
         );
+        diag[company.id] = {
+          connected: true,
+          listCount: list.length,
+          primeirosNumeros: list.slice(0, 5).map((o: any) => o.numero ?? o.id),
+          novosCount: novos.length,
+          detalheOk: items.filter(Boolean).length,
+        };
         return { company: company.id, items: items.filter(Boolean) };
       }),
     );
@@ -82,7 +91,7 @@ export async function POST(req: Request) {
       await commitStore(store);
     }
 
-    return ok({ synced: results.length, results });
+    return ok({ synced: results.length, results, dataInicial, diag });
   } catch (err) {
     return fail(err instanceof Error ? err.message : "Erro interno no sync", 500);
   }
