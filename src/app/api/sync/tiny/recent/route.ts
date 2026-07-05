@@ -31,24 +31,30 @@ export async function POST(req: Request) {
 
     const tables: Array<keyof DataStore> = ["orders", "customers", "invoices", "shipments", "order_items", "api_sync_logs"];
 
-    const [fetched, store] = await Promise.all([
-      Promise.all(
-        companies.map(async (company) => {
-          const connected = await isTinyConnected(company.id).catch(() => false);
-          if (!connected) return { company: company.id, items: [] as unknown[] };
-          // Lista retorna dados leves (sem itens). Busca detalhes completos em paralelo.
-          // Lote pequeno (5) para caber no limite de 10s do plano Hobby. Rode
-          // várias vezes para pegar mais pedidos antigos; os novos entram por webhook.
-          const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 5, offset: 0 }, company.id).catch(() => []);
-          const ids = list.map((o: any) => String(o.id ?? "")).filter(Boolean);
-          const items = await Promise.all(
-            ids.map((id) => fetchOrderById(id, company.id).catch(() => null))
-          );
-          return { company: company.id, items: items.filter(Boolean) };
-        })
-      ),
-      loadStoreFor(tables),
-    ]);
+    // Carrega o store primeiro para saber quais pedidos JÁ existem (evita rebuscar
+    // detalhe do que já temos — é o que estourava os 10s do Hobby).
+    const store = await loadStoreFor(tables);
+    const jaExiste = (numero: string, empresa: string) =>
+      store.orders.some(
+        (o) => o.order_number === numero && ((o as any).empresa ?? "nyer") === empresa,
+      );
+
+    const fetched = await Promise.all(
+      companies.map(async (company) => {
+        const connected = await isTinyConnected(company.id).catch(() => false);
+        if (!connected) return { company: company.id, items: [] as unknown[] };
+        const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 20, offset: 0 }, company.id).catch(() => []);
+        // Só busca o detalhe (lento) dos pedidos AINDA não gravados. Máx. 4 por vez
+        // para caber no limite de 10s; rode de novo para pegar mais.
+        const novos = list
+          .filter((o: any) => !jaExiste(String(o.numero ?? o.id ?? ""), company.id))
+          .slice(0, 4);
+        const items = await Promise.all(
+          novos.map((o: any) => fetchOrderById(String(o.id ?? ""), company.id).catch(() => null)),
+        );
+        return { company: company.id, items: items.filter(Boolean) };
+      }),
+    );
 
     const results: { order_id: string; empresa: string }[] = [];
     for (const { company, items } of fetched) {
