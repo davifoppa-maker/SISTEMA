@@ -30,6 +30,15 @@ interface Result {
   validade?: string;
 }
 
+interface QuoteRow {
+  id: string;
+  label: string;
+  ok: boolean;
+  totalFrete?: number;
+  prazo?: number;
+  error?: string;
+}
+
 interface ProviderOption {
   id: string;
   label: string;
@@ -55,7 +64,6 @@ export function QuoteForm({
   providers: ProviderOption[];
   cubagemAuto?: CubagemAuto;
 }) {
-  const [provider, setProvider] = useState(providers[0]?.id ?? "braspress");
   const [cnpjRemetente, setCnpjRemetente] = useState(prefill.cnpjRemetente);
   const [cepOrigem, setCepOrigem] = useState(prefill.cepOrigem);
   const [cnpjDestinatario, setCnpjDestinatario] = useState(prefill.cnpjDestinatario);
@@ -76,15 +84,17 @@ export function QuoteForm({
   );
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
+  const [rows, setRows] = useState<QuoteRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const totalVolumes = sumVolumes(cubagem);
 
+  // Cota em TODAS as transportadoras configuradas de uma vez e ranqueia pela
+  // mais barata. Não há escolha manual — a mais barata é a recomendada.
   async function submit() {
     setLoading(true);
     setError(null);
-    setResult(null);
+    setRows(null);
     try {
       const cubagemPayload = cubagemToPayload(cubagem).filter(
         (d) => d.altura > 0 && d.largura > 0 && d.comprimento > 0 && d.volumes > 0,
@@ -102,18 +112,40 @@ export function QuoteForm({
         empresa: prefill.empresa,
         cubagem: cubagemPayload.length > 0 ? cubagemPayload : [{ altura: 0.1, largura: 0.1, comprimento: 0.1, volumes: totalVolumes }],
       };
-      const res = await fetch(`/api/cotacao/${provider}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        setResult(json.data as Result);
-      } else {
-        const detail = json.detail ? ` — ${JSON.stringify(json.detail)}` : "";
-        setError((json.error ?? "Falha ao cotar.") + detail);
+
+      const ativos = providers.filter((p) => p.configured);
+      if (ativos.length === 0) {
+        setError("Nenhuma transportadora configurada.");
+        return;
       }
+
+      const resultados = await Promise.all(
+        ativos.map(async (p): Promise<QuoteRow> => {
+          try {
+            const res = await fetch(`/api/cotacao/${p.id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+            if (res.ok && json.ok) {
+              const d = json.data as Result;
+              return { id: p.id, label: p.label, ok: true, totalFrete: d.totalFrete, prazo: d.prazo };
+            }
+            return { id: p.id, label: p.label, ok: false, error: json.error ?? "Falha ao cotar." };
+          } catch {
+            return { id: p.id, label: p.label, ok: false, error: "Falha de rede." };
+          }
+        }),
+      );
+
+      // Sucessos primeiro, do mais barato ao mais caro; erros por último.
+      resultados.sort((a, b) => {
+        if (a.ok !== b.ok) return a.ok ? -1 : 1;
+        return (a.totalFrete ?? Infinity) - (b.totalFrete ?? Infinity);
+      });
+      setRows(resultados);
+      if (!resultados.some((r) => r.ok)) setError("Nenhuma transportadora retornou cotação.");
     } catch {
       setError("Falha de rede ao cotar.");
     } finally {
@@ -127,14 +159,6 @@ export function QuoteForm({
         <Card>
           <CardHeader><CardTitle>Remetente ({prefill.empresa === "ecopro" ? "Ecopro" : "NRX"})</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Transportadora">
-              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </Select>
-            </Field>
-            <div className="hidden sm:block" />
             <Field label="CNPJ remetente"><Input value={cnpjRemetente} onChange={(e) => setCnpjRemetente(e.target.value)} /></Field>
             <Field label="CEP origem"><Input value={cepOrigem} onChange={(e) => setCepOrigem(e.target.value)} /></Field>
           </CardContent>
@@ -204,32 +228,44 @@ export function QuoteForm({
         </Card>
 
         <Button onClick={submit} disabled={loading} className="w-full sm:w-auto">
-          {loading ? "Cotando…" : "Fazer cotação"}
+          {loading ? "Cotando em todas…" : "Cotar em todas as transportadoras"}
         </Button>
       </div>
 
       <div>
         <Card>
-          <CardHeader><CardTitle>Resultado</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Melhor frete</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {!result && !error ? <p className="text-slate-400">Preencha os volumes/dimensões e clique em “Fazer cotação”.</p> : null}
-            {error ? <p className="rounded-lg bg-red-50 p-2 text-red-700">{error}</p> : null}
-            {result ? (
+            {!rows && !error ? <p className="text-slate-400">Clique em “Cotar em todas as transportadoras”. A mais barata aparece no topo.</p> : null}
+            {error && !rows ? <p className="rounded-lg bg-red-50 p-2 text-red-700">{error}</p> : null}
+            {rows ? (
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Valor do frete</span>
-                  <span className="text-lg font-semibold text-emerald-700">{result.totalFrete != null ? brl(result.totalFrete) : "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Prazo</span>
-                  <span className="font-medium">{result.prazo != null ? `${result.prazo} dia(s)` : "—"}</span>
-                </div>
-                {result.validade ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Validade</span>
-                    <span className="text-xs">{result.validade}</span>
-                  </div>
-                ) : null}
+                {rows.map((r, i) => {
+                  const isBest = r.ok && i === 0;
+                  return (
+                    <div
+                      key={r.id}
+                      className={`flex items-center justify-between gap-2 rounded-lg border p-2 ${
+                        isBest ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"
+                      } ${!r.ok ? "opacity-70" : ""}`}
+                    >
+                      <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                        {r.label}
+                        {isBest ? <span className="rounded bg-emerald-600 px-1.5 text-[10px] font-semibold text-white">MAIS BARATA</span> : null}
+                      </span>
+                      {r.ok ? (
+                        <span className="text-right">
+                          <span className={`font-semibold ${isBest ? "text-emerald-700" : "text-slate-700"}`}>
+                            {r.totalFrete != null ? brl(r.totalFrete) : "—"}
+                          </span>
+                          <span className="block text-[11px] text-slate-500">{r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
+                        </span>
+                      ) : (
+                        <span className="max-w-[55%] truncate text-right text-xs text-amber-700">{r.error}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </CardContent>
