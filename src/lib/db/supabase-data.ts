@@ -192,23 +192,31 @@ export async function loadSupabaseStore(): Promise<DataStore> {
 
 /**
  * Carrega APENAS as tabelas pedidas (as demais ficam vazias). Para telas de
- * leitura (Pedidos, Dashboard) que não precisam da base inteira — mais rápido
- * e confiável. Não registra snapshot (uso somente leitura, sem commit).
+ * leitura e para rotas que também gravam (ex.: sync). Registra o snapshot das
+ * tabelas carregadas para que o commit grave SOMENTE as linhas que mudaram
+ * (senão o commit trata tudo como novo e regrava a base inteira → timeout).
  */
 export async function loadPartialSupabaseStore(
   tables: Array<keyof DataStore>,
 ): Promise<DataStore> {
   const sb = getSupabaseAdmin();
   const store = {} as Record<string, unknown[]>;
+  const snap: Snapshot = {};
   for (const t of TABLES) store[t] = [];
   // Leituras EM PARALELO — como agora são no-store (sem o cache do Next que
   // antes zerava leituras), podem rodar juntas e a página abre muito mais rápido.
   await Promise.all(
     tables.map(async (t) => {
-      store[t as string] = await readTable(sb, t as string);
+      const rows = await readTable(sb, t as string);
+      store[t as string] = rows;
+      const map = new Map<string, string>();
+      for (const row of rows) map.set(String(row.id), JSON.stringify(row));
+      snap[t as string] = map;
     }),
   );
-  return store as unknown as DataStore;
+  const dataStore = store as unknown as DataStore;
+  snapshots.set(dataStore, snap);
+  return dataStore;
 }
 
 export async function commitSupabaseStore(store: DataStore): Promise<void> {
