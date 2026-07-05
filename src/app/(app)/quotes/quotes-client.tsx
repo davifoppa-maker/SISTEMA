@@ -51,12 +51,12 @@ interface QuoteRow {
   error?: string;
 }
 
-// Dados fixos do remetente (Exx Nutrition).
+// Dados fixos do remetente (NRX).
 const ORIGEM = {
-  nome: "Exx Nutrition",
-  cnpj: "33.042.107/0001-51",
+  nome: "NRX",
+  cnpj: "51.579.683/0001-14",
   cidade: "Braço do Norte/SC",
-  cep: "88750-000",
+  cep: "88352-501",
 };
 
 export function QuotesClient({ orders, providers }: { orders: QuoteOrderOption[]; providers: ProviderOption[] }) {
