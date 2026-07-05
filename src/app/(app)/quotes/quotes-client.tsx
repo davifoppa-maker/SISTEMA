@@ -55,7 +55,7 @@ interface QuoteRow {
 const ORIGEM = {
   nome: "NRX",
   cnpj: "51.579.683/0001-14",
-  cidade: "Braço do Norte/SC",
+  cidade: "Brusque/SC",
   cep: "88352-501",
 };
 
