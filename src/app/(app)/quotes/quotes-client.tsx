@@ -33,6 +33,8 @@ export interface QuoteOrderOption {
   total_value: number;
   volumes: number;
   weight: number;
+  status: string;
+  empresa: string;
   cubagem?: CubagemAuto;
 }
 
@@ -63,6 +65,31 @@ const ORIGEM = {
 };
 
 export function QuotesClient({ orders, providers }: { orders: QuoteOrderOption[]; providers: ProviderOption[] }) {
+  // Busca + filtros do seletor de pedido.
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("");
+  const [filtroEmpresa, setFiltroEmpresa] = useState("");
+
+  const statusDisponiveis = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.status).filter((s) => s && s !== "—"))).sort(),
+    [orders],
+  );
+
+  const orderedFiltered = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (filtroStatus && o.status !== filtroStatus) return false;
+      if (filtroEmpresa && o.empresa !== filtroEmpresa) return false;
+      if (!q) return true;
+      return (
+        o.order_number.toLowerCase().includes(q) ||
+        o.customer_name.toLowerCase().includes(q) ||
+        o.customer_document.toLowerCase().includes(q) ||
+        `${o.city}/${o.state}`.toLowerCase().includes(q)
+      );
+    });
+  }, [orders, busca, filtroStatus, filtroEmpresa]);
+
   const [orderId, setOrderId] = useState(orders[0]?.id ?? "");
   const order = orders.find((o) => o.id === orderId);
   const [cubagem, setCubagem] = useState<CubagemRow[]>([emptyCubagemRow("1")]);
@@ -359,13 +386,65 @@ Observações: ${obs || "—"}`;
       <Card>
         <CardHeader><CardTitle>Dados da cotação</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div>
+          <div className="space-y-2">
             <Label>Pedido</Label>
-            <select value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
-              {orders.map((o) => (
-                <option key={o.id} value={o.id}>#{o.order_number} — {o.customer_name}</option>
-              ))}
-            </select>
+            {/* Busca + filtros */}
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nº, cliente, CNPJ ou cidade…"
+            />
+            <div className="flex gap-2">
+              <select
+                value={filtroEmpresa}
+                onChange={(e) => setFiltroEmpresa(e.target.value)}
+                className="h-9 flex-1 rounded-lg border border-slate-300 px-2 text-sm"
+              >
+                <option value="">Todas as empresas</option>
+                <option value="nyer">NRX</option>
+                <option value="ecopro">Ecopro</option>
+              </select>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                className="h-9 flex-1 rounded-lg border border-slate-300 px-2 text-sm"
+              >
+                <option value="">Todas as situações</option>
+                {statusDisponiveis.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            {/* Lista de pedidos filtrada */}
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {orderedFiltered.length === 0 ? (
+                <p className="p-3 text-sm text-slate-400">Nenhum pedido encontrado.</p>
+              ) : (
+                orderedFiltered.slice(0, 100).map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setOrderId(o.id)}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                      orderId === o.id ? "bg-brand-50" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium text-slate-800">#{o.order_number}</span>
+                      <span className="text-slate-500"> — {o.customer_name}</span>
+                    </span>
+                    <span className="shrink-0 text-[10px] font-medium text-slate-400">
+                      {o.empresa === "ecopro" ? "Ecopro" : "NRX"} · {o.status}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+            {orderedFiltered.length > 100 ? (
+              <p className="text-xs text-slate-400">Mostrando 100 de {orderedFiltered.length}. Refine a busca.</p>
+            ) : (
+              <p className="text-xs text-slate-400">{orderedFiltered.length} pedido(s)</p>
+            )}
           </div>
 
           <div>

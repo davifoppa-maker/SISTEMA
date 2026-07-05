@@ -45,6 +45,8 @@ export default async function QuotesPage() {
         total_value: o.total_value,
         volumes,
         weight: shipment?.total_weight ?? volumes * 8.5,
+        status: o.tiny_status ?? "—",
+        empresa: (o as any).empresa ?? "nyer",
         cubagem,
       };
     });
