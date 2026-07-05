@@ -51,12 +51,15 @@ interface QuoteRow {
   error?: string;
 }
 
-// Dados fixos do remetente (NRX).
+// Dados fixos do remetente (NRX — Nyer Suplementos).
 const ORIGEM = {
-  nome: "NRX",
+  nome: "NRX (Nyer Suplementos)",
   cnpj: "51.579.683/0001-14",
+  endereco: "Rod. Deputado Antonio Heil (SC-486), nº 3980 — Nova Brasília",
   cidade: "Brusque/SC",
   cep: "88352-501",
+  telefone: "(47) 9204-8419",
+  email: "financeiro@nyersuplementos.com",
 };
 
 export function QuotesClient({ orders, providers }: { orders: QuoteOrderOption[]; providers: ProviderOption[] }) {
@@ -180,7 +183,9 @@ export function QuotesClient({ orders, providers }: { orders: QuoteOrderOption[]
 
 Remetente: ${ORIGEM.nome}
 CNPJ: ${ORIGEM.cnpj}
+Endereço: ${ORIGEM.endereco}
 Origem: ${ORIGEM.cidade} — CEP ${ORIGEM.cep}
+Telefone: ${ORIGEM.telefone}
 Destinatário: ${order.customer_name}
 CNPJ/CPF: ${order.customer_document}
 Destino: ${order.city}/${order.state} — CEP ${cepDest}
