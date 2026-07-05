@@ -33,6 +33,9 @@ const LEVELS: LevelInfo[] = [
   { name: "PREMIUM", discount: 0.65, minVolume: 20000, minMix: 50, color: "text-amber-700", bg: "bg-amber-100" },
 ];
 
+// Pontos mínimos para o representante aprovar um pedido.
+const PONTOS_MIN = 26;
+
 function getLevel(volumeTabela: number, mixPct: number): LevelInfo {
   if (volumeTabela >= 20000 && mixPct >= 50) return LEVELS[3];
   if (volumeTabela >= 10000 && mixPct >= 40) return LEVELS[2];
@@ -425,18 +428,7 @@ export function MargemClient() {
             </div>
           </div>
 
-          {/* Parâmetros */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Parâmetros</h2>
-            <div className="space-y-3">
-              <Slider label="Impostos" value={params.impostos} min={0} max={20} onChange={(v) => setParams((p) => ({ ...p, impostos: v }))} />
-              <Slider label="Comissão" value={params.comissao} min={0} max={20} onChange={(v) => setParams((p) => ({ ...p, comissao: v }))} />
-              <Slider label="Logística" value={params.logistica} min={0} max={20} onChange={(v) => setParams((p) => ({ ...p, logistica: v }))} />
-              <Slider label="Margem mínima" value={params.margemMin} min={0} max={40} onChange={(v) => setParams((p) => ({ ...p, margemMin: v }))} />
-            </div>
-          </div>
-
-          {/* Resultado */}
+          {/* Pontos do pedido (visão do representante) */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Resultado</h2>
             <div className="space-y-2 text-sm">
@@ -444,46 +436,57 @@ export function MargemClient() {
                 <span className="text-slate-500">Receita</span>
                 <span className="font-medium text-slate-800">{fmtBRL(receita)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Custo produtos</span>
-                <span className="font-medium text-slate-800">{fmtBRL(custoProdutos)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Custos operacionais</span>
-                <span className="font-medium text-slate-800">{fmtBRL(custosOperacionais)}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-100 pt-2">
-                <span className="text-slate-500">Lucro</span>
-                <span className={`font-semibold ${lucro >= 0 ? "text-emerald-600" : "text-red-500"}`}>{fmtBRL(lucro)}</span>
-              </div>
             </div>
 
-            {/* Margem bar */}
-            <div className="mt-4">
-              <div className="mb-1 flex justify-between text-xs">
-                <span className="text-slate-500">Margem</span>
-                <span className={`font-bold ${margemPct >= params.margemMin ? "text-emerald-600" : "text-red-500"}`}>
-                  {margemPct.toFixed(1)}%
-                </span>
-              </div>
-              <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className={`h-full rounded-full transition-all ${margemPct >= params.margemMin ? "bg-emerald-500" : "bg-red-500"}`}
-                  style={{ width: `${Math.min(Math.max(margemPct, 0), 100)}%` }}
-                />
-                {/* Min marker */}
-                <div
-                  className="absolute top-0 h-full w-0.5 bg-slate-500"
-                  style={{ left: `${Math.min(params.margemMin, 100)}%` }}
-                />
-              </div>
-              <div className="mt-0.5 text-[10px] text-slate-400">
-                Mínimo: {params.margemMin}%
-                {margemPct < params.margemMin && receita > 0 && (
-                  <span className="ml-1 font-medium text-red-500">Abaixo do mínimo</span>
-                )}
-              </div>
-            </div>
+            {/* Pontuação gamificada */}
+            {(() => {
+              const pontos = Math.max(0, Math.round(margemPct));
+              const aprovado = pontos >= PONTOS_MIN;
+              const faltam = Math.max(0, PONTOS_MIN - pontos);
+              const progresso = Math.min((pontos / PONTOS_MIN) * 100, 100);
+              return (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-end justify-between">
+                    <span className="text-xs font-medium text-slate-500">Pontos do pedido</span>
+                    <span className={`text-3xl font-extrabold leading-none ${aprovado ? "text-emerald-600" : "text-slate-800"}`}>
+                      {pontos}
+                      <span className="text-sm font-medium text-slate-400"> / {PONTOS_MIN}</span>
+                    </span>
+                  </div>
+
+                  <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full transition-all ${aprovado ? "bg-emerald-500" : "bg-amber-400"}`}
+                      style={{ width: `${progresso}%` }}
+                    />
+                    {/* Marcador da meta (26 pts) */}
+                    <div className="absolute top-0 h-full w-0.5 bg-slate-600" style={{ left: "100%" }} />
+                  </div>
+
+                  {/* Selo de status */}
+                  <div className="mt-3">
+                    {receita <= 0 ? (
+                      <div className="rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
+                        Adicione produtos para calcular os pontos.
+                      </div>
+                    ) : aprovado ? (
+                      <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700">
+                        <span className="text-lg">🎉</span> Pedido aprovado! ({pontos} pts)
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700">
+                        <span className="text-lg">🔒</span> Faltam {faltam} ponto(s) para aprovar
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="mt-2 text-center text-[11px] text-slate-400">
+                    Mínimo de {PONTOS_MIN} pontos para aprovar o pedido.
+                    Aumente o mix não-proteico e o volume para ganhar mais pontos.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
