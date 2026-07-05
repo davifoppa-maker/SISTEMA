@@ -52,7 +52,7 @@ type Snapshot = Record<string, Map<string, string>>;
 // detalhe/inspeção. Em UPSERT, colunas ausentes preservam o valor já gravado.
 const SELECT_OVERRIDE: Record<string, string> = {
   orders:
-    "id,source,source_order_id,tiny_id,order_number,external_order_number,channel,customer_id,tiny_status,logistic_status,total_value,city,state,seller,price_list,order_origin,carrier_name,nf_numero,nf_chave,freight_value,expected_delivery_at,order_date,due_date,tags,created_at,updated_at",
+    "id,source,source_order_id,tiny_id,order_number,external_order_number,channel,customer_id,tiny_status,logistic_status,total_value,city,state,seller,price_list,order_origin,carrier_name,nf_numero,nf_chave,freight_value,expected_delivery_at,order_date,due_date,empresa,nat_operacao,tags,created_at,updated_at",
   invoices: "id,order_id,number,series,access_key,issued_at,total_value,xml_url,danfe_url,created_at",
   webhook_events: "id,source,event_type,external_id,idempotency_key,status,received_at,processed_at,error_message",
   carrier_tracking_events: "id,shipment_id,status,description,occurred_at,created_at",
