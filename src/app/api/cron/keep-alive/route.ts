@@ -1,6 +1,6 @@
 import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok } from "@/lib/api";
-import { ingestOrder } from "@/lib/services/tiny";
+import { ingestOrder, enrichOrderItems } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, getValidAccessToken, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
@@ -57,10 +57,20 @@ async function run() {
         } catch { /* ignora pedido inválido */ }
       }
     }
-    if (synced > 0) {
+    // Preenche os itens de pedidos que ainda não têm (usa a conta certa de cada).
+    // Lote modesto para caber no tempo; os demais entram nas próximas execuções.
+    let itensPreenchidos = 0;
+    try {
+      itensPreenchidos = await enrichOrderItems(store, 12);
+    } catch (e) {
+      diag.itensErr = e instanceof Error ? e.message : String(e);
+    }
+    diag.itensPreenchidos = itensPreenchidos;
+
+    if (synced > 0 || itensPreenchidos > 0) {
       store.api_sync_logs.push({
         id: uuid(), source: "tiny", operation: "cron_keep_alive", ok: true,
-        detail: `${synced} pedidos sincronizados (desde ${dataInicial})`,
+        detail: `${synced} pedidos + ${itensPreenchidos} com itens (desde ${dataInicial})`,
         created_at: nowIso(),
       });
       await commitStore(store);
