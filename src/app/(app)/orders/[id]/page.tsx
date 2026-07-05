@@ -38,20 +38,32 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const customer = store.customers.find((c) => c.id === order.customer_id);
 
-  // Tenta itens do store; se vazio, busca direto do Tiny agora (server-side),
-  // usando a conta (empresa) correta do pedido — Ecopro e NRX são contas distintas.
+  // Tenta itens do store; se vazio, busca direto do Tiny agora (server-side).
+  // Tenta a conta (empresa) do pedido e, se não achar, a outra conta — assim
+  // funciona mesmo que a marcação de empresa esteja errada. Corrige a empresa
+  // do pedido para a conta que efetivamente respondeu.
   const empresa = (order as any).empresa ?? "nyer";
   let storeItems = store.order_items.filter((i) => i.order_id === order.id);
   if (storeItems.length === 0 && order.tiny_id) {
     try {
-      const tinyOk = await isTinyConnected(empresa).catch(() => false);
-      if (tinyOk) {
-        const full = await fetchOrderById(order.tiny_id, empresa).catch(() => null);
-        const itensTiny = (full as Record<string, unknown>)?.itens as Array<Record<string, unknown>> ?? [];
+      const ordem = empresa === "ecopro" ? ["ecopro", "nyer"] : ["nyer", "ecopro"];
+      let itensTiny: Array<Record<string, unknown>> = [];
+      let empresaOk = empresa;
+      for (const emp of ordem) {
+        if (!(await isTinyConnected(emp).catch(() => false))) continue;
+        const full = await fetchOrderById(order.tiny_id, emp).catch(() => null);
+        const its = (full as Record<string, unknown>)?.itens as Array<Record<string, unknown>> ?? [];
+        if (its.length > 0) { itensTiny = its; empresaOk = emp; break; }
+      }
+      {
         if (itensTiny.length > 0) {
           const mutableStore = await loadStore();
           const mutableOrder = mutableStore.orders.find((o) => o.id === order.id);
           if (mutableOrder) {
+            // Corrige a empresa se a conta que respondeu for outra.
+            if (((mutableOrder as any).empresa ?? "nyer") !== empresaOk) {
+              (mutableOrder as any).empresa = empresaOk;
+            }
             itensTiny.forEach((it) => {
               const item = {
                 id: uuid(),

@@ -37,9 +37,18 @@ export async function GET(req: Request) {
 
   for (const order of lote) {
     const empresa = (order as any).empresa ?? "nyer";
+    const ordem = empresa === "ecopro" ? ["ecopro", "nyer"] : ["nyer", "ecopro"];
     try {
-      const payload = await fetchOrderById(order.tiny_id!, empresa);
-      const itens = payload?.itens ?? [];
+      let itens: any[] = [];
+      for (const emp of ordem) {
+        const payload = await fetchOrderById(order.tiny_id!, emp).catch(() => null);
+        const its = payload?.itens ?? [];
+        if (its.length > 0) {
+          itens = its;
+          if (((order as any).empresa ?? "nyer") !== emp) (order as any).empresa = emp; // corrige marcação
+          break;
+        }
+      }
       if (itens.length > 0) {
         itens.forEach((it: any) => {
           store.order_items.push({
