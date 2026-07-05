@@ -3,13 +3,13 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { readStore } from "@/lib/queries";
+import { loadStoreFor } from "@/lib/db";
 import { brl, dateShort } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const store = await readStore();
+  const store = await loadStoreFor(["customers"]);
   const customers = [...store.customers].sort((a, b) => b.total_purchased - a.total_purchased);
 
   return (

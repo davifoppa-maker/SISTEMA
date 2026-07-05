@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { LogisticBadge, SlaBadge } from "@/components/status-badge";
-import { readStore } from "@/lib/queries";
-import { dataDriver, loadStore, commitStore } from "@/lib/db";
+import { dataDriver, loadStore, loadStoreFor, commitStore } from "@/lib/db";
+import type { DataStore } from "@/lib/types";
 import { fetchOrderRawPayload } from "@/lib/db/supabase-data";
 import { brl, dateTime } from "@/lib/utils/format";
 import { CHANNEL_LABELS } from "@/lib/types";
@@ -29,7 +29,12 @@ const SLA_TYPE_LABELS: Record<string, string> = {
 };
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
-  const store = await readStore();
+  // Carrega só as tabelas usadas nesta tela (bem mais rápido que a base inteira).
+  const detailTables: Array<keyof DataStore> = [
+    "orders", "order_items", "customers", "invoices", "shipments", "carriers",
+    "shipment_volumes", "sla_records", "message_logs", "occurrences",
+  ];
+  const store = await loadStoreFor(detailTables);
   const order = store.orders.find((o) => o.id === params.id);
   if (!order) notFound();
 
