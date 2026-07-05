@@ -23,7 +23,7 @@ export default async function CotacaoPage({ params }: { params: { id: string } }
   let volumes: number | null = null;
   if (order.tiny_id && isTinyConfigured()) {
     try {
-      const w = await fetchOrderWeight(order.tiny_id);
+      const w = await fetchOrderWeight(order.tiny_id, { companyId: (order as any).empresa ?? "nyer" });
       peso = w.pesoBruto;
       cepDestino = w.cepDestino;
       volumes = w.volumes;

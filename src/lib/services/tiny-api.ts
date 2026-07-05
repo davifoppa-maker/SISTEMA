@@ -987,11 +987,12 @@ async function fetchProductGrossWeight(
   return 0;
 }
 
-export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean } = {}): Promise<TinyOrderWeight> {
-  const c = getTinyConfig();
+export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; companyId?: string } = {}): Promise<TinyOrderWeight> {
+  const companyId = opts.companyId ?? "nyer";
+  const c = getTinyConfig(companyId);
   const empty: TinyOrderWeight = { pesoBruto: null, volumes: null, cepDestino: null, source: null };
 
-  const dres = await tinyFetch(`${c.apiBaseUrl}/pedidos/${encodeURIComponent(tinyId)}`);
+  const dres = await tinyFetch(`${c.apiBaseUrl}/pedidos/${encodeURIComponent(tinyId)}`, {}, companyId);
   if (!dres.ok) return { ...empty, debug: opts.debug ? { pedidoStatus: dres.status } : undefined };
   const raw = (await dres.json()) as Record<string, any>;
   // Só "desembrulha" se pedido/data forem OBJETOS — senão o campo "data" (a data

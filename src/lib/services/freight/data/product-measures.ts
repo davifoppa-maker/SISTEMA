@@ -215,6 +215,7 @@ export const PRODUCT_MEASURES: Record<string, ProductMeasure> = {
   "NYER26015": { desc: "Whey Nyer Pote 1kg - Maracujá",            larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
   "NYER26016": { desc: "Whey Nyer Pote 1kg - Açaí",               larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
   "NYER26017": { desc: "Whey Nyer Pote 1kg - Chocolate Maltado",   larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
+  "NYER260428": { desc: "Whey Protein Pote Gourmet Nyer 1Kg - Chocolate Maltado", larguraCm: 30.5, alturaCm: 25.5, comprimentoCm: 31.0 },
   // caixa06 (8un) 230×225×223mm
   "NYER26018": { desc: "Pure Bust - Limão",                        larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
   "NYER26019": { desc: "Pure Bust - Red",                          larguraCm: 22.5, alturaCm: 22.3, comprimentoCm: 23.0 },
