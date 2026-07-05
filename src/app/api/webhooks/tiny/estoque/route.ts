@@ -6,6 +6,12 @@ import { nowIso, uuid } from "@/lib/utils/ids";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// Health-check: permite confirmar no navegador que a rota está no ar (o Tiny
+// sempre envia por POST; o GET só serve para diagnóstico).
+export async function GET() {
+  return ok({ alive: true, endpoint: "webhooks/tiny/estoque", metodo_esperado: "POST" });
+}
+
 // Lê o corpo do webhook de forma tolerante: JSON ou form-urlencoded (o Tiny
 // costuma mandar o conteúdo dentro de um campo "dados").
 async function readBody(req: Request): Promise<any> {
