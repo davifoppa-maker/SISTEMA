@@ -21,21 +21,20 @@ export function GET(req: NextRequest) {
     );
   }
   const state = randomBytes(16).toString("hex");
-  const res = NextResponse.redirect(buildAuthorizationUrl(state, companyId));
-  res.cookies.set("tiny_oauth_state", state, {
+  // redirect_uri baseado no domínio ATUAL (evita erro de domínio antigo/APP_URL).
+  const redirectUri = `${req.nextUrl.origin}/api/auth/tiny/callback`;
+  const res = NextResponse.redirect(buildAuthorizationUrl(state, companyId, redirectUri));
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 600,
-  });
+  };
+  res.cookies.set("tiny_oauth_state", state, cookieOpts);
   // Salva a empresa no cookie para o callback saber qual conta conectar.
-  res.cookies.set("tiny_oauth_empresa", companyId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 600,
-  });
+  res.cookies.set("tiny_oauth_empresa", companyId, cookieOpts);
+  // Guarda o redirect_uso usado, para o callback trocar o code com o MESMO valor.
+  res.cookies.set("tiny_oauth_redirect", redirectUri, cookieOpts);
   return res;
 }

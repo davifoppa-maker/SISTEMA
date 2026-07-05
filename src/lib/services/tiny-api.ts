@@ -57,12 +57,12 @@ export function isTinyConfigured(companyId = "nyer"): boolean {
 }
 
 /** URL para iniciar o consentimento OAuth no Tiny. */
-export function buildAuthorizationUrl(state: string, companyId = "nyer"): string {
+export function buildAuthorizationUrl(state: string, companyId = "nyer", redirectUriOverride?: string): string {
   const c = getTinyConfig(companyId);
   const url = new URL(c.authUrl);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", c.clientId);
-  url.searchParams.set("redirect_uri", c.redirectUri);
+  url.searchParams.set("redirect_uri", redirectUriOverride || c.redirectUri);
   url.searchParams.set("scope", c.scope);
   url.searchParams.set("state", state);
   return url.toString();
@@ -111,12 +111,13 @@ async function postToken(body: Record<string, string>, companyId = "nyer"): Prom
 }
 
 /** Troca o authorization code (callback) por tokens e persiste. */
-export async function exchangeCodeForTokens(code: string, companyId = "nyer"): Promise<TinyTokenSet> {
+export async function exchangeCodeForTokens(code: string, companyId = "nyer", redirectUriOverride?: string): Promise<TinyTokenSet> {
   const c = getTinyConfig(companyId);
   const tokens = await postToken({
     grant_type: "authorization_code",
     code,
-    redirect_uri: c.redirectUri,
+    // Precisa ser IDÊNTICO ao usado na autorização (senão o Tiny recusa).
+    redirect_uri: redirectUriOverride || c.redirectUri,
   }, companyId);
   await saveTokens(tokens, companyId);
   return tokens;

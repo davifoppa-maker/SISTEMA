@@ -30,8 +30,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(settings);
   }
 
+  // Usa o MESMO redirect_uri do login (domínio atual) para a troca do code.
+  const redirectUri = req.cookies.get("tiny_oauth_redirect")?.value || `${url.origin}/api/auth/tiny/callback`;
+
   try {
-    await exchangeCodeForTokens(code, companyId);
+    await exchangeCodeForTokens(code, companyId, redirectUri);
     settings.searchParams.set("tiny", "conectado");
     settings.searchParams.set("empresa", companyId);
   } catch (err) {
@@ -43,5 +46,6 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(settings);
   res.cookies.delete("tiny_oauth_state");
   res.cookies.delete("tiny_oauth_empresa");
+  res.cookies.delete("tiny_oauth_redirect");
   return res;
 }
