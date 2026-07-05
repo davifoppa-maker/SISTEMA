@@ -8,7 +8,7 @@ export const maxDuration = 30;
 
 /**
  * Registra no pedido a transportadora escolhida na cotação + o valor do frete
- * (e o prazo, no log). Grava SOMENTE no nosso sistema (Pós-Venda Exx). Se houver
+ * (e o prazo, no log). Grava SOMENTE no nosso sistema (Pós-Venda NYER). Se houver
  * expedição (shipment) ainda não coletada, vincula a transportadora a ela para
  * aparecer no pedido.
  */

@@ -1,4 +1,4 @@
-// Tipos de domínio do sistema de pós-venda logístico Exx Nutrition.
+// Tipos de domínio do sistema de pós-venda logístico NYER.
 
 export type Channel =
   | "b2b_mercos"

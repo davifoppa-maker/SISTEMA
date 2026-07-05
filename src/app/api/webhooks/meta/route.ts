@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
-  if (mode === "subscribe" && token === (process.env.META_WHATSAPP_VERIFY_TOKEN ?? "exx-verify-token")) {
+  if (mode === "subscribe" && token === (process.env.META_WHATSAPP_VERIFY_TOKEN ?? "nyer-verify-token")) {
     return new Response(challenge ?? "", { status: 200 });
   }
   return new Response("forbidden", { status: 403 });

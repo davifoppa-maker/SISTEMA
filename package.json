@@ -1,8 +1,8 @@
 {
-  "name": "pos-venda-exx",
+  "name": "nyer-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Camada de controle logístico e pós-venda da Exx Nutrition sobre o Olist Tiny.",
+  "description": "Camada de controle logístico e pós-venda da NYER sobre o Olist Tiny.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

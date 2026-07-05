@@ -30,7 +30,7 @@ export function getArleteConfig() {
     dominio: process.env.SSW_DOMINIO || "ARL",
     login: process.env.SSW_LOGIN || "",
     senha: process.env.SSW_SENHA || "",
-    // Quem paga o frete (remetente Exx, por padrão).
+    // Quem paga o frete (remetente NYER, por padrão).
     cnpjPagador: onlyDigits(process.env.SSW_CNPJ_PAGADOR || "51579683000114"),
     cepOrigem: onlyDigits(process.env.SSW_CEP_ORIGEM || "88352501"),
     apiBaseUrl: SSW_API_BASE.replace(/\/$/, ""),
