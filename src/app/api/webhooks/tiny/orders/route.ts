@@ -107,8 +107,16 @@ export async function POST(req: Request) {
       // Nem o fallback achou o pedido: mantém o bruto salvo; o próximo sync
       // (botão "atualizar" ou cron) reprocessa via reprocessPendingWebhooks.
       event.status = "received";
+      store.api_sync_logs.push({
+        id: uuid(),
+        source: "tiny",
+        operation: "webhook_order",
+        ok: false,
+        detail: `SEM DETALHE tinyId=${tinyId} empresa=${companyId} — fetchOrderById falhou (verificar token/conexão da conta)`,
+        created_at: nowIso(),
+      });
       await commitStore(store);
-      return ok({ received: true, pending_detail: true, webhook_event_id: event.id });
+      return ok({ received: true, pending_detail: true, empresa: companyId, tinyId, webhook_event_id: event.id });
     }
 
     // O status do webhook é o sinal mais fresco (o detalhe do Tiny pode demorar
