@@ -37,7 +37,9 @@ export async function POST(req: Request) {
           const connected = await isTinyConnected(company.id).catch(() => false);
           if (!connected) return { company: company.id, items: [] as unknown[] };
           // Lista retorna dados leves (sem itens). Busca detalhes completos em paralelo.
-          const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 8, offset: 0 }, company.id).catch(() => []);
+          // Lote pequeno (5) para caber no limite de 10s do plano Hobby. Rode
+          // várias vezes para pegar mais pedidos antigos; os novos entram por webhook.
+          const list = await fetchRecentOrders({ dataInicial, dataFinal, limit: 5, offset: 0 }, company.id).catch(() => []);
           const ids = list.map((o: any) => String(o.id ?? "")).filter(Boolean);
           const items = await Promise.all(
             ids.map((id) => fetchOrderById(id, company.id).catch(() => null))
