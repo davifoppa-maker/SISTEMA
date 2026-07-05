@@ -95,6 +95,28 @@ export interface CubagemResultado {
   alertas: string[];
 }
 
+// Quantas UNIDADES do produto cabem na caixa máster de cada dimensão (a medida
+// cadastrada é a caixa fechada de expedição — caixa06 a caixa10 — que já vem com
+// N unidades). Casamos pela assinatura de dimensões (ordenadas), com tolerância.
+const CAIXAS_MASTER: { sig: [number, number, number]; un: number; nome: string }[] = [
+  { sig: [45, 32, 17], un: 10, nome: "Caixa 10un (refil)" },     // caixa10 — Whey/Hydro refil
+  { sig: [35.5, 23.5, 16], un: 10, nome: "Caixa 10un (refil P)" }, // caixa09 — refil 420g/creatina
+  { sig: [31, 30.5, 25.5], un: 4, nome: "Caixa 4un (pote 1kg)" }, // caixa08 — potes 1kg
+  { sig: [23, 22.5, 22.3], un: 8, nome: "Caixa 8un (potes)" },    // caixa06 — pure bust/dark pump/etc
+  { sig: [26, 13.3, 11.7], un: 8, nome: "Caixa 8un (caps)" },     // caixa07 — termogênico/multivit
+];
+
+function masterBoxFor(d: Dim): { un: number; nome: string } | null {
+  const s = [d.comprimentoCm, d.larguraCm, d.alturaCm].sort((a, b) => b - a);
+  for (const m of CAIXAS_MASTER) {
+    const ms = [...m.sig].sort((a, b) => b - a);
+    if (Math.abs(s[0] - ms[0]) < 0.8 && Math.abs(s[1] - ms[1]) < 0.8 && Math.abs(s[2] - ms[2]) < 0.8) {
+      return { un: m.un, nome: m.nome };
+    }
+  }
+  return null;
+}
+
 /** Calcula a cubagem e o empacotamento dos itens de um pedido. */
 export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
   const detalheItens: DetalheItem[] = [];
@@ -107,7 +129,10 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
     dim: Dim;
     vol: number;
   }
-  const unidades: Unidade[] = [];
+  const unidades: Unidade[] = []; // itens soltos (medida = 1 unidade) → empacota
+  // Caixas máster já fechadas (medida = caixa de N unidades) → viram volumes diretos.
+  const masterCaixas = new Map<string, CaixaEscolhida>();
+  let volumeMasterCm3 = 0;
 
   for (const it of itens) {
     const qty = Math.max(0, Math.floor(Number(it.quantidade) || 0));
@@ -134,13 +159,24 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
     }
 
     detalheItens.push({ sku, descricao: it.descricao, quantidade: qty, volumeUnitCm3: v, status: "ok" });
-    for (let i = 0; i < qty; i++) unidades.push({ sku, descricao: it.descricao, dim, vol: v });
+
+    const master = masterBoxFor(dim);
+    if (master && qty > 0) {
+      // A medida é a caixa fechada de N unidades → nº de caixas = ceil(qtd / N).
+      const nCaixas = Math.ceil(qty / master.un);
+      const caixa: Caixa = { nome: master.nome, comprimentoCm: dim.comprimentoCm, larguraCm: dim.larguraCm, alturaCm: dim.alturaCm };
+      const key = `${master.nome}|${dim.comprimentoCm}x${dim.larguraCm}x${dim.alturaCm}`;
+      const e = masterCaixas.get(key);
+      if (e) e.quantidade += nCaixas;
+      else masterCaixas.set(key, { caixa, quantidade: nCaixas });
+      volumeMasterCm3 += v * nCaixas;
+    } else {
+      // Produto solto (1 unidade = 1 item) → empacota nas caixas padrão.
+      for (let i = 0; i < qty; i++) unidades.push({ sku, descricao: it.descricao, dim, vol: v });
+    }
   }
 
-  // Estratégia (combina com a operação): encher a MAIOR caixa primeiro — menos
-  // caixas e caixas maiores — e, no fim, REDUZIR cada caixa para o menor modelo
-  // que ainda comporta seu conteúdo. Assim a sobra vai numa única caixa menor
-  // (ex.: "7× Caixa 4 + 1× Caixa 1"), em vez de várias caixinhas.
+  // Empacotamento dos itens SOLTOS nas caixas padrão (0–5).
   unidades.sort((a, b) => b.vol - a.vol);
 
   interface Bin {
@@ -163,7 +199,6 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
         sobra.push(u);
       }
     }
-    // Nada coube (item não entra nem na maior caixa) → força um e alerta, p/ não travar.
     if (bin.itens.length === 0) {
       const u = sobra.shift()!;
       bin.itens.push(u.dim);
@@ -174,7 +209,6 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
     restantes = sobra;
   }
 
-  // Reduz cada caixa para o MENOR modelo que comporta (volume×fator + dimensional).
   for (const bin of bins) {
     const candidatos = CAIXAS.filter(
       (c) => bin.usados <= volCm3(c) * FILL_FACTOR && bin.itens.every((d) => cabeDimensional(d, c)),
@@ -182,8 +216,8 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
     if (candidatos.length > 0) bin.caixa = candidatos[0];
   }
 
-  // agrupa as caixas por modelo
-  const mapa = new Map<string, CaixaEscolhida>();
+  // Junta caixas máster (produtos fechados) + caixas dos itens soltos.
+  const mapa = new Map<string, CaixaEscolhida>(masterCaixas);
   for (const b of bins) {
     const e = mapa.get(b.caixa.nome);
     if (e) e.quantidade += 1;
@@ -191,7 +225,7 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
   }
   const caixas = [...mapa.values()].sort((a, b) => volCm3(b.caixa) - volCm3(a.caixa));
 
-  const volumeItensCm3 = unidades.reduce((s, u) => s + u.vol, 0);
+  const volumeItensCm3 = volumeMasterCm3 + unidades.reduce((s, u) => s + u.vol, 0);
 
   return {
     caixas,
