@@ -130,9 +130,11 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
     vol: number;
   }
   const unidades: Unidade[] = []; // itens soltos (medida = 1 unidade) → empacota
-  // Caixas máster já fechadas (medida = caixa de N unidades) → viram volumes diretos.
-  const masterCaixas = new Map<string, CaixaEscolhida>();
-  let volumeMasterCm3 = 0;
+  // Caixas máster já fechadas (medida = caixa de N unidades). ACUMULA todas as
+  // unidades do mesmo tipo de caixa (mesma dimensão) ANTES de dividir por N —
+  // senão sabores diferentes do mesmo produto arredondam pra cima separadamente
+  // (ex.: 15+15+15+15 = 60 refis daria 8 caixas em vez de 6).
+  const masterAgg = new Map<string, { caixa: Caixa; un: number; vol: number; totalUn: number }>();
 
   for (const it of itens) {
     const qty = Math.max(0, Math.floor(Number(it.quantidade) || 0));
@@ -162,18 +164,25 @@ export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
 
     const master = masterBoxFor(dim);
     if (master && qty > 0) {
-      // A medida é a caixa fechada de N unidades → nº de caixas = ceil(qtd / N).
-      const nCaixas = Math.ceil(qty / master.un);
+      // Acumula as unidades por tipo de caixa (mesma dimensão). Divide por N só no fim.
       const caixa: Caixa = { nome: master.nome, comprimentoCm: dim.comprimentoCm, larguraCm: dim.larguraCm, alturaCm: dim.alturaCm };
       const key = `${master.nome}|${dim.comprimentoCm}x${dim.larguraCm}x${dim.alturaCm}`;
-      const e = masterCaixas.get(key);
-      if (e) e.quantidade += nCaixas;
-      else masterCaixas.set(key, { caixa, quantidade: nCaixas });
-      volumeMasterCm3 += v * nCaixas;
+      const e = masterAgg.get(key);
+      if (e) e.totalUn += qty;
+      else masterAgg.set(key, { caixa, un: master.un, vol: v, totalUn: qty });
     } else {
       // Produto solto (1 unidade = 1 item) → empacota nas caixas padrão.
       for (let i = 0; i < qty; i++) unidades.push({ sku, descricao: it.descricao, dim, vol: v });
     }
+  }
+
+  // Fecha as caixas máster: nº de caixas = ceil(TOTAL de unidades / N por caixa).
+  const masterCaixas = new Map<string, CaixaEscolhida>();
+  let volumeMasterCm3 = 0;
+  for (const [key, m] of masterAgg) {
+    const nCaixas = Math.ceil(m.totalUn / m.un);
+    masterCaixas.set(key, { caixa: m.caixa, quantidade: nCaixas });
+    volumeMasterCm3 += m.vol * nCaixas;
   }
 
   // Empacotamento dos itens SOLTOS nas caixas padrão (0–5).
