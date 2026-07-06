@@ -27,6 +27,11 @@ export function getBbmConfig() {
     token: process.env.BBM_TOKEN || "",
     usuario: process.env.BBM_USUARIO || "",
     senha: process.env.BBM_SENHA || "",
+    // Chaves de acesso da Translovato (NF-e / CT-e) — usadas no rastreio.
+    chaveNf: process.env.BBM_CHAVE_NF || "",
+    chaveCte: process.env.BBM_CHAVE_CTE || "",
+    // CNPJ da transportadora Translovato (para endpoints que exigem).
+    cnpjTransportadora: onlyDigits(process.env.BBM_CNPJ_TRANSPORTADORA || "03886858000193"),
     cepOrigem: onlyDigits(process.env.BBM_CEP_ORIGEM || process.env.BRASPRESS_CEP_ORIGEM || "88352501"),
     cnpjRemetente: onlyDigits(process.env.BBM_CNPJ_REMETENTE || process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114"),
     apiBaseUrl: API_BASE,
