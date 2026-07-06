@@ -59,15 +59,21 @@ export function CustosClient({
     [linhas, termo, soSemCusto, valores],
   );
 
-  const totalValor = useMemo(
-    () =>
-      linhas.reduce((s, l) => {
-        const c = parseCusto(valores[l.nome] ?? "");
-        return s + (c != null ? c * l.quantidade : 0);
-      }, 0),
-    [linhas, valores],
-  );
+  // Valor total separado por categoria (produto acabado, matéria prima, embalagens).
+  const valorPorCategoria = useMemo(() => {
+    const acc = { produto_acabado: 0, materia_prima: 0, embalagens: 0, total: 0 };
+    for (const l of linhas) {
+      const c = parseCusto(valores[l.nome] ?? "");
+      if (c == null) continue;
+      const v = c * l.quantidade;
+      acc.total += v;
+      const cat = (l.categoria as keyof typeof acc) ?? "produto_acabado";
+      if (cat in acc) (acc as any)[cat] += v;
+    }
+    return acc;
+  }, [linhas, valores]);
 
+  const totalValor = valorPorCategoria.total;
   const comCusto = linhas.filter((l) => parseCusto(valores[l.nome] ?? "") != null).length;
 
   async function salvar() {
@@ -132,10 +138,26 @@ export function CustosClient({
         </CardContent>
       </Card>
 
-      {/* Resumo + ações */}
+      {/* Resumo por categoria */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-medium text-slate-500">📦 Produto acabado</div>
+          <div className="mt-1 text-lg font-bold text-emerald-600">{brl(valorPorCategoria.produto_acabado)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-medium text-slate-500">🧪 Matéria prima</div>
+          <div className="mt-1 text-lg font-bold text-sky-600">{brl(valorPorCategoria.materia_prima)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-medium text-slate-500">📦 Embalagens</div>
+          <div className="mt-1 text-lg font-bold text-violet-600">{brl(valorPorCategoria.embalagens)}</div>
+        </div>
+      </div>
+
+      {/* Resumo total + ações */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
-          Valor estimado:{" "}
+          Valor total estimado:{" "}
           <strong className="text-slate-800">{brl(totalValor)}</strong>{" "}
           <span className="text-slate-400">
             ({comCusto}/{linhas.length} itens com custo)
