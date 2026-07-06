@@ -32,6 +32,8 @@ export const CATALOG: Product[] = [
   { sku: "NYER260431", name: "Hydro Protein 820g Original", tabela: 149.9, cost: 48.0, type: "proteico" },
   { sku: "NYER260432", name: "Hydro Protein 820g Chocolate", tabela: 149.9, cost: 48.0, type: "proteico" },
   { sku: "NYER260433", name: "Hydro Protein 820g Milkshake", tabela: 149.9, cost: 48.0, type: "proteico" },
+  { sku: "NYER6921", name: "Beff Protein 900g Frutas Vermelhas", tabela: 299.9, cost: 69.9, type: "proteico" },
+  { sku: "NYER21321", name: "Beff Protein 900g Frutas Amarelas", tabela: 299.9, cost: 69.9, type: "proteico" },
 
   // Não-Proteicos
   { sku: "NYER26028", name: "Creatina Refill 150g", tabela: 59.9, cost: 9.9, type: "nao_proteico" },
