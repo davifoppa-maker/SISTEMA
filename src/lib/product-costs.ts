@@ -40,6 +40,7 @@ export const CATALOG: Product[] = [
   { sku: "NYER26029", name: "Creatina Refill 300g", tabela: 68.9, cost: 13.9, type: "nao_proteico" },
   { sku: "NYER260434", name: "Creatina Pote 300g", tabela: 74.9, cost: 13.9, type: "nao_proteico" },
   { sku: "NYER26030", name: "Creatina Refill 500g", tabela: 99.9, cost: 30.0, type: "nao_proteico" },
+  { sku: "NYER26060", name: "Magnésio Inositol 250g", tabela: 99.9, cost: 23.0, type: "nao_proteico" },
   { sku: "NYER26017", name: "Darkpump Pré-Workout 300g Uva", tabela: 119.9, cost: 23.48, type: "nao_proteico" },
   { sku: "NYER26018", name: "Darkpump Pré-Workout 300g Frutas Vermelhas", tabela: 119.9, cost: 23.48, type: "nao_proteico" },
   { sku: "NYER26019", name: "Darkpump Pré-Workout 300g Limão", tabela: 119.9, cost: 23.48, type: "nao_proteico" },
