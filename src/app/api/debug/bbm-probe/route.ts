@@ -42,12 +42,39 @@ export async function GET(req: Request) {
         nome: t.nome,
         status: res.status,
         contentType: res.headers.get("content-type"),
-        resposta: text.slice(0, 250),
+        resposta: text.slice(0, 200),
       });
     } catch (err) {
       resultados.push({ nome: t.nome, erro: err instanceof Error ? err.message : String(err) });
     }
   }
 
-  return ok({ base, temUsuario: Boolean(c.usuario), temSenha: Boolean(c.senha), resultados });
+  // Busca a ESPECIFICAÇÃO Swagger/OpenAPI (lista os endpoints reais).
+  const specUrls = [
+    `${base}/swagger.json`,
+    `${base}/swagger/v1/swagger.json`,
+    `${base}-docs`,
+    `${base}/api-docs`,
+    `${base}/openapi.json`,
+    `${base}/docs.json`,
+    `${base}/swagger-ui-init.js`,
+    `${base}/v1/api-docs`,
+  ];
+  const specs: Array<{ url: string; status: number; paths?: string[]; amostra?: string }> = [];
+  for (const su of specUrls) {
+    try {
+      const res = await fetch(su, { headers: { Accept: "application/json,*/*" } });
+      const text = await res.text();
+      let paths: string[] | undefined;
+      try {
+        const j = JSON.parse(text);
+        if (j.paths) paths = Object.keys(j.paths);
+      } catch { /* não é JSON puro (ex.: swagger-ui-init.js) */ }
+      specs.push({ url: su.replace(base, "…"), status: res.status, paths, amostra: paths ? undefined : text.slice(0, 300) });
+    } catch (err) {
+      specs.push({ url: su.replace(base, "…"), status: 0, amostra: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return ok({ base, temUsuario: Boolean(c.usuario), temSenha: Boolean(c.senha), resultados, specs });
 }
