@@ -61,12 +61,20 @@ function StatusPill({ status }: { status: string | null }) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; channel?: string; status?: string; empresa?: string };
+  searchParams: { q?: string; channel?: string; status?: string; empresa?: string; ordem?: string };
 }) {
   const q = (searchParams.q ?? "").toLowerCase();
   const channel = searchParams.channel ?? "";
   const status = searchParams.status ?? "";
   const empresa = searchParams.empresa ?? "";
+  const ordem = searchParams.ordem === "asc" ? "asc" : "desc"; // padrão: mais recente primeiro
+
+  // Data válida = ano plausível (2015–2030). Descarta datas quebradas (ex.: 2096).
+  const dataValida = (d: string | null | undefined): string => {
+    if (!d) return "";
+    const ano = Number(String(d).slice(0, 4));
+    return ano >= 2015 && ano <= 2030 ? String(d) : "";
+  };
 
   const allViews = await listOrderViewsFast();
   const channelOptions = buildChannelOptions(allViews);
@@ -85,17 +93,34 @@ export default async function OrdersPage({
   if (status) views = views.filter((v) => v.order.tiny_status === status);
   if (empresa) views = views.filter((v) => ((v.order as any).empresa ?? "nyer") === empresa);
 
-  // Ordena pela DATA do pedido (mais recente primeiro); sem data cai pelo número.
+  // Ordena pela DATA do pedido (padrão decrescente; clique alterna). Datas
+  // inválidas vão para o fim; empate cai pelo número do pedido.
+  const dir = ordem === "asc" ? 1 : -1;
   views = [...views].sort((a, b) => {
-    const da = a.order.order_date ?? "";
-    const db = b.order.order_date ?? "";
-    if (da && db && da !== db) return db.localeCompare(da);
-    if (da !== db) return db.localeCompare(da); // com data vem antes de sem data
+    const da = dataValida(a.order.order_date);
+    const db = dataValida(b.order.order_date);
+    if (da !== db) {
+      if (!da) return 1; // sem data válida → sempre por último
+      if (!db) return -1;
+      return da.localeCompare(db) * dir;
+    }
     const na = Number(a.order.order_number);
     const nb = Number(b.order.order_number);
-    if (Number.isFinite(na) && Number.isFinite(nb)) return nb - na;
-    return b.order.order_number.localeCompare(a.order.order_number);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return (na - nb) * dir;
+    return a.order.order_number.localeCompare(b.order.order_number) * dir;
   });
+
+  // Link para alternar a ordenação preservando os filtros atuais.
+  const qs = (o: string) => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", searchParams.q ?? "");
+    if (channel) p.set("channel", channel);
+    if (status) p.set("status", status);
+    if (empresa) p.set("empresa", empresa);
+    p.set("ordem", o);
+    return `/orders?${p.toString()}`;
+  };
+  const proximaOrdem = ordem === "asc" ? "desc" : "asc";
 
   return (
     <>
@@ -163,10 +188,14 @@ export default async function OrdersPage({
             <Thead>
               <tr>
                 <Th>Pedido</Th>
-                <Th>Nº externo</Th>
+                <Th>Vendedor</Th>
                 <Th>Empresa</Th>
                 <Th>Cliente</Th>
-                <Th>Data</Th>
+                <Th>
+                  <Link href={qs(proximaOrdem)} className="inline-flex items-center gap-1 hover:text-brand-600">
+                    Data {ordem === "asc" ? "▲" : "▼"}
+                  </Link>
+                </Th>
                 <Th>Cidade/UF</Th>
                 <Th className="text-right">Valor</Th>
                 <Th>NF</Th>
@@ -184,14 +213,14 @@ export default async function OrdersPage({
                       #{v.order.order_number}
                     </Link>
                   </Td>
-                  <Td className="text-slate-500">{v.order.external_order_number ?? "—"}</Td>
+                  <Td className="text-slate-500">{v.order.seller ?? "—"}</Td>
                   <Td>
                     <Badge variant={(v.order as any).empresa === "ecopro" ? "muted" : "info"}>
                       {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NRX"}
                     </Badge>
                   </Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
-                  <Td className="text-slate-500">{v.order.order_date ? dateShort(v.order.order_date) : "—"}</Td>
+                  <Td className="text-slate-500">{dataValida(v.order.order_date) ? dateShort(v.order.order_date) : "—"}</Td>
                   <Td className="text-slate-500">{v.order.city ? `${v.order.city}/${v.order.state}` : "—"}</Td>
                   <Td className="text-right">{brl(v.order.total_value)}</Td>
                   <Td className="text-slate-500">{v.invoiceNumber ?? "—"}</Td>
