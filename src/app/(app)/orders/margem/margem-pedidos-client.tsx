@@ -97,7 +97,6 @@ function MargemBar({ pct, min }: { pct: number | null; min: number }) {
 }
 
 export function MargemPedidosClient({ orders }: { orders: Order[] }) {
-  const [params, setParams] = useState<Params>({ impostos: 7, comissao: 8, logistica: 7 });
   const [margemMin, setMargemMin] = useState(20);
   // costOverrides: sku → custo editado pelo usuário
   const [costOverrides, setCostOverrides] = useState<Record<string, number>>({});
@@ -112,8 +111,6 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
     setCostOverrides((prev) => ({ ...prev, [sku]: value }));
   }
 
-  const taxRate = (params.impostos + params.comissao + params.logistica) / 100;
-
   const rows = useMemo(() => {
     return orders.map((order) => {
       let receita = 0;
@@ -127,18 +124,18 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
         custoProdutos += cost * item.quantity;
       }
 
-      const custosOp = receita * taxRate;
-      const lucro = receita - custoProdutos - custosOp;
+      // O custo cadastrado já inclui os parâmetros operacionais — não somamos por cima.
+      const lucro = receita - custoProdutos;
       const margem = receita > 0 ? (lucro / receita) * 100 : null;
 
-      return { order, receita, custoProdutos, custosOp, lucro, margem, itensMapeados };
+      return { order, receita, custoProdutos, lucro, margem, itensMapeados };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, params, costOverrides]);
+  }, [orders, costOverrides]);
 
   const totalReceita = rows.reduce((s, r) => s + r.receita, 0);
   const totalLucro = rows.reduce((s, r) => s + r.lucro, 0);
-  const totalCusto = rows.reduce((s, r) => s + r.custoProdutos + r.custosOp, 0);
+  const totalCusto = rows.reduce((s, r) => s + r.custoProdutos, 0);
   const margemGeral = totalReceita > 0 ? (totalLucro / totalReceita) * 100 : 0;
   const semItens = orders.filter((o) => o.items.length === 0).length;
 
@@ -159,7 +156,7 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-800">Margem de Pedidos</h1>
-        <p className="text-sm text-slate-500">Margem real por pedido — edite custos e parâmetros ao lado</p>
+        <p className="text-sm text-slate-500">Margem real por pedido (custo já inclui operacional) — edite custos ao lado</p>
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -196,13 +193,12 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3 text-right">Receita</th>
                     <th className="px-4 py-3 text-right">C. Produto</th>
-                    <th className="px-4 py-3 text-right">C. Operac.</th>
                     <th className="px-4 py-3 text-right">Lucro</th>
                     <th className="px-4 py-3">Margem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {rows.map(({ order, receita, custoProdutos, custosOp, lucro, margem }) => (
+                  {rows.map(({ order, receita, custoProdutos, lucro, margem }) => (
                     <tr key={order.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <Link href={`/orders/${order.id}`} className="font-semibold text-brand-700 hover:underline">
@@ -213,7 +209,6 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
                       <td className="max-w-[140px] truncate px-4 py-3 text-slate-700">{order.customerName}</td>
                       <td className="px-4 py-3 text-right font-medium text-slate-800">{receita > 0 ? fmtBRL(receita) : "—"}</td>
                       <td className="px-4 py-3 text-right text-slate-600">{custoProdutos > 0 ? fmtBRL(custoProdutos) : "—"}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{custosOp > 0 ? fmtBRL(custosOp) : "—"}</td>
                       <td className={`px-4 py-3 text-right font-semibold ${lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                         {order.items.length > 0 ? fmtBRL(lucro) : "—"}
                       </td>
@@ -233,17 +228,13 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
 
         {/* Painel lateral */}
         <div className="flex flex-col gap-4 lg:w-72 shrink-0">
-          {/* Parâmetros */}
+          {/* Margem mínima (alerta) */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Parâmetros operacionais</h2>
-            <div className="space-y-3">
-              <Slider label="Impostos" value={params.impostos} onChange={(v) => setParams((p) => ({ ...p, impostos: v }))} />
-              <Slider label="Comissão" value={params.comissao} onChange={(v) => setParams((p) => ({ ...p, comissao: v }))} />
-              <Slider label="Logística" value={params.logistica} onChange={(v) => setParams((p) => ({ ...p, logistica: v }))} />
-              <Slider label="Margem mínima" value={margemMin} onChange={setMargemMin} />
-            </div>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">Margem mínima</h2>
+            <Slider label="Alerta abaixo de" value={margemMin} onChange={setMargemMin} />
             <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              Total operacional: <strong className="text-slate-700">{(params.impostos + params.comissao + params.logistica).toFixed(1)}%</strong>
+              O custo cadastrado já inclui impostos, comissão e logística. A margem é
+              calculada como <strong className="text-slate-700">(receita − custo) ÷ receita</strong>.
             </div>
           </div>
 
