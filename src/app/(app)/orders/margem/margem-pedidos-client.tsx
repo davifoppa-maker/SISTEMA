@@ -238,39 +238,16 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
             </div>
           </div>
 
-          {/* Custos de produto */}
+          {/* Origem dos custos */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-1 text-sm font-semibold text-slate-800">Custo dos produtos</h2>
-            <p className="mb-3 text-[10px] text-slate-400">Clique no valor para editar. Alterações aplicadas em tempo real.</p>
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {uniqueSkus.length === 0 && (
-                <p className="text-xs text-slate-400">Nenhum produto com SKU mapeado.</p>
-              )}
-              {uniqueSkus.map(({ sku, name, catalogCost }) => {
-                const currentCost = getCost(sku, catalogCost);
-                const isOverridden = costOverrides[sku] !== undefined;
-                return (
-                  <div key={sku} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-medium text-slate-700">{name}</div>
-                      <div className="font-mono text-[10px] text-slate-400">{sku}</div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isOverridden && (
-                        <button
-                          onClick={() => setCostOverrides((prev) => { const n = { ...prev }; delete n[sku]; return n; })}
-                          className="text-[10px] text-brand-600 hover:underline"
-                          title="Restaurar padrão"
-                        >
-                          ↺
-                        </button>
-                      )}
-                      <CostInput value={currentCost} onChange={(v) => setCost(sku, v)} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <h2 className="mb-1 text-sm font-semibold text-slate-800">Custos dos produtos</h2>
+            <p className="text-xs text-slate-500">
+              Os custos vêm da base central em <strong>Custos &amp; Preços</strong>.
+              Edite por lá — as mudanças refletem aqui automaticamente.
+            </p>
+            <a href="/catalogo" className="mt-3 inline-block text-xs font-medium text-brand-600 hover:underline">
+              Abrir Custos &amp; Preços →
+            </a>
           </div>
         </div>
       </div>
