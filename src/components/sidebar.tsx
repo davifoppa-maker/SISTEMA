@@ -75,6 +75,7 @@ const nav = [
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
+  { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
