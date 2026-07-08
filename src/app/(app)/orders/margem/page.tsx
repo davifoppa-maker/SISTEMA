@@ -9,9 +9,18 @@ export default async function OrdemMargemPage() {
   const [views, CATALOG] = await Promise.all([listOrderViewsFast(), getCatalog()]);
 
   const sb = getSupabaseAdmin();
-  const { data: allItems } = await sb
-    .from("order_items")
-    .select("order_id, sku, quantity, unit_value");
+  // Pagina TODOS os itens (o Supabase corta em 1000 por consulta).
+  const allItems: { order_id: string; sku: string | null; quantity: number; unit_value: number | null }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await sb
+      .from("order_items")
+      .select("order_id, sku, quantity, unit_value")
+      .order("order_id", { ascending: true })
+      .range(from, from + 999);
+    if (!data || data.length === 0) break;
+    allItems.push(...(data as any[]));
+    if (data.length < 1000) break;
+  }
 
   const itemsByOrder = new Map<string, { sku: string | null; quantity: number; unit_value: number }[]>();
   for (const item of allItems ?? []) {
