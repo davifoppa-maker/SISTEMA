@@ -25,6 +25,24 @@ export async function GET(req: Request) {
   const tables: Array<keyof DataStore> = ["orders", "order_items"];
   const store = await loadStoreFor(tables);
 
+  // Diagnóstico: mostra TODOS os pedidos sem itens (com e sem tiny_id).
+  if (url.searchParams.get("diag") === "1") {
+    const comItens = new Set(store.order_items.map((i) => i.order_id));
+    const sem = store.orders.filter((o) => !comItens.has(o.id));
+    return ok({
+      total_pedidos: store.orders.length,
+      sem_itens: sem.length,
+      sem_tiny_id: sem.filter((o) => !o.tiny_id).length,
+      com_tiny_id: sem.filter((o) => o.tiny_id).length,
+      amostra: sem.slice(0, 15).map((o) => ({
+        numero: o.order_number,
+        empresa: (o as any).empresa ?? "nyer",
+        tiny_id: o.tiny_id ?? null,
+        status: o.tiny_status,
+      })),
+    });
+  }
+
   const semItens = store.orders.filter((o) => {
     if (!o.tiny_id) return false;
     if (empresaFiltro && ((o as any).empresa ?? "nyer") !== empresaFiltro) return false;
