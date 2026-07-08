@@ -1,12 +1,12 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
-import { CATALOG } from "@/lib/product-costs";
+import { getCatalog } from "@/lib/catalog";
 import { MargemPedidosClient } from "./margem-pedidos-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdemMargemPage() {
-  const views = await listOrderViewsFast();
+  const [views, CATALOG] = await Promise.all([listOrderViewsFast(), getCatalog()]);
 
   const sb = getSupabaseAdmin();
   const { data: allItems } = await sb
