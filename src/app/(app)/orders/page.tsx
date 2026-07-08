@@ -164,7 +164,7 @@ export default async function OrdersPage({
               <tr>
                 <Th>Pedido</Th>
                 <Th>Nº externo</Th>
-                <Th>Canal</Th>
+                <Th>Empresa</Th>
                 <Th>Cliente</Th>
                 <Th>Data</Th>
                 <Th>Cidade/UF</Th>
@@ -186,16 +186,9 @@ export default async function OrdersPage({
                   </Td>
                   <Td className="text-slate-500">{v.order.external_order_number ?? "—"}</Td>
                   <Td>
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant={v.order.channel === "b2b_mercos" ? "info" : "muted"}>
-                          {v.order.order_origin ?? CHANNEL_LABELS[v.order.channel] ?? v.order.channel}
-                        </Badge>
-                        <span className="text-[10px] font-semibold text-slate-400">
-                          {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NYER"}
-                        </span>
-                      </div>
-                    </div>
+                    <Badge variant={(v.order as any).empresa === "ecopro" ? "muted" : "info"}>
+                      {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NRX"}
+                    </Badge>
                   </Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
                   <Td className="text-slate-500">{v.order.order_date ? dateShort(v.order.order_date) : "—"}</Td>
