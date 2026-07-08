@@ -184,7 +184,7 @@ function LiquidoCell({ value, onSet }: { value: number; onSet: (v: number) => vo
   );
 }
 
-export function MargemClient() {
+export function MargemClient({ catalog = CATALOG }: { catalog?: Product[] }) {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [params, setParams] = useState<Params>({ impostos: 7, comissao: 8, logistica: 7, margemMin: 20 });
   const [search, setSearch] = useState("");
@@ -195,8 +195,8 @@ export function MargemClient() {
   const filteredCatalog = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return [];
-    return CATALOG.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 10);
-  }, [search]);
+    return catalog.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 10);
+  }, [search, catalog]);
 
   function getQty(sku: string) {
     return items.find((i) => i.sku === sku)?.qty ?? 0;
@@ -218,7 +218,7 @@ export function MargemClient() {
   const calculations = useMemo(() => {
     const orderProducts = items
       .map((item) => {
-        const product = CATALOG.find((p) => p.sku === item.sku)!;
+        const product = catalog.find((p) => p.sku === item.sku)!;
         return { product, qty: item.qty };
       })
       .filter((i) => i.product);
@@ -265,7 +265,7 @@ export function MargemClient() {
       volumeProgress,
       orderProducts,
     };
-  }, [items, params, liquidoOverrides]);
+  }, [items, params, liquidoOverrides, catalog]);
 
   const { level, mixPct, totalTabela, volumeProgress, nextLevel, receita, custoProdutos, custosOperacionais, lucro, margemPct, orderProducts, discount } = calculations;
 

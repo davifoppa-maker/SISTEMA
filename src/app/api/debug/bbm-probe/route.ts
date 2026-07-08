@@ -76,5 +76,32 @@ export async function GET(req: Request) {
     }
   }
 
-  return ok({ base, temUsuario: Boolean(c.usuario), temSenha: Boolean(c.senha), resultados, specs });
+  // Baixa o swagger.json completo e extrai auth + parâmetros de cada endpoint.
+  let detalhe: unknown = null;
+  try {
+    const res = await fetch(`${base}/swagger.json`, { headers: { Accept: "application/json" } });
+    const spec = await res.json();
+    const paths: Record<string, any> = spec.paths ?? {};
+    const endpoints: Record<string, unknown> = {};
+    for (const [p, methods] of Object.entries(paths)) {
+      for (const [m, def] of Object.entries(methods as Record<string, any>)) {
+        endpoints[`${m.toUpperCase()} ${p}`] = {
+          resumo: def.summary ?? def.description ?? null,
+          parametros: (def.parameters ?? []).map((pr: any) => ({ nome: pr.name, em: pr.in, obrigatorio: pr.required, tipo: pr.type ?? pr.schema?.type })),
+          body: def.requestBody?.content ? Object.keys(def.requestBody.content) : undefined,
+        };
+      }
+    }
+    detalhe = {
+      titulo: spec.info?.title,
+      securityDefinitions: spec.securityDefinitions ?? spec.components?.securitySchemes ?? null,
+      security: spec.security ?? null,
+      basePath: spec.basePath ?? spec.servers ?? null,
+      endpoints,
+    };
+  } catch (err) {
+    detalhe = { erro: err instanceof Error ? err.message : String(err) };
+  }
+
+  return ok({ base, temUsuario: Boolean(c.usuario), temSenha: Boolean(c.senha), specs, detalhe });
 }
