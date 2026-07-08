@@ -15,8 +15,23 @@ interface Order {
   id: string;
   order_number: string;
   tiny_status: string | null;
+  order_date: string | null;
+  empresa: string;
   customerName: string;
   items: OrderItem[];
+}
+
+function dataValida(d: string | null): string {
+  if (!d) return "";
+  const ano = Number(String(d).slice(0, 4));
+  return ano >= 2015 && ano <= 2030 ? String(d) : "";
+}
+
+function fmtData(d: string | null): string {
+  const v = dataValida(d);
+  if (!v) return "—";
+  const [y, m, dd] = v.slice(0, 10).split("-");
+  return `${dd}/${m}/${y}`;
 }
 
 interface Params {
@@ -129,6 +144,13 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
       const margem = receita > 0 ? (lucro / receita) * 100 : null;
 
       return { order, receita, custoProdutos, lucro, margem, itensMapeados };
+    }).sort((a, b) => {
+      // Mais recente primeiro; sem data válida vai para o fim.
+      const da = dataValida(a.order.order_date);
+      const db = dataValida(b.order.order_date);
+      if (da !== db) { if (!da) return 1; if (!db) return -1; return db.localeCompare(da); }
+      const na = Number(a.order.order_number), nb = Number(b.order.order_number);
+      return Number.isFinite(na) && Number.isFinite(nb) ? nb - na : b.order.order_number.localeCompare(a.order.order_number);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, costOverrides]);
@@ -190,6 +212,7 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-3">Pedido</th>
+                    <th className="px-4 py-3">Data</th>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3 text-right">Receita</th>
                     <th className="px-4 py-3 text-right">C. Produto</th>
@@ -204,8 +227,9 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
                         <Link href={`/orders/${order.id}`} className="font-semibold text-brand-700 hover:underline">
                           #{order.order_number}
                         </Link>
-                        <div className="text-[10px] text-slate-400">{order.tiny_status ?? "—"}</div>
+                        <div className="text-[10px] text-slate-400">{order.empresa === "ecopro" ? "Ecopro" : "NRX"} · {order.tiny_status ?? "—"}</div>
                       </td>
+                      <td className="px-4 py-3 text-slate-500">{fmtData(order.order_date)}</td>
                       <td className="max-w-[140px] truncate px-4 py-3 text-slate-700">{order.customerName}</td>
                       <td className="px-4 py-3 text-right font-medium text-slate-800">{receita > 0 ? fmtBRL(receita) : "—"}</td>
                       <td className="px-4 py-3 text-right text-slate-600">{custoProdutos > 0 ? fmtBRL(custoProdutos) : "—"}</td>
