@@ -61,12 +61,14 @@ function StatusPill({ status }: { status: string | null }) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; channel?: string; status?: string; empresa?: string; ordem?: string };
+  searchParams: { q?: string; channel?: string; status?: string; empresa?: string; ordem?: string; de?: string; ate?: string };
 }) {
   const q = (searchParams.q ?? "").toLowerCase();
   const channel = searchParams.channel ?? "";
   const status = searchParams.status ?? "";
   const empresa = searchParams.empresa ?? "";
+  const de = searchParams.de ?? "";   // data inicial (YYYY-MM-DD)
+  const ate = searchParams.ate ?? ""; // data final (YYYY-MM-DD)
   const ordem = searchParams.ordem === "asc" ? "asc" : "desc"; // padrão: mais recente primeiro
 
   // Data válida = ano plausível (2015–2030). Descarta datas quebradas (ex.: 2096).
@@ -92,6 +94,9 @@ export default async function OrdersPage({
   if (channel) views = views.filter((v) => v.order.channel === channel);
   if (status) views = views.filter((v) => v.order.tiny_status === status);
   if (empresa) views = views.filter((v) => ((v.order as any).empresa ?? "nyer") === empresa);
+  // Filtro por período (data do pedido, YYYY-MM-DD).
+  if (de) views = views.filter((v) => (v.order.order_date ?? "").slice(0, 10) >= de);
+  if (ate) views = views.filter((v) => (v.order.order_date ?? "").slice(0, 10) <= ate);
 
   // Ordena pela DATA do pedido (padrão decrescente; clique alterna). Datas
   // inválidas vão para o fim; empate cai pelo número do pedido.
@@ -117,6 +122,8 @@ export default async function OrdersPage({
     if (channel) p.set("channel", channel);
     if (status) p.set("status", status);
     if (empresa) p.set("empresa", empresa);
+    if (de) p.set("de", de);
+    if (ate) p.set("ate", ate);
     p.set("ordem", o);
     return `/orders?${p.toString()}`;
   };
@@ -171,6 +178,14 @@ export default async function OrdersPage({
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+            </div>
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">De (data)</label>
+              <input type="date" name="de" defaultValue={de} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
+            </div>
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Até (data)</label>
+              <input type="date" name="ate" defaultValue={ate} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
             </div>
             <button className="h-10 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
               Filtrar
