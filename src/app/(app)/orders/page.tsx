@@ -85,6 +85,18 @@ export default async function OrdersPage({
   if (status) views = views.filter((v) => v.order.tiny_status === status);
   if (empresa) views = views.filter((v) => ((v.order as any).empresa ?? "nyer") === empresa);
 
+  // Ordena pela DATA do pedido (mais recente primeiro); sem data cai pelo número.
+  views = [...views].sort((a, b) => {
+    const da = a.order.order_date ?? "";
+    const db = b.order.order_date ?? "";
+    if (da && db && da !== db) return db.localeCompare(da);
+    if (da !== db) return db.localeCompare(da); // com data vem antes de sem data
+    const na = Number(a.order.order_number);
+    const nb = Number(b.order.order_number);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return nb - na;
+    return b.order.order_number.localeCompare(a.order.order_number);
+  });
+
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -154,6 +166,7 @@ export default async function OrdersPage({
                 <Th>Nº externo</Th>
                 <Th>Canal</Th>
                 <Th>Cliente</Th>
+                <Th>Data</Th>
                 <Th>Cidade/UF</Th>
                 <Th className="text-right">Valor</Th>
                 <Th>NF</Th>
@@ -185,6 +198,7 @@ export default async function OrdersPage({
                     </div>
                   </Td>
                   <Td className="max-w-[180px] truncate">{v.customerName}</Td>
+                  <Td className="text-slate-500">{v.order.order_date ? dateShort(v.order.order_date) : "—"}</Td>
                   <Td className="text-slate-500">{v.order.city ? `${v.order.city}/${v.order.state}` : "—"}</Td>
                   <Td className="text-right">{brl(v.order.total_value)}</Td>
                   <Td className="text-slate-500">{v.invoiceNumber ?? "—"}</Td>
