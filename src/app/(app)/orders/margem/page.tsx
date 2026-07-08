@@ -24,6 +24,8 @@ export default async function OrdemMargemPage() {
     id: v.order.id,
     order_number: v.order.order_number,
     tiny_status: v.order.tiny_status,
+    order_date: v.order.order_date ?? null,
+    empresa: (v.order as any).empresa ?? "nyer",
     customerName: v.customerName,
     items: (itemsByOrder.get(v.order.id) ?? []).map((i) => {
       const catalogProduct = CATALOG.find((p) => p.sku === i.sku);
