@@ -186,7 +186,9 @@ function LiquidoCell({ value, onSet }: { value: number; onSet: (v: number) => vo
 
 export function MargemClient({ catalog = CATALOG }: { catalog?: Product[] }) {
   const [items, setItems] = useState<OrderItem[]>([]);
-  const [params, setParams] = useState<Params>({ impostos: 7, comissao: 8, logistica: 7, margemMin: 20 });
+  // Os parâmetros operacionais já estão embutidos no CUSTO cadastrado, então
+  // ficam zerados aqui (não somamos de novo por cima da receita).
+  const [params, setParams] = useState<Params>({ impostos: 0, comissao: 0, logistica: 0, margemMin: 20 });
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   // Overrides de preço líquido por SKU (quando usuário edita manualmente)
