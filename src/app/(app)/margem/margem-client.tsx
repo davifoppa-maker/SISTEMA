@@ -349,11 +349,24 @@ export function MargemClient({ catalog = CATALOG }: { catalog?: Product[] }) {
                     {orderProducts.map(({ product, qty }) => {
                       const netUnit = liquidoOverrides[product.sku] ?? product.tabela * (1 - discount);
                       const isOverridden = liquidoOverrides[product.sku] !== undefined;
+                      // Margem do item: (líquido - custo) / líquido. Alerta se abaixo do mínimo.
+                      const itemMargem = netUnit > 0 ? ((netUnit - product.cost) / netUnit) * 100 : 0;
+                      const prejuizo = itemMargem < 0;
+                      const abaixo = itemMargem < PONTOS_MIN;
                       return (
-                        <tr key={product.sku} className="hover:bg-slate-50">
+                        <tr key={product.sku} className={prejuizo ? "bg-red-500/10" : abaixo ? "bg-amber-500/10" : "hover:bg-slate-50"}>
                           <td className="px-4 py-2">
                             <div className="font-medium text-slate-800">{product.name}</div>
-                            <div className="font-mono text-[10px] text-slate-400">{product.sku}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[10px] text-slate-400">{product.sku}</span>
+                              {prejuizo ? (
+                                <span className="rounded bg-red-500/20 px-1.5 text-[10px] font-bold text-red-400">⚠️ PREJUÍZO ({itemMargem.toFixed(0)}%)</span>
+                              ) : abaixo ? (
+                                <span className="rounded bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-400">⚠️ margem baixa ({itemMargem.toFixed(0)}%)</span>
+                              ) : (
+                                <span className="rounded bg-emerald-500/15 px-1.5 text-[10px] font-medium text-emerald-400">{itemMargem.toFixed(0)}%</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-2 text-right">
                             <QtyCell qty={qty} onSet={(v) => setQty(product.sku, v)} />
