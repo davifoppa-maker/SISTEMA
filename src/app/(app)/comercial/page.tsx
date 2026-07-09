@@ -1,6 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
+import { buildSellerCanonicalizer } from "@/lib/seller";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -47,13 +48,16 @@ export default async function ComercialPage({
     return dia >= de && dia <= ate;
   };
 
+  // Canonicaliza o nome do vendedor (junta variações/nome parcial x completo).
+  const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
+
   // Carteira total = todos os clientes que já compraram (qualquer data).
   const carteiraGlobal = new Set<string>();
   const carteiraPorVendedor = new Map<string, Set<string>>();
   for (const v of views) {
     if (v.order.customer_id) {
       carteiraGlobal.add(v.order.customer_id);
-      const sel = v.order.seller ?? "Sem vendedor";
+      const sel = sellerOf(v.order.seller);
       if (!carteiraPorVendedor.has(sel)) carteiraPorVendedor.set(sel, new Set());
       carteiraPorVendedor.get(sel)!.add(v.order.customer_id);
     }
@@ -82,7 +86,7 @@ export default async function ComercialPage({
     // Se o pedido não tem itens mapeados, usa o total_value como receita.
     if (receita === 0) receita = v.order.total_value ?? 0;
 
-    const sel = v.order.seller ?? "Sem vendedor";
+    const sel = sellerOf(v.order.seller);
     const a = porVendedor.get(sel) ?? { faturamento: 0, custo: 0, pedidos: 0, clientes: new Set() };
     a.faturamento += receita;
     a.custo += custo;
