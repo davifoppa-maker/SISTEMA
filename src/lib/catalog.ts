@@ -15,6 +15,56 @@ import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/db/supabase-store"
 //     updated_at timestamptz not null default now()
 //   );
 
+/**
+ * Cadastra automaticamente na tabela `catalog_custos` qualquer produto que
+ * apareça em pedidos (order_items) e AINDA não esteja no catálogo (estático + banco).
+ * Entra com custo 0 (para o usuário preencher depois na aba Custos & Preços).
+ * Retorna quantos produtos novos foram adicionados.
+ */
+export async function syncUnknownProducts(): Promise<{ adicionados: number; skus: string[] }> {
+  if (!isSupabaseConfigured()) return { adicionados: 0, skus: [] };
+  const sb = getSupabaseAdmin();
+
+  // SKUs já conhecidos (catálogo estático + overrides do banco).
+  const catalog = await getCatalog();
+  const conhecidos = new Set(catalog.map((p) => p.sku));
+
+  // Todos os itens vendidos (sku + descrição), paginado.
+  const vistos = new Map<string, string>(); // sku → melhor descrição
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb
+      .from("order_items")
+      .select("sku, description")
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error || !data || data.length === 0) break;
+    for (const it of data as any[]) {
+      const sku = (it.sku ?? "").trim();
+      if (!sku || conhecidos.has(sku)) continue;
+      if (!vistos.has(sku) || (it.description && !vistos.get(sku))) vistos.set(sku, it.description ?? sku);
+    }
+    if (data.length < 1000) break;
+  }
+
+  const novos = [...vistos.entries()];
+  if (novos.length === 0) return { adicionados: 0, skus: [] };
+
+  const rows = novos.map(([sku, desc]) => ({
+    sku,
+    name: desc || sku,
+    tabela: 0,
+    cost: 0,
+    // Heurística de tipo: whey/protein/hydro/beff = proteico; senão não-proteico.
+    type: /whey|protein|hydro|beff|caseina|albumina/i.test(desc || "") ? "proteico" : "nao_proteico",
+    updated_at: new Date().toISOString(),
+  }));
+
+  // Não sobrescreve o que já existir (ignoreDuplicates).
+  const { error } = await sb.from("catalog_custos").upsert(rows, { onConflict: "sku", ignoreDuplicates: true });
+  if (error) return { adicionados: 0, skus: [] };
+  return { adicionados: rows.length, skus: rows.map((r) => r.sku) };
+}
+
 export async function getCatalog(): Promise<Product[]> {
   if (!isSupabaseConfigured()) return CATALOG;
 

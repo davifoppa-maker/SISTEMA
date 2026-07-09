@@ -3,6 +3,7 @@ import { ok } from "@/lib/api";
 import { ingestOrder, enrichOrderItems } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, getValidAccessToken, isTinyConnected } from "@/lib/services/tiny-api";
+import { syncUnknownProducts } from "@/lib/catalog";
 import { nowIso, uuid } from "@/lib/utils/ids";
 import type { DataStore } from "@/lib/types";
 
@@ -77,6 +78,14 @@ async function run() {
     }
   } catch (e) {
     diag.syncErr = e instanceof Error ? e.message : String(e);
+  }
+
+  // Cadastra na aba Custos & Preços qualquer produto vendido sem custo (custo 0).
+  try {
+    const r = await syncUnknownProducts();
+    diag.produtosNovos = r.adicionados;
+  } catch (e) {
+    diag.produtosErr = e instanceof Error ? e.message : String(e);
   }
 
   return ok({ synced, diag });
