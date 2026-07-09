@@ -47,7 +47,7 @@ export async function syncUnknownProducts(): Promise<{ adicionados: number; skus
       const sku = (it.sku ?? "").trim();
       if (!sku || conhecidos.has(sku)) continue;
       // Se casa com um produto padrão, é divergente (será normalizado) — não cadastra.
-      if (matchStandard(it.description ?? "")) continue;
+      if (matchStandard(it.description ?? "", sku)) continue;
       if (!vistos.has(sku) || (it.description && !vistos.get(sku))) vistos.set(sku, it.description ?? sku);
     }
     if (data.length < 1000) break;

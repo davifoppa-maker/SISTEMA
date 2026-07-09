@@ -31,6 +31,22 @@ function sizeTokens(norm: string): string[] {
   return out;
 }
 
+// Sinônimos / variações de grafia -> forma canônica (do catálogo).
+// Ex.: "refil" (1 L) e "refill" (2 L) são o mesmo; "hidro" e "hydro" idem.
+const SYN: Record<string, string> = {
+  refil: "refill",
+  refill: "refill",
+  hidro: "hydro",
+  hydro: "hydro",
+  proteina: "protein",
+  protein: "protein",
+  pre: "pre",
+  pré: "pre",
+  workout: "workout",
+  monoidratada: "monohidratada",
+  monohidratada: "monohidratada",
+};
+
 // Conjunto de tokens "significativos" de um texto (para comparação).
 function tokens(text: string): { words: Set<string>; sizes: Set<string> } {
   const norm = stripAccents((text || "").toLowerCase());
@@ -40,9 +56,15 @@ function tokens(text: string): { words: Set<string>; sizes: Set<string> } {
     if (!w || STOP.has(w)) continue;
     if (/^\d+$/.test(w)) continue; // números soltos entram via sizes
     if (w.length < 2) continue;
-    words.add(w);
+    words.add(SYN[w] ?? w);
   }
   return { words, sizes };
+}
+
+// Sinaliza que o item é um produto NYER (só unificamos produto Nyer com o
+// catálogo padrão Nyer — evita casar linha da Ecopro/Lab Skull por engano).
+function ehNyer(description: string, sku?: string | null): boolean {
+  return /nyer/i.test(description || "") || /^nyer/i.test((sku || "").trim());
 }
 
 // Pré-computa a assinatura de cada produto padrão do catálogo estático.
@@ -55,7 +77,9 @@ const CATALOG_SIG: { p: Product; words: Set<string>; sizes: Set<string> }[] = CA
  * Casa uma descrição de item com um produto PADRÃO do catálogo estático.
  * Retorna o produto canônico apenas quando o casamento é único e confiante.
  */
-export function matchStandard(description: string): Product | null {
+export function matchStandard(description: string, sku?: string | null): Product | null {
+  // Só unifica com o catálogo padrão (100% Nyer) quando o item é Nyer.
+  if (!ehNyer(description, sku)) return null;
   const t = tokens(description);
   if (t.words.size === 0) return null;
 
@@ -123,7 +147,7 @@ export async function normalizarSkus(apply: boolean): Promise<{
 
   const mapeados: NormMapping[] = [];
   for (const [sku, { desc, linhas }] of info) {
-    const std = matchStandard(desc);
+    const std = matchStandard(desc, sku);
     if (!std || std.sku === sku) continue;
     mapeados.push({ from: sku, to: std.sku, descricao: desc, produto: std.name, linhas });
   }
