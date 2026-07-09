@@ -77,6 +77,7 @@ const nav = [
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
   { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
   { href: "/alertas", label: "Alertas Comerciais", icon: AlertTriangle },
+  { href: "/comercial", label: "Dashboard Comercial", icon: TrendingUp },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
