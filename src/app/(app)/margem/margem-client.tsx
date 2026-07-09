@@ -271,6 +271,50 @@ export function MargemClient({ catalog = CATALOG }: { catalog?: Product[] }) {
 
   const { level, mixPct, totalTabela, volumeProgress, nextLevel, receita, custoProdutos, custosOperacionais, lucro, margemPct, orderProducts, discount } = calculations;
 
+  const [cliente, setCliente] = useState("");
+
+  // Gera o ORÇAMENTO em PDF (via impressão do navegador) — SEM custo/margem/pontos.
+  function baixarOrcamento() {
+    if (orderProducts.length === 0) return;
+    const linhas = orderProducts.map(({ product, qty }) => {
+      const netUnit = liquidoOverrides[product.sku] ?? product.tabela * (1 - discount);
+      return `<tr>
+        <td>${product.name}</td>
+        <td style="text-align:center">${qty}</td>
+        <td style="text-align:right">${fmtBRL(netUnit)}</td>
+        <td style="text-align:right">${fmtBRL(netUnit * qty)}</td>
+      </tr>`;
+    }).join("");
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+      <title>Orçamento NYER</title>
+      <style>
+        *{font-family:Arial,Helvetica,sans-serif;color:#1e293b}
+        body{margin:32px}
+        h1{color:#6d28d9;margin:0 0 2px}
+        .sub{color:#64748b;font-size:12px;margin-bottom:16px}
+        .box{border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th{background:#f1f5f9;text-align:left;padding:8px;border-bottom:2px solid #e2e8f0}
+        td{padding:8px;border-bottom:1px solid #f1f5f9}
+        .total{text-align:right;font-size:16px;font-weight:bold;margin-top:12px}
+        .foot{margin-top:24px;font-size:11px;color:#94a3b8}
+      </style></head><body>
+      <h1>NYER — Orçamento</h1>
+      <div class="sub">Nyer Suplementos · CNPJ 51.579.683/0001-14 · Brusque/SC · ${hoje}</div>
+      ${cliente ? `<div class="box"><strong>Cliente:</strong> ${cliente}</div>` : ""}
+      <table>
+        <thead><tr><th>Produto</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div class="total">Total: ${fmtBRL(receita)}</div>
+      <div class="foot">Orçamento gerado pela NYER. Valores sujeitos a confirmação. Validade: 7 dias.</div>
+      <script>window.onload=function(){window.print();}</script>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  }
+
   return (
     <div className="-mx-4 -mt-16 min-h-screen bg-[radial-gradient(ellipse_at_top,_#3b0764_0%,_#1e1b4b_45%,_#0f172a_100%)] px-4 pt-16 text-white sm:-mx-6 sm:px-6 md:-mt-6 md:pt-6">
       <div className="mb-4">
@@ -331,7 +375,23 @@ export function MargemClient({ catalog = CATALOG }: { catalog?: Product[] }) {
           {orderProducts.length > 0 && (
             <div className="rounded-xl border border-white/15 bg-white/5 shadow-lg backdrop-blur-md">
               <div className="border-b border-white/10 px-4 py-3">
-                <h2 className="text-sm font-semibold text-white">🛒 Itens do pedido</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-white">🛒 Itens do pedido</h2>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={cliente}
+                      onChange={(e) => setCliente(e.target.value)}
+                      placeholder="Cliente (opcional)"
+                      className="h-8 rounded-lg border border-white/15 bg-white/10 px-2 text-xs text-white placeholder-violet-200/50 outline-none focus:border-fuchsia-400"
+                    />
+                    <button
+                      onClick={baixarOrcamento}
+                      className="h-8 rounded-lg bg-white/15 px-3 text-xs font-semibold text-white hover:bg-white/25"
+                    >
+                      📄 Baixar orçamento (PDF)
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
