@@ -72,7 +72,13 @@ export async function syncUnknownProducts(): Promise<{ adicionados: number; skus
   return { adicionados: rows.length, skus: rows.map((r) => r.sku) };
 }
 
-export async function getCatalog(): Promise<Product[]> {
+/**
+ * @param incluirNovos quando false, retorna SÓ os produtos do catálogo PADRÃO
+ * (SKUs definidos no código), aplicando os overrides de custo/preço do banco,
+ * mas SEM os produtos auto-cadastrados (divergentes/zerados). Usado no Gestor
+ * de Margem, que só trabalha com os SKUs padrão.
+ */
+export async function getCatalog(incluirNovos = true): Promise<Product[]> {
   if (!isSupabaseConfigured()) return CATALOG;
 
   try {
@@ -97,7 +103,8 @@ export async function getCatalog(): Promise<Product[]> {
       };
     });
 
-    // Produtos NOVOS (só no banco) entram no fim.
+    // Produtos NOVOS (só no banco) entram no fim — a não ser que sejam excluídos.
+    if (!incluirNovos) return merged;
     for (const [sku, o] of overrides) {
       merged.push({
         sku,
