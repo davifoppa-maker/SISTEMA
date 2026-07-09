@@ -1,5 +1,6 @@
 import { CATALOG, type Product, type ProductType } from "@/lib/product-costs";
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/db/supabase-store";
+import { normalizarSkus, matchStandard } from "@/lib/sku-normalize";
 
 // Catálogo do Gestor de Margem = catálogo estático (código) MESCLADO com os
 // ajustes salvos no banco (tabela `catalog_custos`). Assim os custos/preços
@@ -25,6 +26,10 @@ export async function syncUnknownProducts(): Promise<{ adicionados: number; skus
   if (!isSupabaseConfigured()) return { adicionados: 0, skus: [] };
   const sb = getSupabaseAdmin();
 
+  // PENEIRA primeiro: SKUs divergentes que casam com um produto padrão viram o
+  // SKU padrão (nos pedidos) — assim não são cadastrados como duplicata.
+  try { await normalizarSkus(true); } catch { /* segue mesmo se falhar */ }
+
   // SKUs já conhecidos (catálogo estático + overrides do banco).
   const catalog = await getCatalog();
   const conhecidos = new Set(catalog.map((p) => p.sku));
@@ -41,6 +46,8 @@ export async function syncUnknownProducts(): Promise<{ adicionados: number; skus
     for (const it of data as any[]) {
       const sku = (it.sku ?? "").trim();
       if (!sku || conhecidos.has(sku)) continue;
+      // Se casa com um produto padrão, é divergente (será normalizado) — não cadastra.
+      if (matchStandard(it.description ?? "")) continue;
       if (!vistos.has(sku) || (it.description && !vistos.get(sku))) vistos.set(sku, it.description ?? sku);
     }
     if (data.length < 1000) break;
