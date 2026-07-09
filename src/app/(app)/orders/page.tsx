@@ -144,6 +144,14 @@ export default async function OrdersPage({
       <Card className="mb-4">
         <CardContent>
           <form className="flex flex-wrap items-end gap-3" method="get">
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">De (data)</label>
+              <input type="date" name="de" defaultValue={de} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
+            </div>
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Até (data)</label>
+              <input type="date" name="ate" defaultValue={ate} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
+            </div>
             <div className="flex-1 min-w-[220px]">
               <label className="mb-1 block text-xs font-medium text-slate-600">Buscar</label>
               <input
@@ -178,14 +186,6 @@ export default async function OrdersPage({
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-            </div>
-            <div className="min-w-[140px]">
-              <label className="mb-1 block text-xs font-medium text-slate-600">De (data)</label>
-              <input type="date" name="de" defaultValue={de} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
-            </div>
-            <div className="min-w-[140px]">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Até (data)</label>
-              <input type="date" name="ate" defaultValue={ate} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-600" />
             </div>
             <button className="h-10 rounded-lg bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-800">
               Filtrar
