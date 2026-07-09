@@ -133,6 +133,7 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
       let itensMapeados = 0;
 
       for (const item of order.items) {
+        if (item.unit_value <= 0) continue; // bonificado (valor 0): fora da margem
         receita += item.unit_value * item.quantity;
         const cost = getCost(item.sku, item.catalog_cost);
         if (cost > 0) itensMapeados++;

@@ -44,6 +44,7 @@ export default async function AlertasPage() {
     let temCusto = false;
     const itensRuins: { nome: string; margem: number }[] = [];
     for (const i of its) {
+      if (i.unit_value <= 0) continue; // bonificado: fora da margem
       const c = custoDe(i.sku);
       const total = i.unit_value * i.quantity;
       receita += total;

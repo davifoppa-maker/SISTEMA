@@ -74,7 +74,9 @@ export default async function ComercialPage({
     const its = itemsByOrder.get(v.order.id) ?? [];
     let receita = 0, custo = 0;
     for (const i of its) {
-      const tot = (i.unit_value ?? 0) * i.quantity;
+      const val = i.unit_value ?? 0;
+      if (val <= 0) continue; // item bonificado (valor 0) NÃO entra na margem
+      const tot = val * i.quantity;
       receita += tot;
       custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
       // ABC por produto (receita).
@@ -83,8 +85,13 @@ export default async function ComercialPage({
       e.receita += tot;
       abcMap.set(key, e);
     }
-    // Se o pedido não tem itens mapeados, usa o total_value como receita.
-    if (receita === 0) receita = v.order.total_value ?? 0;
+    // Sem itens pagos: usa total_value só se o pedido NÃO for zerado.
+    // Pedido zerado/bonificado é desconsiderado do comercial (vai p/ Bonificados).
+    if (receita === 0) {
+      const tv = v.order.total_value ?? 0;
+      if (tv <= 0) continue;
+      receita = tv;
+    }
 
     const sel = sellerOf(v.order.seller);
     const a = porVendedor.get(sel) ?? { faturamento: 0, custo: 0, pedidos: 0, clientes: new Set() };
