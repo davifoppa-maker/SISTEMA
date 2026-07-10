@@ -106,6 +106,7 @@ export default async function ComercialPage({
   }
 
   const vendedores = [...porVendedor.entries()]
+    .filter(([, a]) => a.faturamento > 0) // ignora vendedores com venda zerada
     .map(([nome, a]) => {
       const carteira = carteiraPorVendedor.get(nome)?.size ?? a.clientes.size;
       return {

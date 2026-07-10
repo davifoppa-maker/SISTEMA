@@ -47,16 +47,19 @@ export function buildSellerCanonicalizer(rawNames: Iterable<string | null | unde
   for (const k of keys) {
     const words = k.split(" ");
     if (words.length < 2) { canonicalKey.set(k, k); continue; }
-    // Procura o nome MAIS LONGO do qual `k` é prefixo de palavras.
+    // Procura o nome MAIS LONGO que "contém" o nome `k`: mesmo primeiro nome e
+    // todas as palavras de `k` presentes (não precisa ser prefixo contíguo, para
+    // pegar variações como "Amanda de Castilhos" x "Amanda Castilhos Angioletti").
     let best = k;
     let bestLen = words.length;
     for (const other of keys) {
       if (other === k) continue;
       const ow = other.split(" ");
       if (ow.length <= bestLen) continue;
-      let isPrefix = true;
-      for (let i = 0; i < words.length; i++) if (ow[i] !== words[i]) { isPrefix = false; break; }
-      if (isPrefix) { best = other; bestLen = ow.length; }
+      if (ow[0] !== words[0]) continue; // mesmo primeiro nome
+      let contains = true;
+      for (const w of words) if (!ow.includes(w)) { contains = false; break; }
+      if (contains) { best = other; bestLen = ow.length; }
     }
     canonicalKey.set(k, best);
   }
