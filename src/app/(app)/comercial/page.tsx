@@ -51,11 +51,22 @@ export default async function ComercialPage({
   // Canonicaliza o nome do vendedor (junta variações/nome parcial x completo).
   const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
 
-  // Carteira total = todos os clientes que já compraram (qualquer data).
+  // Receita "de venda" de um pedido (só itens com valor > 0; fallback total_value).
+  // Pedido ZERADO (parceria/bonificação) retorna 0 e é desconsiderado.
+  const receitaDeVenda = (orderId: string, totalValue: number | null): number => {
+    const its = itemsByOrder.get(orderId) ?? [];
+    let r = 0;
+    for (const i of its) { const val = i.unit_value ?? 0; if (val > 0) r += val * i.quantity; }
+    if (r === 0) { const tv = totalValue ?? 0; return tv > 0 ? tv : 0; }
+    return r;
+  };
+  const pedidoEhVenda = (v: (typeof views)[number]) => receitaDeVenda(v.order.id, v.order.total_value) > 0;
+
+  // Carteira = clientes que já compraram (venda real; pedido zerado não conta).
   const carteiraGlobal = new Set<string>();
   const carteiraPorVendedor = new Map<string, Set<string>>();
   for (const v of views) {
-    if (v.order.customer_id) {
+    if (v.order.customer_id && pedidoEhVenda(v)) {
       carteiraGlobal.add(v.order.customer_id);
       const sel = sellerOf(v.order.seller);
       if (!carteiraPorVendedor.has(sel)) carteiraPorVendedor.set(sel, new Set());

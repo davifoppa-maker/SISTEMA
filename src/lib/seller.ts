@@ -5,6 +5,12 @@
 
 export const SEM_VENDEDOR = "Sem vendedor";
 
+// Apelidos EXPLÍCITOS de vendedor: chave normalizada (sem acento/minúscula) ->
+// nome canônico. Garante a união mesmo quando a heurística automática não pega.
+const SELLER_ALIASES: Record<string, string> = {
+  "amanda de castilhos": "Amanda de Castilhos Angioletti",
+};
+
 function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
@@ -68,7 +74,9 @@ export function buildSellerCanonicalizer(rawNames: Iterable<string | null | unde
     const disp = normSeller(raw);
     if (disp === SEM_VENDEDOR) return SEM_VENDEDOR;
     const k = key(disp);
+    if (SELLER_ALIASES[k]) return SELLER_ALIASES[k]; // apelido explícito
     const canonK = canonicalKey.get(k) ?? k;
-    return displayByKey.get(canonK) ?? disp;
+    const canonDisp = displayByKey.get(canonK) ?? disp;
+    return SELLER_ALIASES[key(canonDisp)] ?? canonDisp;
   };
 }
