@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -48,23 +49,82 @@ const classeCor: Record<string, string> = {
 
 export function ComercialClient({ dados }: { dados: DadosComercial }) {
   const { kpis, vendedores, abc } = dados;
+  const router = useRouter();
+
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const irPara = (de: string, ate: string) => router.push(`/comercial?de=${de}&ate=${ate}`);
+
+  // Seleciona um mês inteiro (input type=month → YYYY-MM).
+  const aplicarMes = (m: string) => {
+    if (!m) return;
+    const [y, mm] = m.split("-").map(Number);
+    const de = `${y}-${String(mm).padStart(2, "0")}-01`;
+    const ultimo = new Date(y, mm, 0).getDate();
+    const ate = `${y}-${String(mm).padStart(2, "0")}-${String(ultimo).padStart(2, "0")}`;
+    irPara(de, ate);
+  };
+
+  // Atalhos rápidos.
+  const hoje = new Date();
+  const esteMes = () => { const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1); irPara(iso(d), iso(hoje)); };
+  const mesPassado = () => {
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    irPara(iso(ini), iso(fim));
+  };
+  const ultimosDias = (n: number) => { const d = new Date(hoje.getTime() - n * 86400000); irPara(iso(d), iso(hoje)); };
+  const esteAno = () => { const d = new Date(hoje.getFullYear(), 0, 1); irPara(iso(d), iso(hoje)); };
+
+  const mesAtual = dados.de.slice(0, 7);
 
   return (
     <>
       <PageHeader title="📊 Dashboard Comercial" description="Desempenho de vendas por vendedor, carteira e curva ABC." />
 
       {/* Filtro de período */}
-      <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">De</label>
-          <input type="date" name="de" defaultValue={dados.de} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+      <div className="mb-4 space-y-3">
+        {/* Atalhos rápidos */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: "Este mês", fn: esteMes },
+            { label: "Mês passado", fn: mesPassado },
+            { label: "Últimos 30 dias", fn: () => ultimosDias(30) },
+            { label: "Últimos 90 dias", fn: () => ultimosDias(90) },
+            { label: "Este ano", fn: esteAno },
+          ].map((b) => (
+            <button key={b.label} type="button" onClick={b.fn}
+              className="h-8 rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-medium text-slate-200 hover:bg-white/10">
+              {b.label}
+            </button>
+          ))}
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">Até</label>
-          <input type="date" name="ate" defaultValue={dados.ate} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Seletor de MÊS */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Mês</label>
+            <input type="month" defaultValue={mesAtual}
+              onChange={(e) => aplicarMes(e.target.value)}
+              className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+          </div>
+
+          <span className="pb-2 text-xs text-slate-500">ou intervalo:</span>
+
+          {/* Intervalo de dias */}
+          <form method="get" className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">De</label>
+              <input type="date" name="de" defaultValue={dados.de} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Até</label>
+              <input type="date" name="ate" defaultValue={dados.ate} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+            </div>
+            <button className="h-10 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Aplicar</button>
+          </form>
         </div>
-        <button className="h-10 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Aplicar</button>
-      </form>
+      </div>
 
       {/* KPIs */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
