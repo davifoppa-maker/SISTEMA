@@ -44,6 +44,7 @@ export default async function AlertasPage() {
     let temCusto = false;
     const itensRuins: { nome: string; margem: number }[] = [];
     for (const i of its) {
+      if (i.unit_value <= 0) continue; // bonificado: fora da margem
       const c = custoDe(i.sku);
       const total = i.unit_value * i.quantity;
       receita += total;
@@ -63,6 +64,7 @@ export default async function AlertasPage() {
         cliente: v.customerName,
         empresa: (v.order as any).empresa ?? "nyer",
         status: v.order.tiny_status ?? "—",
+        data: v.order.order_date ?? null,
         receita,
         margem: Math.round(margem * 10) / 10,
         prejuizo: margem < 0,
@@ -70,8 +72,16 @@ export default async function AlertasPage() {
       });
     }
   }
-  // Piores margens primeiro.
-  alertas.sort((a, b) => a.margem - b.margem);
+  // Mais recentes primeiro (data válida). Sem data vai para o fim.
+  const dataOk = (d: string | null) => {
+    const ano = Number(String(d ?? "").slice(0, 4));
+    return ano >= 2015 && ano <= 2030 ? String(d).slice(0, 10) : "";
+  };
+  alertas.sort((a, b) => {
+    const da = dataOk(a.data), db = dataOk(b.data);
+    if (da !== db) { if (!da) return 1; if (!db) return -1; return db.localeCompare(da); }
+    return a.margem - b.margem;
+  });
 
   return <AlertasClient alertas={alertas} margemAlvo={MARGEM_ALVO} />;
 }

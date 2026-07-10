@@ -2,6 +2,7 @@ import { ok, fail } from "@/lib/api";
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
+import { buildSellerCanonicalizer, normSeller } from "@/lib/seller";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -53,6 +54,33 @@ export async function GET(req: Request) {
 
   const totalOrdersSemData = views.filter((v) => !v.order.order_date).length;
 
+  // Diagnóstico de VENDEDOR: nomes brutos distintos x nomes unificados, e
+  // quanto do faturamento vem do fallback total_value (pedidos sem itens).
+  const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
+  const brutosDistintos = new Set<string>();
+  const canonDistintos = new Set<string>();
+  const mudancas = new Map<string, string>(); // bruto -> canônico (só quando muda)
+  const porVendedorDbg = new Map<string, { pedidos: number; faturamento: number; fatViaFallback: number }>();
+  let fatItens = 0, fatFallback = 0;
+  for (const v of noPeriodo) {
+    const bruto = normSeller(v.order.seller);
+    const canon = sellerOf(v.order.seller);
+    brutosDistintos.add(bruto);
+    canonDistintos.add(canon);
+    if (bruto !== canon) mudancas.set(bruto, canon);
+
+    const its = itemsByOrder.get(v.order.id) ?? [];
+    let receita = 0;
+    for (const i of its) receita += (i.unit_value ?? 0) * i.quantity;
+    let viaFallback = 0;
+    if (receita === 0) { receita = v.order.total_value ?? 0; viaFallback = receita; fatFallback += receita; }
+    else fatItens += receita;
+
+    const a = porVendedorDbg.get(canon) ?? { pedidos: 0, faturamento: 0, fatViaFallback: 0 };
+    a.pedidos++; a.faturamento += receita; a.fatViaFallback += viaFallback;
+    porVendedorDbg.set(canon, a);
+  }
+
   return ok({
     periodo: { de, ate },
     pedidos_no_periodo: noPeriodo.length,
@@ -72,5 +100,15 @@ export async function GET(req: Request) {
       .sort((a, b) => b.receita - a.receita)
       .slice(0, 30),
     vendedores: [...vendedoresSet].sort(),
+    vendedor_diagnostico: {
+      nomes_brutos_distintos: brutosDistintos.size,
+      nomes_unificados_distintos: canonDistintos.size,
+      unificacoes: [...mudancas.entries()].map(([de, para]) => ({ de, para })),
+      faturamento_via_itens: Math.round(fatItens),
+      faturamento_via_fallback_total_value: Math.round(fatFallback),
+      por_vendedor: [...porVendedorDbg.entries()]
+        .map(([nome, a]) => ({ nome, pedidos: a.pedidos, faturamento: Math.round(a.faturamento), fatViaFallback: Math.round(a.fatViaFallback) }))
+        .sort((x, y) => y.faturamento - x.faturamento),
+    },
   });
 }

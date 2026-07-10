@@ -1,6 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
+import { buildSellerCanonicalizer } from "@/lib/seller";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -47,13 +48,27 @@ export default async function ComercialPage({
     return dia >= de && dia <= ate;
   };
 
-  // Carteira total = todos os clientes que já compraram (qualquer data).
+  // Canonicaliza o nome do vendedor (junta variações/nome parcial x completo).
+  const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
+
+  // Receita "de venda" de um pedido (só itens com valor > 0; fallback total_value).
+  // Pedido ZERADO (parceria/bonificação) retorna 0 e é desconsiderado.
+  const receitaDeVenda = (orderId: string, totalValue: number | null): number => {
+    const its = itemsByOrder.get(orderId) ?? [];
+    let r = 0;
+    for (const i of its) { const val = i.unit_value ?? 0; if (val > 0) r += val * i.quantity; }
+    if (r === 0) { const tv = totalValue ?? 0; return tv > 0 ? tv : 0; }
+    return r;
+  };
+  const pedidoEhVenda = (v: (typeof views)[number]) => receitaDeVenda(v.order.id, v.order.total_value) > 0;
+
+  // Carteira = clientes que já compraram (venda real; pedido zerado não conta).
   const carteiraGlobal = new Set<string>();
   const carteiraPorVendedor = new Map<string, Set<string>>();
   for (const v of views) {
-    if (v.order.customer_id) {
+    if (v.order.customer_id && pedidoEhVenda(v)) {
       carteiraGlobal.add(v.order.customer_id);
-      const sel = v.order.seller ?? "Sem vendedor";
+      const sel = sellerOf(v.order.seller);
       if (!carteiraPorVendedor.has(sel)) carteiraPorVendedor.set(sel, new Set());
       carteiraPorVendedor.get(sel)!.add(v.order.customer_id);
     }
@@ -70,7 +85,9 @@ export default async function ComercialPage({
     const its = itemsByOrder.get(v.order.id) ?? [];
     let receita = 0, custo = 0;
     for (const i of its) {
-      const tot = (i.unit_value ?? 0) * i.quantity;
+      const val = i.unit_value ?? 0;
+      if (val <= 0) continue; // item bonificado (valor 0) NÃO entra na margem
+      const tot = val * i.quantity;
       receita += tot;
       custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
       // ABC por produto (receita).
@@ -79,10 +96,15 @@ export default async function ComercialPage({
       e.receita += tot;
       abcMap.set(key, e);
     }
-    // Se o pedido não tem itens mapeados, usa o total_value como receita.
-    if (receita === 0) receita = v.order.total_value ?? 0;
+    // Sem itens pagos: usa total_value só se o pedido NÃO for zerado.
+    // Pedido zerado/bonificado é desconsiderado do comercial (vai p/ Bonificados).
+    if (receita === 0) {
+      const tv = v.order.total_value ?? 0;
+      if (tv <= 0) continue;
+      receita = tv;
+    }
 
-    const sel = v.order.seller ?? "Sem vendedor";
+    const sel = sellerOf(v.order.seller);
     const a = porVendedor.get(sel) ?? { faturamento: 0, custo: 0, pedidos: 0, clientes: new Set() };
     a.faturamento += receita;
     a.custo += custo;
@@ -95,6 +117,7 @@ export default async function ComercialPage({
   }
 
   const vendedores = [...porVendedor.entries()]
+    .filter(([, a]) => a.faturamento > 0) // ignora vendedores com venda zerada
     .map(([nome, a]) => {
       const carteira = carteiraPorVendedor.get(nome)?.size ?? a.clientes.size;
       return {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +11,7 @@ export interface AlertaPedido {
   cliente: string;
   empresa: string;
   status: string;
+  data: string | null;
   receita: number;
   margem: number;
   prejuizo: boolean;
@@ -18,8 +20,34 @@ export interface AlertaPedido {
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+function dataOk(d: string | null): string {
+  const ano = Number(String(d ?? "").slice(0, 4));
+  return ano >= 2015 && ano <= 2030 ? String(d).slice(0, 10) : "";
+}
+function fmtData(d: string | null): string {
+  const v = dataOk(d);
+  if (!v) return "—";
+  const [y, m, dd] = v.split("-");
+  return `${dd}/${m}/${y}`;
+}
+
 export function AlertasClient({ alertas, margemAlvo }: { alertas: AlertaPedido[]; margemAlvo: number }) {
   const prejuizos = alertas.filter((a) => a.prejuizo).length;
+  const [ordem, setOrdem] = useState<"data" | "margem">("data");
+
+  const lista = useMemo(() => {
+    const arr = [...alertas];
+    if (ordem === "margem") {
+      arr.sort((a, b) => a.margem - b.margem);
+    } else {
+      arr.sort((a, b) => {
+        const da = dataOk(a.data), db = dataOk(b.data);
+        if (da !== db) { if (!da) return 1; if (!db) return -1; return db.localeCompare(da); }
+        return a.margem - b.margem;
+      });
+    }
+    return arr;
+  }, [alertas, ordem]);
 
   return (
     <>
@@ -44,6 +72,21 @@ export function AlertasClient({ alertas, margemAlvo }: { alertas: AlertaPedido[]
         </div>
       </div>
 
+      {/* Ordenação */}
+      {alertas.length > 0 && (
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <span className="text-slate-400">Ordenar por:</span>
+          <button type="button" onClick={() => setOrdem("data")}
+            className={`h-8 rounded-lg border px-3 font-medium ${ordem === "data" ? "border-violet-500 bg-violet-600/20 text-violet-300" : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10"}`}>
+            Mais recentes
+          </button>
+          <button type="button" onClick={() => setOrdem("margem")}
+            className={`h-8 rounded-lg border px-3 font-medium ${ordem === "margem" ? "border-violet-500 bg-violet-600/20 text-violet-300" : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10"}`}>
+            Pior margem
+          </button>
+        </div>
+      )}
+
       {alertas.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-slate-400">
@@ -57,6 +100,7 @@ export function AlertasClient({ alertas, margemAlvo }: { alertas: AlertaPedido[]
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                   <th className="px-4 py-3">Pedido</th>
+                  <th className="px-4 py-3">Data</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3 text-right">Receita</th>
                   <th className="px-4 py-3 text-right">Margem</th>
@@ -64,7 +108,7 @@ export function AlertasClient({ alertas, margemAlvo }: { alertas: AlertaPedido[]
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {alertas.map((a) => (
+                {lista.map((a) => (
                   <tr key={a.id} className={a.prejuizo ? "bg-red-500/5" : "bg-amber-500/5"}>
                     <td className="px-4 py-3">
                       <Link href={`/orders/${a.id}`} className="font-semibold text-brand-400 hover:underline">
@@ -74,6 +118,7 @@ export function AlertasClient({ alertas, margemAlvo }: { alertas: AlertaPedido[]
                         {a.empresa === "ecopro" ? "Ecopro" : "NRX"} · {a.status}
                       </div>
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-400">{fmtData(a.data)}</td>
                     <td className="px-4 py-3 max-w-[180px] truncate">{a.cliente}</td>
                     <td className="px-4 py-3 text-right">{brl(a.receita)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${a.prejuizo ? "text-red-400" : "text-amber-400"}`}>
