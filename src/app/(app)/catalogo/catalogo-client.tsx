@@ -94,13 +94,10 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
                   <th className="px-2 py-2">SKU</th>
                   <th className="px-2 py-2">Tipo</th>
                   <th className="px-2 py-2 text-right">Custo (R$)</th>
-                  <th className="px-2 py-2 text-right">Tabela / venda (R$)</th>
-                  <th className="px-2 py-2 text-right">Margem</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visiveis.map((p, i) => {
-                  const margem = p.tabela > 0 ? ((p.tabela - p.cost) / p.tabela) * 100 : 0;
                   return (
                     <tr key={p.sku || `novo-${i}`}>
                       <td className="px-2 py-1.5">
@@ -124,16 +121,6 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
                           onChange={(e) => update(p.sku, { cost: Number(e.target.value) || 0 })}
                           className="w-24 text-right"
                         />
-                      </td>
-                      <td className="px-2 py-1.5 text-right">
-                        <Input
-                          type="number" step="0.01" value={String(p.tabela)}
-                          onChange={(e) => update(p.sku, { tabela: Number(e.target.value) || 0 })}
-                          className="w-24 text-right"
-                        />
-                      </td>
-                      <td className={`px-2 py-1.5 text-right font-semibold ${margem >= 50 ? "text-emerald-500" : margem >= 30 ? "text-amber-500" : "text-red-500"}`}>
-                        {margem.toFixed(0)}%
                       </td>
                     </tr>
                   );
