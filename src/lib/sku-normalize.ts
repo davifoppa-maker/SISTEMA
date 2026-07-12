@@ -67,6 +67,15 @@ function ehNyer(description: string, sku?: string | null): boolean {
   return /nyer/i.test(description || "") || /^nyer/i.test((sku || "").trim());
 }
 
+// Chave de PRODUTO por nome (tokens + tamanhos normalizados, ordenados). Dois
+// itens com o mesmo nome — mesmo com SKUs diferentes — geram a mesma chave.
+export function nameKey(text: string): string {
+  const t = tokens(text);
+  const w = [...t.words].sort().join(" ");
+  const s = [...t.sizes].sort().join(" ");
+  return w ? `${w}|${s}` : "";
+}
+
 // Pré-computa a assinatura de cada produto padrão do catálogo estático.
 const CATALOG_SIG: { p: Product; words: Set<string>; sizes: Set<string> }[] = CATALOG.map((p) => {
   const t = tokens(p.name);
@@ -151,6 +160,40 @@ export async function normalizarSkus(apply: boolean): Promise<{
     if (!std || std.sku === sku) continue;
     mapeados.push({ from: sku, to: std.sku, descricao: desc, produto: std.name, linhas });
   }
+
+  // 2ª passada: agrupa produtos com o MESMO NOME (SKUs diferentes) que não
+  // casaram com o catálogo padrão, e unifica cada grupo num SKU canônico.
+  const jaMapeado = new Set(mapeados.map((m) => m.from));
+  const custoDe = new Map<string, number>();
+  {
+    const { data } = await sb.from("catalog_custos").select("sku,cost");
+    for (const r of (data ?? []) as any[]) custoDe.set(String(r.sku), Number(r.cost) || 0);
+  }
+  const clusters = new Map<string, { sku: string; desc: string; linhas: number }[]>();
+  for (const [sku, { desc, linhas }] of info) {
+    if (jaMapeado.has(sku)) continue;
+    const k = nameKey(desc);
+    if (!k) continue;
+    const arr = clusters.get(k) ?? [];
+    arr.push({ sku, desc, linhas });
+    clusters.set(k, arr);
+  }
+  for (const grupo of clusters.values()) {
+    if (grupo.length < 2) continue; // só há o que unir com 2+ SKUs
+    // Canônico: prefere quem já tem custo > 0; senão o mais usado; senão SKU asc.
+    const canon = [...grupo].sort((a, b) => {
+      const ca = (custoDe.get(a.sku) ?? 0) > 0 ? 1 : 0;
+      const cb = (custoDe.get(b.sku) ?? 0) > 0 ? 1 : 0;
+      if (ca !== cb) return cb - ca;
+      if (b.linhas !== a.linhas) return b.linhas - a.linhas;
+      return a.sku.localeCompare(b.sku);
+    })[0];
+    for (const d of grupo) {
+      if (d.sku === canon.sku) continue;
+      mapeados.push({ from: d.sku, to: canon.sku, descricao: d.desc, produto: canon.desc, linhas: d.linhas });
+    }
+  }
+
   mapeados.sort((a, b) => b.linhas - a.linhas);
 
   let itensAtualizados = 0;

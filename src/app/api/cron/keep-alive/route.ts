@@ -1,6 +1,6 @@
 import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok } from "@/lib/api";
-import { ingestOrder, enrichOrderItems } from "@/lib/services/tiny";
+import { ingestOrder, enrichOrderItems, removeDeletedOlistOrders } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, getValidAccessToken, isTinyConnected } from "@/lib/services/tiny-api";
 import { syncUnknownProducts } from "@/lib/catalog";
@@ -68,10 +68,21 @@ async function run() {
     }
     diag.itensPreenchidos = itensPreenchidos;
 
-    if (synced > 0 || itensPreenchidos > 0) {
+    // Apaga do nosso banco os pedidos que foram deletados no Olist (só 404 confirmado).
+    let removidos = 0;
+    try {
+      const r = await removeDeletedOlistOrders(store, 12);
+      removidos = r.removed;
+      diag.pedidosRemovidos = r.removed;
+      diag.pedidosVerificados = r.checked;
+    } catch (e) {
+      diag.removeErr = e instanceof Error ? e.message : String(e);
+    }
+
+    if (synced > 0 || itensPreenchidos > 0 || removidos > 0) {
       store.api_sync_logs.push({
         id: uuid(), source: "tiny", operation: "cron_keep_alive", ok: true,
-        detail: `${synced} pedidos + ${itensPreenchidos} com itens (desde ${dataInicial})`,
+        detail: `${synced} pedidos + ${itensPreenchidos} com itens + ${removidos} removidos (desde ${dataInicial})`,
         created_at: nowIso(),
       });
       await commitStore(store);

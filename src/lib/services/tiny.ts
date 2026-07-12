@@ -516,6 +516,55 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
   return enriched;
 }
 
+/**
+ * Remove do nosso banco os pedidos que foram APAGADOS no Olist.
+ * Verifica um lote (os mais "parados", por updated_at antigo) chamando o Olist:
+ *   - resposta 404 nas DUAS contas (sem erro de rede) => apagado => remove aqui;
+ *   - existe em alguma conta => mantém e "renova" o updated_at (rotaciona a fila);
+ *   - erro de rede em alguma conta => mantém (nunca apaga em caso de dúvida).
+ * O commitStore posterior persiste as remoções (pedido + itens + expedição + NF).
+ */
+export async function removeDeletedOlistOrders(
+  store: DataStore,
+  cap = 12,
+): Promise<{ checked: number; removed: number; removedIds: string[] }> {
+  const candidates = [...store.orders]
+    .filter((o) => o.tiny_id)
+    .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))
+    .slice(0, cap);
+
+  let checked = 0;
+  const removedIds: string[] = [];
+  for (const order of candidates) {
+    checked++;
+    const empAtual = (order as any).empresa ?? "nyer";
+    const ordem = empAtual === "ecopro" ? ["ecopro", "nyer"] : ["nyer", "ecopro"];
+    let existe = false;
+    let erro = false;
+    for (const emp of ordem) {
+      try {
+        const p = await fetchOrderById(order.tiny_id!, emp);
+        if (p) { existe = true; break; }
+      } catch {
+        erro = true; // erro de rede/API: NÃO é 404 — não podemos concluir que sumiu
+      }
+    }
+    if (existe) { order.updated_at = nowIso(); continue; } // mantém e rotaciona
+    if (erro) continue; // dúvida: mantém
+    // 404 confirmado nas duas contas → apagado no Olist. Remove daqui.
+    const shIds = store.shipments.filter((s) => s.order_id === order.id).map((s) => s.id);
+    store.orders = store.orders.filter((o) => o.id !== order.id);
+    store.order_items = store.order_items.filter((i) => i.order_id !== order.id);
+    store.invoices = store.invoices.filter((i) => i.order_id !== order.id);
+    store.shipments = store.shipments.filter((s) => s.order_id !== order.id);
+    const foraDoPedido = (shipmentId: string | null) => shipmentId == null || !shIds.includes(shipmentId);
+    store.shipment_volumes = store.shipment_volumes.filter((v) => foraDoPedido(v.shipment_id));
+    store.sla_records = store.sla_records.filter((r) => foraDoPedido(r.shipment_id));
+    removedIds.push(order.id);
+  }
+  return { checked, removed: removedIds.length, removedIds };
+}
+
 function tinyDateToIso(v: unknown): string | null {
   const s = String(v ?? "").trim();
   if (!s) return null;
