@@ -1,7 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
-import { ehCancelado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
 import { AlertasClient, type AlertaPedido } from "./alertas-client";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +39,7 @@ export default async function AlertasPage() {
   const alertas: AlertaPedido[] = [];
   for (const v of views) {
     if (ehCancelado(v.order.tiny_status)) continue; // pedido cancelado não conta
+    if (clienteIgnorado(v.customerName)) continue; // cliente interno (ex.: Exx Nutrition)
     const its = itemsByOrder.get(v.order.id) ?? [];
     if (its.length === 0) continue; // sem itens → sem como avaliar margem
     let receita = 0;

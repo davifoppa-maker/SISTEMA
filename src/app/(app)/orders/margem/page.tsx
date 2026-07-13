@@ -1,7 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
-import { ehCancelado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
 import { MargemPedidosClient } from "./margem-pedidos-client";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function OrdemMargemPage() {
 
   const orders = views
     .filter((v) => !ehCancelado(v.order.tiny_status)) // pedido cancelado não conta
+    .filter((v) => !clienteIgnorado(v.customerName)) // cliente interno (ex.: Exx Nutrition)
     .map((v) => ({
     id: v.order.id,
     order_number: v.order.order_number,
