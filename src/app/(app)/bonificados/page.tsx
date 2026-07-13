@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
 import { BonificadosClient, type DadosBonificados, type LinhaBonificada } from "./bonificados-client";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,7 @@ export default async function BonificadosPage({
   for (const v of views) {
     if (ehCancelado(v.order.tiny_status)) continue; // pedido cancelado não conta
     if (clienteIgnorado(v.customerName)) continue; // cliente interno (ex.: Exx Nutrition)
+    if (pedidoNumIgnorado(v.order.order_number)) continue; // pedido excluído manualmente
     const dia = (v.order.order_date ?? "").slice(0, 10);
     const mes = dia.slice(0, 7);
     const uf = (v.order.state ?? "").toUpperCase() || "—";

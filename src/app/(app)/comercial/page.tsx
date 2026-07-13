@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +64,7 @@ export default async function ComercialPage({
   };
   const pedidoEhVenda = (v: (typeof views)[number]) =>
     !ehCancelado(v.order.tiny_status) && !clienteIgnorado(v.customerName) &&
-    receitaDeVenda(v.order) > 0;
+    !pedidoNumIgnorado(v.order.order_number) && receitaDeVenda(v.order) > 0;
 
   // Carteira = clientes que já compraram (venda real; pedido zerado não conta).
   const carteiraGlobal = new Set<string>();
@@ -88,6 +88,7 @@ export default async function ComercialPage({
     if (!dentroPeriodo(v.order.order_date)) continue;
     if (ehCancelado(v.order.tiny_status)) continue; // pedido cancelado não conta
     if (clienteIgnorado(v.customerName)) continue; // cliente interno (ex.: Exx Nutrition)
+    if (pedidoNumIgnorado(v.order.order_number)) continue; // pedido excluído manualmente
     const its = itemsByOrder.get(v.order.id) ?? [];
     let custo = 0, recItens = 0;
     for (const i of its) {

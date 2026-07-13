@@ -15,6 +15,15 @@ export function clienteIgnorado(nome: string | null | undefined): boolean {
   return CLIENTES_IGNORADOS.some((c) => n.includes(c));
 }
 
+// Pedidos EXCLUÍDOS das análises por número (ex.: transferência interna com custo
+// distorcido). Não some do banco (o cron reimporta do Olist), some das telas.
+const PEDIDOS_IGNORADOS = new Set<string>(["175"]);
+
+export function pedidoNumIgnorado(orderNumber: string | null | undefined): boolean {
+  const n = String(orderNumber ?? "").trim();
+  return n !== "" && PEDIDOS_IGNORADOS.has(n);
+}
+
 // Pedido CANCELADO no Olist/Tiny. O status vem como texto ("cancelada") ou
 // como código V3 (2 = cancelada). Não deve contar em faturamento/margem.
 export function ehCancelado(tinyStatus: string | null | undefined): boolean {
