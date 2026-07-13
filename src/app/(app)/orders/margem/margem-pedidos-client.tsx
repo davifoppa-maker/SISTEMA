@@ -18,6 +18,7 @@ interface Order {
   order_date: string | null;
   empresa: string;
   customerName: string;
+  vendedor: string;
   items: OrderItem[];
 }
 
@@ -116,6 +117,33 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
   // costOverrides: sku → custo editado pelo usuário
   const [costOverrides, setCostOverrides] = useState<Record<string, number>>({});
 
+  // Filtros: mês (YYYY-MM), intervalo personalizado (de/até) e vendedor.
+  const [mes, setMes] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+  const [vendedor, setVendedor] = useState("");
+
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  function aplicarMes(m: string) { setMes(m); setDe(""); setAte(""); }
+  function preset(dini: Date, dfim: Date) { setDe(iso(dini)); setAte(iso(dfim)); setMes(""); }
+  const hoje = new Date();
+
+  const vendedores = useMemo(
+    () => [...new Set(orders.map((o) => o.vendedor))].sort((a, b) => a.localeCompare(b)),
+    [orders],
+  );
+
+  const ordersFiltrados = useMemo(() => {
+    return orders.filter((o) => {
+      const d = dataValida(o.order_date).slice(0, 10);
+      if (vendedor && o.vendedor !== vendedor) return false;
+      if (mes && d.slice(0, 7) !== mes) return false;
+      if (de && (!d || d < de)) return false;
+      if (ate && (!d || d > ate)) return false;
+      return true;
+    });
+  }, [orders, mes, de, ate, vendedor]);
+
   function getCost(sku: string | null, catalogCost: number | null): number {
     if (sku && costOverrides[sku] !== undefined) return costOverrides[sku];
     return catalogCost ?? 0;
@@ -127,7 +155,7 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
   }
 
   const rows = useMemo(() => {
-    return orders.map((order) => {
+    return ordersFiltrados.map((order) => {
       let receita = 0;
       let custoProdutos = 0;
       let itensMapeados = 0;
@@ -154,32 +182,61 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
       return Number.isFinite(na) && Number.isFinite(nb) ? nb - na : b.order.order_number.localeCompare(a.order.order_number);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, costOverrides]);
+  }, [ordersFiltrados, costOverrides]);
 
   const totalReceita = rows.reduce((s, r) => s + r.receita, 0);
   const totalLucro = rows.reduce((s, r) => s + r.lucro, 0);
   const totalCusto = rows.reduce((s, r) => s + r.custoProdutos, 0);
   const margemGeral = totalReceita > 0 ? (totalLucro / totalReceita) * 100 : 0;
-  const semItens = orders.filter((o) => o.items.length === 0).length;
-
-  // Produtos únicos com custo para o painel lateral
-  const uniqueSkus = useMemo(() => {
-    const seen = new Map<string, { name: string; catalogCost: number | null }>();
-    for (const order of orders) {
-      for (const item of order.items) {
-        if (item.sku && !seen.has(item.sku)) {
-          seen.set(item.sku, { name: item.name, catalogCost: item.catalog_cost });
-        }
-      }
-    }
-    return Array.from(seen.entries()).map(([sku, info]) => ({ sku, ...info }));
-  }, [orders]);
+  const semItens = ordersFiltrados.filter((o) => o.items.length === 0).length;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-800">Margem de Pedidos</h1>
         <p className="text-sm text-slate-500">Margem real por pedido (custo já inclui operacional) — edite custos ao lado</p>
+      </div>
+
+      {/* Filtros: atalhos + mês + vendedor + personalizado */}
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: "Este mês", fn: () => preset(new Date(hoje.getFullYear(), hoje.getMonth(), 1), hoje) },
+            { label: "Mês passado", fn: () => preset(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1), new Date(hoje.getFullYear(), hoje.getMonth(), 0)) },
+            { label: "Últimos 30 dias", fn: () => preset(new Date(hoje.getTime() - 30 * 86400000), hoje) },
+            { label: "Últimos 90 dias", fn: () => preset(new Date(hoje.getTime() - 90 * 86400000), hoje) },
+            { label: "Este ano", fn: () => preset(new Date(hoje.getFullYear(), 0, 1), hoje) },
+            { label: "Limpar", fn: () => { setMes(""); setDe(""); setAte(""); setVendedor(""); } },
+          ].map((b) => (
+            <button key={b.label} type="button" onClick={b.fn}
+              className="h-8 rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50">
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Vendedor</label>
+            <select value={vendedor} onChange={(e) => setVendedor(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-3 text-sm">
+              <option value="">Todos</option>
+              {vendedores.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Mês</label>
+            <input type="month" value={mes} onChange={(e) => aplicarMes(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-3 text-sm" />
+          </div>
+          <span className="pb-2 text-xs text-slate-400">ou personalizado:</span>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">De</label>
+            <input type="date" value={de} onChange={(e) => { setDe(e.target.value); setMes(""); }} className="h-10 rounded-lg border border-slate-300 px-3 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Até</label>
+            <input type="date" value={ate} onChange={(e) => { setAte(e.target.value); setMes(""); }} className="h-10 rounded-lg border border-slate-300 px-3 text-sm" />
+          </div>
+          <span className="pb-2 text-xs text-slate-400">{rows.length} pedido(s)</span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">

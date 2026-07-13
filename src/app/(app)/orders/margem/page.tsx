@@ -2,6 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
+import { buildSellerCanonicalizer } from "@/lib/seller";
 import { MargemPedidosClient } from "./margem-pedidos-client";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,8 @@ export default async function OrdemMargemPage() {
     itemsByOrder.set(item.order_id, arr);
   }
 
+  const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
+
   const orders = views
     .filter((v) => !ehCancelado(v.order.tiny_status)) // pedido cancelado não conta
     .filter((v) => !clienteIgnorado(v.customerName)) // cliente interno (ex.: Exx Nutrition)
@@ -40,6 +43,7 @@ export default async function OrdemMargemPage() {
     order_date: v.order.order_date ?? null,
     empresa: (v.order as any).empresa ?? "nyer",
     customerName: v.customerName,
+    vendedor: sellerOf(v.order.seller),
     items: (itemsByOrder.get(v.order.id) ?? []).map((i) => {
       const catalogProduct = CATALOG.find((p) => p.sku === i.sku);
       return {
