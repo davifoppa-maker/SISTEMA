@@ -94,15 +94,16 @@ export async function GET(req: Request) {
       custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
     }
     const frete = v.order.freight_value ?? 0;
-    const fallback = recItens === 0 ? Math.max((v.order.total_value ?? 0) - frete, 0) : 0;
-    const receita = recItens || fallback;
+    const totalPedido = v.order.total_value ?? 0;
+    const receita = totalPedido > 0 ? totalPedido : recItens; // base = total do pedido (Olist)
     return {
       numero: v.order.order_number,
       cliente: v.customerName,
       vendedor: sellerOf(v.order.seller),
       data: (v.order.order_date ?? "").slice(0, 10),
       receita: Math.round(receita),
-      via: recItens > 0 ? "itens" : "fallback",
+      receitaItens: Math.round(recItens),
+      via: totalPedido > 0 ? "total_pedido" : "itens",
       frete: Math.round(frete),
       custo: Math.round(custo),
       margemPct: receita > 0 ? Math.round(((receita - custo) / receita) * 100) : 0,

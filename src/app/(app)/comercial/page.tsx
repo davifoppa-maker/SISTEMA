@@ -52,15 +52,15 @@ export default async function ComercialPage({
   // Canonicaliza o nome do vendedor (junta variações/nome parcial x completo).
   const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
 
-  // Receita "de venda" de um pedido = soma dos itens com valor > 0. Quando o
-  // pedido não tem itens mapeados, usa total_value SEM FRETE (para ficar na mesma
-  // base dos itens, que não têm frete). Pedido zerado retorna 0 e é ignorado.
-  const receitaDeVenda = (o: { id: string; total_value: number | null; freight_value: number | null }): number => {
+  // Faturamento = VALOR TOTAL do pedido (igual ao Olist). Só cai para a soma dos
+  // itens quando o pedido não tem total_value. Pedido zerado retorna 0 e é ignorado.
+  const receitaDeVenda = (o: { id: string; total_value: number | null }): number => {
+    const tv = o.total_value ?? 0;
+    if (tv > 0) return tv;
     const its = itemsByOrder.get(o.id) ?? [];
     let r = 0;
     for (const i of its) { const val = i.unit_value ?? 0; if (val > 0) r += val * i.quantity; }
-    if (r === 0) { const tv = (o.total_value ?? 0) - (o.freight_value ?? 0); return tv > 0 ? tv : 0; }
-    return r;
+    return r > 0 ? r : 0;
   };
   const pedidoEhVenda = (v: (typeof views)[number]) =>
     !ehCancelado(v.order.tiny_status) && !clienteIgnorado(v.customerName) &&
@@ -89,26 +89,23 @@ export default async function ComercialPage({
     if (ehCancelado(v.order.tiny_status)) continue; // pedido cancelado não conta
     if (clienteIgnorado(v.customerName)) continue; // cliente interno (ex.: Exx Nutrition)
     const its = itemsByOrder.get(v.order.id) ?? [];
-    let receita = 0, custo = 0;
+    let custo = 0, recItens = 0;
     for (const i of its) {
       const val = i.unit_value ?? 0;
       if (val <= 0) continue; // item bonificado (valor 0) NÃO entra na margem
       const tot = val * i.quantity;
-      receita += tot;
+      recItens += tot;
       custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
-      // ABC por produto (receita).
+      // ABC por produto (receita dos itens).
       const key = i.sku ?? "—";
       const e = abcMap.get(key) ?? { nome: catalog.find((p) => p.sku === i.sku)?.name ?? (i.sku ?? "Produto"), receita: 0 };
       e.receita += tot;
       abcMap.set(key, e);
     }
-    // Sem itens pagos: usa total_value SEM FRETE (mesma base dos itens).
-    // Pedido zerado/bonificado é desconsiderado do comercial (vai p/ Bonificados).
-    if (receita === 0) {
-      const tv = (v.order.total_value ?? 0) - (v.order.freight_value ?? 0);
-      if (tv <= 0) continue;
-      receita = tv;
-    }
+    // Faturamento = valor total do pedido (igual ao Olist); fallback: soma dos itens.
+    // Pedido zerado/bonificado (total 0 e sem itens pagos) é desconsiderado.
+    const receita = (v.order.total_value ?? 0) > 0 ? (v.order.total_value as number) : recItens;
+    if (receita <= 0) continue;
 
     const sel = sellerOf(v.order.seller);
     const a = porVendedor.get(sel) ?? { faturamento: 0, custo: 0, pedidos: 0, clientes: new Set() };
