@@ -5,6 +5,7 @@ import { Table, Thead, Th, Tr, Td, EmptyState } from "@/components/ui/table";
 import { SlaBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { listOrderViewsFast } from "@/lib/queries";
+import { buildSellerCanonicalizer } from "@/lib/seller";
 import { brl, dateShort } from "@/lib/utils/format";
 import { CHANNEL_LABELS, type Channel } from "@/lib/types";
 
@@ -61,12 +62,13 @@ function StatusPill({ status }: { status: string | null }) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; channel?: string; status?: string; empresa?: string; ordem?: string; de?: string; ate?: string };
+  searchParams: { q?: string; channel?: string; status?: string; empresa?: string; vendedor?: string; ordem?: string; de?: string; ate?: string };
 }) {
   const q = (searchParams.q ?? "").toLowerCase();
   const channel = searchParams.channel ?? "";
   const status = searchParams.status ?? "";
   const empresa = searchParams.empresa ?? "";
+  const vendedor = searchParams.vendedor ?? "";
   const de = searchParams.de ?? "";   // data inicial (YYYY-MM-DD)
   const ate = searchParams.ate ?? ""; // data final (YYYY-MM-DD)
   const ordem = searchParams.ordem === "asc" ? "asc" : "desc"; // padrão: mais recente primeiro
@@ -80,6 +82,9 @@ export default async function OrdersPage({
 
   const allViews = await listOrderViewsFast();
   const channelOptions = buildChannelOptions(allViews);
+  // Vendedores (nomes unificados) para o filtro.
+  const sellerOf = buildSellerCanonicalizer(allViews.map((v) => v.order.seller));
+  const vendedorOptions = [...new Set(allViews.map((v) => sellerOf(v.order.seller)))].sort((a, b) => a.localeCompare(b));
   let views = allViews;
   if (q) {
     views = views.filter(
@@ -94,6 +99,7 @@ export default async function OrdersPage({
   if (channel) views = views.filter((v) => v.order.channel === channel);
   if (status) views = views.filter((v) => v.order.tiny_status === status);
   if (empresa) views = views.filter((v) => ((v.order as any).empresa ?? "nyer") === empresa);
+  if (vendedor) views = views.filter((v) => sellerOf(v.order.seller) === vendedor);
   // Filtro por período (data do pedido, YYYY-MM-DD).
   if (de) views = views.filter((v) => (v.order.order_date ?? "").slice(0, 10) >= de);
   if (ate) views = views.filter((v) => (v.order.order_date ?? "").slice(0, 10) <= ate);
@@ -122,6 +128,7 @@ export default async function OrdersPage({
     if (channel) p.set("channel", channel);
     if (status) p.set("status", status);
     if (empresa) p.set("empresa", empresa);
+    if (vendedor) p.set("vendedor", vendedor);
     if (de) p.set("de", de);
     if (ate) p.set("ate", ate);
     p.set("ordem", o);
@@ -167,6 +174,15 @@ export default async function OrdersPage({
                 <option value="">Todas</option>
                 <option value="nyer">NYER</option>
                 <option value="ecopro">Ecopro</option>
+              </select>
+            </div>
+            <div className="min-w-[180px]">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Vendedor</label>
+              <select name="vendedor" defaultValue={vendedor} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
+                <option value="">Todos</option>
+                {vendedorOptions.map((nome) => (
+                  <option key={nome} value={nome}>{nome}</option>
+                ))}
               </select>
             </div>
             <div className="min-w-[160px]">
@@ -228,7 +244,7 @@ export default async function OrdersPage({
                       #{v.order.order_number}
                     </Link>
                   </Td>
-                  <Td className="text-slate-500">{v.order.seller ?? "—"}</Td>
+                  <Td className="text-slate-500">{sellerOf(v.order.seller)}</Td>
                   <Td>
                     <Badge variant={(v.order as any).empresa === "ecopro" ? "muted" : "info"}>
                       {(v.order as any).empresa === "ecopro" ? "Ecopro" : "NRX"}
