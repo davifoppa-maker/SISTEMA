@@ -4,11 +4,10 @@ function normNome(s: string | null | undefined): string {
   return String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 }
 
-// Clientes INTERNOS (contas próprias / transferências) — não são venda real e
-// não devem contar em faturamento/margem/dashboard. Some das análises mesmo que
-// o pedido continue existindo no Olist (não adianta apagar do banco: o cron
-// reimporta). Comparação por "contém", para pegar variações (LTDA, etc.).
-const CLIENTES_IGNORADOS = ["exx nutrition"];
+// Clientes INTERNOS a excluir das análises (contas próprias / transferências).
+// Comparação por "contém". Vazio = ninguém excluído (Exx Nutrition volta a
+// contar no faturamento, para bater com o Olist).
+const CLIENTES_IGNORADOS: string[] = [];
 
 export function clienteIgnorado(nome: string | null | undefined): boolean {
   const n = normNome(nome);
