@@ -3,6 +3,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer, normSeller } from "@/lib/seller";
+import { ehCancelado, clienteIgnorado } from "@/lib/pedido";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -81,9 +82,39 @@ export async function GET(req: Request) {
     porVendedorDbg.set(canon, a);
   }
 
+  // MAIORES pedidos do período — quebra por receita de itens x fallback (s/ frete),
+  // frete, custo e margem. Serve para achar o pedido que distorce o dashboard.
+  const detalhe = noPeriodo.map((v) => {
+    const its = itemsByOrder.get(v.order.id) ?? [];
+    let recItens = 0, custo = 0;
+    for (const i of its) {
+      const val = i.unit_value ?? 0;
+      if (val <= 0) continue;
+      recItens += val * i.quantity;
+      custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
+    }
+    const frete = v.order.freight_value ?? 0;
+    const fallback = recItens === 0 ? Math.max((v.order.total_value ?? 0) - frete, 0) : 0;
+    const receita = recItens || fallback;
+    return {
+      numero: v.order.order_number,
+      cliente: v.customerName,
+      vendedor: sellerOf(v.order.seller),
+      data: (v.order.order_date ?? "").slice(0, 10),
+      receita: Math.round(receita),
+      via: recItens > 0 ? "itens" : "fallback",
+      frete: Math.round(frete),
+      custo: Math.round(custo),
+      margemPct: receita > 0 ? Math.round(((receita - custo) / receita) * 100) : 0,
+      cancelado: ehCancelado(v.order.tiny_status),
+      clienteIgnorado: clienteIgnorado(v.customerName),
+    };
+  }).sort((a, b) => b.receita - a.receita).slice(0, 20);
+
   return ok({
     periodo: { de, ate },
     pedidos_no_periodo: noPeriodo.length,
+    maiores_pedidos: detalhe,
     total_pedidos_base: views.length,
     qualidade: {
       pedidos_SEM_vendedor: semVendedor,

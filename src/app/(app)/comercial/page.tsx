@@ -52,18 +52,19 @@ export default async function ComercialPage({
   // Canonicaliza o nome do vendedor (junta variações/nome parcial x completo).
   const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
 
-  // Receita "de venda" de um pedido (só itens com valor > 0; fallback total_value).
-  // Pedido ZERADO (parceria/bonificação) retorna 0 e é desconsiderado.
-  const receitaDeVenda = (orderId: string, totalValue: number | null): number => {
-    const its = itemsByOrder.get(orderId) ?? [];
+  // Receita "de venda" de um pedido = soma dos itens com valor > 0. Quando o
+  // pedido não tem itens mapeados, usa total_value SEM FRETE (para ficar na mesma
+  // base dos itens, que não têm frete). Pedido zerado retorna 0 e é ignorado.
+  const receitaDeVenda = (o: { id: string; total_value: number | null; freight_value: number | null }): number => {
+    const its = itemsByOrder.get(o.id) ?? [];
     let r = 0;
     for (const i of its) { const val = i.unit_value ?? 0; if (val > 0) r += val * i.quantity; }
-    if (r === 0) { const tv = totalValue ?? 0; return tv > 0 ? tv : 0; }
+    if (r === 0) { const tv = (o.total_value ?? 0) - (o.freight_value ?? 0); return tv > 0 ? tv : 0; }
     return r;
   };
   const pedidoEhVenda = (v: (typeof views)[number]) =>
     !ehCancelado(v.order.tiny_status) && !clienteIgnorado(v.customerName) &&
-    receitaDeVenda(v.order.id, v.order.total_value) > 0;
+    receitaDeVenda(v.order) > 0;
 
   // Carteira = clientes que já compraram (venda real; pedido zerado não conta).
   const carteiraGlobal = new Set<string>();
@@ -101,10 +102,10 @@ export default async function ComercialPage({
       e.receita += tot;
       abcMap.set(key, e);
     }
-    // Sem itens pagos: usa total_value só se o pedido NÃO for zerado.
+    // Sem itens pagos: usa total_value SEM FRETE (mesma base dos itens).
     // Pedido zerado/bonificado é desconsiderado do comercial (vai p/ Bonificados).
     if (receita === 0) {
-      const tv = v.order.total_value ?? 0;
+      const tv = (v.order.total_value ?? 0) - (v.order.freight_value ?? 0);
       if (tv <= 0) continue;
       receita = tv;
     }
