@@ -85,7 +85,8 @@ export default async function ComercialPage({
     }
   }
 
-  interface Agg { faturamento: number; custo: number; pedidos: number; clientes: Set<string>; }
+  interface Agg { faturamento: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; }
+  const novaAgg = (): Agg => ({ faturamento: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0 });
   const porVendedor = new Map<string, Agg>();
   const abcMap = new Map<string, { nome: string; receita: number }>();
   const positivadosGlobal = new Set<string>();
@@ -116,7 +117,7 @@ export default async function ComercialPage({
     if (receita <= 0) continue;
 
     const sel = sellerOf(v.order.seller);
-    const a = porVendedor.get(sel) ?? { faturamento: 0, custo: 0, pedidos: 0, clientes: new Set() };
+    const a = porVendedor.get(sel) ?? novaAgg();
     a.faturamento += receita;
     a.custo += custo;
     a.pedidos += 1;
@@ -125,6 +126,31 @@ export default async function ComercialPage({
 
     fatTotal += receita; custoTotal += custo; pedidosTotal += 1;
     if (v.order.customer_id) positivadosGlobal.add(v.order.customer_id);
+  }
+
+  // 1ª compra de cada cliente (TODOS os tempos, só venda real). Quando essa 1ª
+  // compra cai no período, o cliente é "novo" e o crédito vai pro vendedor dela.
+  const anoOk = (d: string) => { const a = Number(d.slice(0, 4)); return a >= 2015 && a <= 2030; };
+  const primeiraCompra = new Map<string, { date: string; sel: string; receita: number }>();
+  for (const v of views) {
+    const cid = v.order.customer_id;
+    if (!cid || !pedidoEhVenda(v)) continue;
+    const dia = (v.order.order_date ?? "").slice(0, 10);
+    if (dia.length !== 10 || !anoOk(dia)) continue;
+    const prev = primeiraCompra.get(cid);
+    if (!prev || dia < prev.date) {
+      primeiraCompra.set(cid, { date: dia, sel: sellerOf(v.order.seller), receita: receitaDeVenda(v.order) });
+    }
+  }
+  let clientesNovosTotal = 0, primeirasVendasTotal = 0;
+  for (const pc of primeiraCompra.values()) {
+    if (pc.date < de || pc.date > ate) continue;
+    const a = porVendedor.get(pc.sel) ?? novaAgg();
+    a.clientesNovos += 1;
+    a.primeirasVendas += pc.receita;
+    porVendedor.set(pc.sel, a);
+    clientesNovosTotal += 1;
+    primeirasVendasTotal += pc.receita;
   }
 
   const vendedores = [...porVendedor.entries()]
@@ -140,6 +166,8 @@ export default async function ComercialPage({
         clientesPositivados: a.clientes.size,
         carteira,
         positivacao: carteira > 0 ? (a.clientes.size / carteira) * 100 : 0,
+        clientesNovos: a.clientesNovos,
+        primeirasVendas: a.primeirasVendas,
       };
     })
     .sort((x, y) => y.faturamento - x.faturamento);
@@ -165,6 +193,8 @@ export default async function ComercialPage({
       positivacao: carteiraGlobal.size > 0 ? (positivadosGlobal.size / carteiraGlobal.size) * 100 : 0,
       clientesPositivados: positivadosGlobal.size,
       carteiraTotal: carteiraGlobal.size,
+      clientesNovos: clientesNovosTotal,
+      primeirasVendas: primeirasVendasTotal,
     },
     vendedores,
     abc: abc.slice(0, 40),

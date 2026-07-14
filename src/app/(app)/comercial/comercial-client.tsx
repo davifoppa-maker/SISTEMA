@@ -15,6 +15,8 @@ export interface DadosComercial {
     positivacao: number;
     clientesPositivados: number;
     carteiraTotal: number;
+    clientesNovos: number;
+    primeirasVendas: number;
   };
   vendedores: {
     nome: string;
@@ -25,6 +27,8 @@ export interface DadosComercial {
     clientesPositivados: number;
     carteira: number;
     positivacao: number;
+    clientesNovos: number;
+    primeirasVendas: number;
   }[];
   abc: { nome: string; receita: number; pctAcum: number; classe: string }[];
 }
@@ -127,12 +131,13 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
       </div>
 
       {/* KPIs */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Kpi label="Faturamento" value={brl(kpis.faturamento)} sub={`${kpis.pedidos} pedidos`} />
         <Kpi label="Ticket médio" value={brl(kpis.ticketMedio)} />
         <Kpi label="Margem líquida" value={`${kpis.margem.toFixed(1)}%`} />
         <Kpi label="Positivação" value={`${kpis.positivacao.toFixed(1)}%`} sub={`${kpis.clientesPositivados}/${kpis.carteiraTotal} clientes`} />
         <Kpi label="Clientes ativos" value={String(kpis.clientesPositivados)} sub="no período" />
+        <Kpi label="Clientes novos" value={String(kpis.clientesNovos)} sub={`${brl(kpis.primeirasVendas)} em 1ª venda`} />
       </div>
 
       {/* Por vendedor */}
@@ -150,12 +155,14 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
                   <th className="px-4 py-2 text-right">Pedidos</th>
                   <th className="px-4 py-2 text-right">Ticket médio</th>
                   <th className="px-4 py-2 text-right">Margem líq.</th>
+                  <th className="px-4 py-2 text-right">Clientes novos</th>
+                  <th className="px-4 py-2 text-right">1ª venda (R$)</th>
                   <th className="px-4 py-2 text-right">Positivação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {vendedores.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Sem vendas no período.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">Sem vendas no período.</td></tr>
                 ) : vendedores.map((v) => (
                   <tr key={v.nome}>
                     <td className="px-4 py-2 font-medium text-white">{v.nome}</td>
@@ -165,6 +172,8 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
                     <td className={`px-4 py-2 text-right font-semibold ${v.margem >= 26 ? "text-emerald-400" : v.margem >= 0 ? "text-amber-400" : "text-red-400"}`}>
                       {v.margem.toFixed(1)}%
                     </td>
+                    <td className="px-4 py-2 text-right font-medium text-sky-300">{v.clientesNovos}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{brl(v.primeirasVendas)}</td>
                     <td className="px-4 py-2 text-right text-slate-300">
                       {v.positivacao.toFixed(0)}% <span className="text-[10px] text-slate-500">({v.clientesPositivados}/{v.carteira})</span>
                     </td>
