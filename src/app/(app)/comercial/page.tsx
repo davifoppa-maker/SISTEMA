@@ -12,12 +12,19 @@ function isoDaysAgo(d: number) {
   return dt.toISOString().slice(0, 10);
 }
 
+// 1º dia do mês atual (YYYY-MM-01).
+function isoInicioDoMes() {
+  const dt = new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 export default async function ComercialPage({
   searchParams,
 }: {
   searchParams: { de?: string; ate?: string };
 }) {
-  const de = searchParams.de || isoDaysAgo(90);
+  // Padrão: mês atual (1º dia → hoje).
+  const de = searchParams.de || isoInicioDoMes();
   const ate = searchParams.ate || isoDaysAgo(0);
 
   const [views, catalog] = await Promise.all([listOrderViewsFast(), getCatalog()]);
