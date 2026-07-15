@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -85,12 +85,14 @@ export default async function ComercialPage({
     }
   }
 
-  interface Agg { faturamento: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; }
-  const novaAgg = (): Agg => ({ faturamento: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0 });
+  // fatMargem/custo: base do cálculo de margem (exclui clientes fora da margem,
+  // ex.: Exx). faturamento: total cheio (inclui Exx), para bater com o Olist.
+  interface Agg { faturamento: number; fatMargem: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; }
+  const novaAgg = (): Agg => ({ faturamento: 0, fatMargem: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0 });
   const porVendedor = new Map<string, Agg>();
   const abcMap = new Map<string, { nome: string; receita: number }>();
   const positivadosGlobal = new Set<string>();
-  let fatTotal = 0, custoTotal = 0, pedidosTotal = 0;
+  let fatTotal = 0, fatMargemTotal = 0, custoTotal = 0, pedidosTotal = 0;
 
   for (const v of views) {
     if (!dentroPeriodo(v.order.order_date)) continue;
@@ -116,15 +118,19 @@ export default async function ComercialPage({
     const receita = (v.order.total_value ?? 0) > 0 ? (v.order.total_value as number) : recItens;
     if (receita <= 0) continue;
 
+    // Exx (e afins): conta no faturamento, mas fora do cálculo de margem.
+    const foraMargem = clienteForaDaMargem(v.customerName);
+
     const sel = sellerOf(v.order.seller);
     const a = porVendedor.get(sel) ?? novaAgg();
     a.faturamento += receita;
-    a.custo += custo;
     a.pedidos += 1;
+    if (!foraMargem) { a.fatMargem += receita; a.custo += custo; }
     if (v.order.customer_id) a.clientes.add(v.order.customer_id);
     porVendedor.set(sel, a);
 
-    fatTotal += receita; custoTotal += custo; pedidosTotal += 1;
+    fatTotal += receita; pedidosTotal += 1;
+    if (!foraMargem) { fatMargemTotal += receita; custoTotal += custo; }
     if (v.order.customer_id) positivadosGlobal.add(v.order.customer_id);
   }
 
@@ -162,7 +168,7 @@ export default async function ComercialPage({
         faturamento: a.faturamento,
         pedidos: a.pedidos,
         ticketMedio: a.pedidos > 0 ? a.faturamento / a.pedidos : 0,
-        margem: a.faturamento > 0 ? ((a.faturamento - a.custo) / a.faturamento) * 100 : 0,
+        margem: a.fatMargem > 0 ? ((a.fatMargem - a.custo) / a.fatMargem) * 100 : 0,
         clientesPositivados: a.clientes.size,
         carteira,
         positivacao: carteira > 0 ? (a.clientes.size / carteira) * 100 : 0,
@@ -189,7 +195,7 @@ export default async function ComercialPage({
       faturamento: fatTotal,
       pedidos: pedidosTotal,
       ticketMedio: pedidosTotal > 0 ? fatTotal / pedidosTotal : 0,
-      margem: fatTotal > 0 ? ((fatTotal - custoTotal) / fatTotal) * 100 : 0,
+      margem: fatMargemTotal > 0 ? ((fatMargemTotal - custoTotal) / fatMargemTotal) * 100 : 0,
       positivacao: carteiraGlobal.size > 0 ? (positivadosGlobal.size / carteiraGlobal.size) * 100 : 0,
       clientesPositivados: positivadosGlobal.size,
       carteiraTotal: carteiraGlobal.size,

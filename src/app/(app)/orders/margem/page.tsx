@@ -1,7 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem } from "@/lib/pedido";
 import { buildSellerCanonicalizer } from "@/lib/seller";
 import { MargemPedidosClient } from "./margem-pedidos-client";
 
@@ -37,6 +37,7 @@ export default async function OrdemMargemPage() {
     .filter((v) => !ehCancelado(v.order.tiny_status)) // pedido cancelado não conta
     .filter((v) => !clienteIgnorado(v.customerName)) // cliente interno (ex.: Exx Nutrition)
     .filter((v) => !pedidoNumIgnorado(v.order.order_number)) // pedido excluído manualmente
+    .filter((v) => !clienteForaDaMargem(v.customerName)) // Exx: fora da margem (custo distorcido)
     .map((v) => ({
     id: v.order.id,
     order_number: v.order.order_number,
