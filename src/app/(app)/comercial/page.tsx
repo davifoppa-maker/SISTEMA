@@ -190,21 +190,27 @@ export default async function ComercialPage({
   });
 
   // POSITIVAÇÃO (independe do período): última compra de cada cliente em TODOS os
-  // tempos. Clientes inativos (não recompram há X dias) entram na lista de positivar.
+  // tempos, usando TODOS os pedidos (menos cancelados). Quando o pedido não tem
+  // customer_id, usa o NOME como chave — para não perder cliente por falta de
+  // vínculo. Clientes inativos (não recompram há X dias) entram na lista.
   interface CliAgg { nome: string; ultima: string; sel: string; pedidos: number; total: number; }
   const porCliente = new Map<string, CliAgg>();
   for (const v of views) {
-    const cid = v.order.customer_id;
-    if (!cid || !pedidoEhVenda(v)) continue;
+    if (ehCancelado(v.order.tiny_status)) continue; // cancelado não é compra
+    if (pedidoNumIgnorado(v.order.order_number)) continue;
+    const cid = (v.order.customer_id ?? "").trim();
+    const nome = (v.customerName ?? "").trim();
+    const key = cid || (nome && nome !== "—" ? `nome:${nome.toLowerCase()}` : "");
+    if (!key) continue; // sem qualquer identidade de cliente
     const dia = (v.order.order_date ?? "").slice(0, 10);
     if (dia.length !== 10 || !anoOk(dia)) continue;
     const receita = receitaDeVenda(v.order);
-    const cur = porCliente.get(cid);
-    if (!cur) porCliente.set(cid, { nome: v.customerName, ultima: dia, sel: sellerOf(v.order.seller), pedidos: 1, total: receita });
+    const cur = porCliente.get(key);
+    if (!cur) porCliente.set(key, { nome: nome || "—", ultima: dia, sel: sellerOf(v.order.seller), pedidos: 1, total: receita });
     else {
       cur.pedidos += 1;
       cur.total += receita;
-      if (dia > cur.ultima) { cur.ultima = dia; cur.sel = sellerOf(v.order.seller); cur.nome = v.customerName; }
+      if (dia > cur.ultima) { cur.ultima = dia; cur.sel = sellerOf(v.order.seller); cur.nome = nome || cur.nome; }
     }
   }
   const hojeIso = isoDaysAgo(0);
