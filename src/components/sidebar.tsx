@@ -35,10 +35,12 @@ import {
   Menu,
   X,
   Package2,
+  Users,
 } from "lucide-react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/customers", label: "Clientes", icon: Users },
   {
     href: "/orders",
     label: "Pedidos",
