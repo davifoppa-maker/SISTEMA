@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -31,6 +32,14 @@ export interface DadosComercial {
     primeirasVendas: number;
   }[];
   abc: { nome: string; receita: number; pctAcum: number; classe: string }[];
+  positivar: {
+    cliente: string;
+    vendedor: string;
+    ultimaCompra: string;
+    diasSemComprar: number;
+    pedidos: number;
+    faturamentoTotal: number;
+  }[];
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -82,10 +91,27 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
 
   const mesAtual = dados.de.slice(0, 7);
 
+  // Abas do dashboard.
+  const [aba, setAba] = useState<"faturamento" | "positivacao">("faturamento");
+
   return (
     <>
       <PageHeader title="📊 Dashboard Comercial" description="Desempenho de vendas por vendedor, carteira e curva ABC." />
 
+      {/* Abas */}
+      <div className="mb-5 flex gap-1 border-b border-white/10">
+        {([["faturamento", "Faturamento"], ["positivacao", "Positivação"]] as const).map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setAba(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+              aba === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
+
+      <div className={aba === "faturamento" ? "" : "hidden"}>
       {/* Filtro de período */}
       <div className="mb-4 space-y-3">
         {/* Atalhos rápidos */}
@@ -222,6 +248,99 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
           </div>
         </CardContent>
       </Card>
+      </div>
     </>
+  );
+}
+
+// ————————————————————————————————————————————————————————————————
+// Aba de Positivação: clientes que pararam de comprar (por vendedor / faixa de dias).
+function PositivacaoPanel({ positivar }: { positivar: DadosComercial["positivar"] }) {
+  const [vendedor, setVendedor] = useState("");
+  const [minDias, setMinDias] = useState(30);
+
+  const vendedores = useMemo(
+    () => [...new Set(positivar.map((c) => c.vendedor))].sort((a, b) => a.localeCompare(b)),
+    [positivar],
+  );
+  const lista = useMemo(
+    () => positivar.filter((c) => c.diasSemComprar >= minDias && (!vendedor || c.vendedor === vendedor)),
+    [positivar, minDias, vendedor],
+  );
+
+  const faixa = (d: number) =>
+    d >= 90 ? { txt: "90+ dias", cls: "bg-red-500/20 text-red-400" }
+    : d >= 60 ? { txt: "60–89 dias", cls: "bg-orange-500/20 text-orange-400" }
+    : { txt: "30–59 dias", cls: "bg-amber-500/20 text-amber-400" };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <p className="text-sm text-slate-300">
+          Clientes que <b className="text-white">já compraram</b> mas <b className="text-white">não recompram</b> há um tempo —
+          estão na hora de <b className="text-violet-300">positivar</b>. Ordenados pelos mais atrasados.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Vendedor</label>
+          <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}
+            className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+            <option value="">Todos</option>
+            {vendedores.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Sem comprar há</label>
+          <select value={minDias} onChange={(e) => setMinDias(Number(e.target.value))}
+            className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+            <option value={30}>+30 dias</option>
+            <option value={45}>+45 dias</option>
+            <option value={60}>+60 dias</option>
+            <option value={90}>+90 dias</option>
+          </select>
+        </div>
+        <span className="pb-2 text-xs text-slate-500">{lista.length} cliente(s) para positivar</span>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                  <th className="px-4 py-2">Cliente</th>
+                  <th className="px-4 py-2">Vendedor</th>
+                  <th className="px-4 py-2 text-right">Última compra</th>
+                  <th className="px-4 py-2 text-right">Sem comprar</th>
+                  <th className="px-4 py-2 text-right">Pedidos</th>
+                  <th className="px-4 py-2 text-right">Faturamento total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {lista.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Nenhum cliente nesse critério. 🎉</td></tr>
+                ) : lista.map((c, i) => {
+                  const f = faixa(c.diasSemComprar);
+                  return (
+                    <tr key={i}>
+                      <td className="px-4 py-2 font-medium text-white">{c.cliente}</td>
+                      <td className="px-4 py-2 text-slate-300">{c.vendedor}</td>
+                      <td className="px-4 py-2 text-right text-slate-300">{c.ultimaCompra.split("-").reverse().join("/")}</td>
+                      <td className="px-4 py-2 text-right">
+                        <span className={`rounded px-2 py-0.5 text-xs font-semibold ${f.cls}`}>{c.diasSemComprar} d</span>
+                      </td>
+                      <td className="px-4 py-2 text-right text-slate-300">{c.pedidos}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-white">{brl(c.faturamentoTotal)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

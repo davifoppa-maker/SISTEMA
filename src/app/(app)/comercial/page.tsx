@@ -189,6 +189,39 @@ export default async function ComercialPage({
     return { nome: p.nome, receita: p.receita, pctAcum, classe };
   });
 
+  // POSITIVAÇÃO (independe do período): última compra de cada cliente em TODOS os
+  // tempos. Clientes inativos (não recompram há X dias) entram na lista de positivar.
+  interface CliAgg { nome: string; ultima: string; sel: string; pedidos: number; total: number; }
+  const porCliente = new Map<string, CliAgg>();
+  for (const v of views) {
+    const cid = v.order.customer_id;
+    if (!cid || !pedidoEhVenda(v)) continue;
+    const dia = (v.order.order_date ?? "").slice(0, 10);
+    if (dia.length !== 10 || !anoOk(dia)) continue;
+    const receita = receitaDeVenda(v.order);
+    const cur = porCliente.get(cid);
+    if (!cur) porCliente.set(cid, { nome: v.customerName, ultima: dia, sel: sellerOf(v.order.seller), pedidos: 1, total: receita });
+    else {
+      cur.pedidos += 1;
+      cur.total += receita;
+      if (dia > cur.ultima) { cur.ultima = dia; cur.sel = sellerOf(v.order.seller); cur.nome = v.customerName; }
+    }
+  }
+  const hojeIso = isoDaysAgo(0);
+  const hojeMs = Date.parse(hojeIso);
+  const positivar = [...porCliente.values()]
+    .map((c) => ({
+      cliente: c.nome,
+      vendedor: c.sel,
+      ultimaCompra: c.ultima,
+      diasSemComprar: Math.max(0, Math.floor((hojeMs - Date.parse(c.ultima)) / 86400000)),
+      pedidos: c.pedidos,
+      faturamentoTotal: c.total,
+    }))
+    .filter((c) => c.diasSemComprar >= 30) // só quem já passou do ponto de recompra
+    .sort((a, b) => b.diasSemComprar - a.diasSemComprar)
+    .slice(0, 500);
+
   const dados: DadosComercial = {
     de, ate,
     kpis: {
@@ -204,6 +237,7 @@ export default async function ComercialPage({
     },
     vendedores,
     abc: abc.slice(0, 40),
+    positivar,
   };
 
   return <ComercialClient dados={dados} />;
