@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -30,6 +30,7 @@ export interface DadosComercial {
     positivacao: number;
     clientesNovos: number;
     primeirasVendas: number;
+    lista: { numero: string; data: string; cliente: string; valor: number; frete: number }[];
   }[];
   abc: { nome: string; receita: number; pctAcum: number; classe: string }[];
   positivar: {
@@ -93,6 +94,8 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
 
   // Abas do dashboard.
   const [aba, setAba] = useState<"faturamento" | "positivacao">("faturamento");
+  // Vendedor expandido (mostra os pedidos para validar contra o Olist).
+  const [aberto, setAberto] = useState<string | null>(null);
 
   return (
     <>
@@ -190,8 +193,11 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
                 {vendedores.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">Sem vendas no período.</td></tr>
                 ) : vendedores.map((v) => (
-                  <tr key={v.nome}>
-                    <td className="px-4 py-2 font-medium text-white">{v.nome}</td>
+                  <Fragment key={v.nome}>
+                  <tr className="cursor-pointer hover:bg-white/5" onClick={() => setAberto(aberto === v.nome ? null : v.nome)}>
+                    <td className="px-4 py-2 font-medium text-white">
+                      <span className="mr-1 inline-block text-slate-500">{aberto === v.nome ? "▾" : "▸"}</span>{v.nome}
+                    </td>
                     <td className="px-4 py-2 text-right font-semibold text-white">{brl(v.faturamento)}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{v.pedidos}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{brl(v.ticketMedio)}</td>
@@ -204,6 +210,47 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
                       {v.positivacao.toFixed(0)}% <span className="text-[10px] text-slate-500">({v.clientesPositivados}/{v.carteira})</span>
                     </td>
                   </tr>
+                  {aberto === v.nome ? (
+                    <tr key={v.nome + "-exp"}>
+                      <td colSpan={8} className="bg-black/20 px-4 py-3">
+                        <div className="overflow-x-auto rounded-lg border border-white/10">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-white/10 text-left text-slate-400">
+                                <th className="px-3 py-1.5">Pedido</th>
+                                <th className="px-3 py-1.5">Data</th>
+                                <th className="px-3 py-1.5">Cliente</th>
+                                <th className="px-3 py-1.5 text-right">Valor (c/ frete)</th>
+                                <th className="px-3 py-1.5 text-right">Frete</th>
+                                <th className="px-3 py-1.5 text-right">Valor s/ frete</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {v.lista.map((p) => (
+                                <tr key={p.numero}>
+                                  <td className="px-3 py-1.5 font-medium text-violet-300">#{p.numero}</td>
+                                  <td className="px-3 py-1.5 text-slate-400">{p.data.split("-").reverse().join("/")}</td>
+                                  <td className="px-3 py-1.5 text-slate-300">{p.cliente}</td>
+                                  <td className="px-3 py-1.5 text-right text-white">{brl(p.valor)}</td>
+                                  <td className="px-3 py-1.5 text-right text-slate-400">{brl(p.frete)}</td>
+                                  <td className="px-3 py-1.5 text-right text-slate-300">{brl(p.valor - p.frete)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t border-white/10 font-semibold text-white">
+                                <td className="px-3 py-1.5" colSpan={3}>Total ({v.lista.length})</td>
+                                <td className="px-3 py-1.5 text-right">{brl(v.lista.reduce((s, p) => s + p.valor, 0))}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-400">{brl(v.lista.reduce((s, p) => s + p.frete, 0))}</td>
+                                <td className="px-3 py-1.5 text-right">{brl(v.lista.reduce((s, p) => s + p.valor - p.frete, 0))}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

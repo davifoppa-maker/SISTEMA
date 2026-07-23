@@ -87,8 +87,9 @@ export default async function ComercialPage({
 
   // fatMargem/custo: base do cálculo de margem (exclui clientes fora da margem,
   // ex.: Exx). faturamento: total cheio (inclui Exx), para bater com o Olist.
-  interface Agg { faturamento: number; fatMargem: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; }
-  const novaAgg = (): Agg => ({ faturamento: 0, fatMargem: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0 });
+  interface PedidoLinha { numero: string; data: string; cliente: string; valor: number; frete: number; }
+  interface Agg { faturamento: number; fatMargem: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; lista: PedidoLinha[]; }
+  const novaAgg = (): Agg => ({ faturamento: 0, fatMargem: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0, lista: [] });
   const porVendedor = new Map<string, Agg>();
   const abcMap = new Map<string, { nome: string; receita: number }>();
   const positivadosGlobal = new Set<string>();
@@ -127,6 +128,13 @@ export default async function ComercialPage({
     a.pedidos += 1;
     if (!foraMargem) { a.fatMargem += receita; a.custo += custo; }
     if (v.order.customer_id) a.clientes.add(v.order.customer_id);
+    a.lista.push({
+      numero: v.order.order_number,
+      data: (v.order.order_date ?? "").slice(0, 10),
+      cliente: v.customerName,
+      valor: receita,
+      frete: v.order.freight_value ?? 0,
+    });
     porVendedor.set(sel, a);
 
     fatTotal += receita; pedidosTotal += 1;
@@ -174,6 +182,7 @@ export default async function ComercialPage({
         positivacao: carteira > 0 ? (a.clientes.size / carteira) * 100 : 0,
         clientesNovos: a.clientesNovos,
         primeirasVendas: a.primeirasVendas,
+        lista: [...a.lista].sort((p, q) => q.valor - p.valor),
       };
     })
     .sort((x, y) => y.faturamento - x.faturamento);
