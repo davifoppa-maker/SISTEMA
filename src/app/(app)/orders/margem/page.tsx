@@ -1,13 +1,25 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
+import { loadStoreFor, commitStore } from "@/lib/db";
+import { enrichOrderItems } from "@/lib/services/tiny";
 import { getCatalog } from "@/lib/catalog";
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem } from "@/lib/pedido";
 import { buildSellerCanonicalizer } from "@/lib/seller";
 import { MargemPedidosClient } from "./margem-pedidos-client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function OrdemMargemPage() {
+  // Auto-sync: ao abrir a página, preenche os itens dos pedidos que ainda não têm
+  // (mantém a margem sempre atualizada, sem clicar em "Atualizar pedidos"). É no-op
+  // quando não falta nada; best-effort para nunca quebrar o carregamento.
+  try {
+    const s = await loadStoreFor(["orders", "order_items"]);
+    const n = await enrichOrderItems(s, 15);
+    if (n > 0) await commitStore(s);
+  } catch { /* ignora — a página renderiza com o que tiver */ }
+
   const [views, CATALOG] = await Promise.all([listOrderViewsFast(), getCatalog()]);
 
   const sb = getSupabaseAdmin();

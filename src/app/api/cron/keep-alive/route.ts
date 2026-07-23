@@ -62,7 +62,7 @@ async function run() {
     // Lote modesto para caber no tempo; os demais entram nas próximas execuções.
     let itensPreenchidos = 0;
     try {
-      itensPreenchidos = await enrichOrderItems(store, 12);
+      itensPreenchidos = await enrichOrderItems(store, 30);
     } catch (e) {
       diag.itensErr = e instanceof Error ? e.message : String(e);
     }
