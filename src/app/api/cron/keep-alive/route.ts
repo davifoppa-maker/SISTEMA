@@ -41,23 +41,33 @@ async function run() {
   }
   diag.tokens = tokens;
 
-  // 2) Sync leve dos pedidos recentes (últimos 15 dias) das duas empresas.
+  // 2) Sync dos pedidos recentes das duas empresas. Janela de 45 dias e PAGINADO
+  //    para reprocessar o STATUS de mais pedidos — assim CANCELAMENTOS de pedidos
+  //    um pouco mais antigos refletem no nosso banco (e saem do faturamento).
   const tables: Array<keyof DataStore> = ["orders", "customers", "invoices", "shipments", "order_items", "api_sync_logs", "carriers", "shipment_volumes", "channel_detection_rules", "audit_logs", "sla_records"];
-  const dataInicial = new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10);
+  const dataInicial = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10);
 
   let synced = 0;
   try {
     const store = await loadStoreFor(tables);
     for (const empresa of COMPANIES) {
       if (!(await isTinyConnected(empresa).catch(() => false))) continue;
-      const list = await fetchRecentOrders({ dataInicial, limit: 50, offset: 0 }, empresa).catch(() => []);
-      for (const payload of list) {
-        try {
-          ingestOrder(store, tinyOrderSchema.parse(payload), empresa);
-          synced++;
-        } catch { /* ignora pedido inválido */ }
+      // Até 5 páginas de 100 (500 pedidos/conta) — cobre a janela sem estourar o tempo.
+      for (let offset = 0; offset < 500; offset += 100) {
+        const list = await fetchRecentOrders({ dataInicial, limit: 100, offset }, empresa).catch(() => []);
+        if (list.length === 0) break;
+        for (const payload of list) {
+          try {
+            ingestOrder(store, tinyOrderSchema.parse(payload), empresa);
+            synced++;
+          } catch { /* ignora pedido inválido */ }
+        }
+        if (list.length < 100) break;
       }
     }
+    // Grava os STATUS já sincronizados antes das partes pesadas (itens/remoção).
+    // Assim, se a função expirar no meio, os cancelamentos não se perdem.
+    await commitStore(store).catch(() => {});
     // Preenche os itens de pedidos que ainda não têm (usa a conta certa de cada).
     // Lote modesto para caber no tempo; os demais entram nas próximas execuções.
     let itensPreenchidos = 0;
