@@ -1,5 +1,6 @@
 import type { DataStore } from "@/lib/types";
 import { isPickupCarrier } from "@/lib/services/tiny";
+import { ehCancelado } from "@/lib/pedido";
 
 // "B2B em processamento": pedidos B2B em qualquer fase do Tiny ANTES de enviado
 // (em aberto, aprovado, preparando, faturado, pronto p/ envio) — ou seja, ainda
@@ -47,9 +48,12 @@ export interface DashboardMetrics {
 }
 
 export function computeMetrics(store: DataStore, audience: Audience = "b2b"): DashboardMetrics {
-  // Recorta o store pelo público escolhido.
+  // Recorta o store pelo público escolhido. REGRA GLOBAL: pedido CANCELADO
+  // nunca é contabilizado (sai de todos os cards/métricas do dashboard).
   const audOrderIds = new Set(
-    store.orders.filter((o) => orderMatchesAudience(o.channel, audience)).map((o) => o.id),
+    store.orders
+      .filter((o) => orderMatchesAudience(o.channel, audience) && !ehCancelado(o.tiny_status))
+      .map((o) => o.id),
   );
   const orders = store.orders.filter((o) => audOrderIds.has(o.id));
   const shipments = store.shipments.filter((s) => audOrderIds.has(s.order_id));
@@ -115,7 +119,7 @@ export interface CarrierRankRow {
 
 export function carrierRanking(store: DataStore, audience: Audience = "b2b"): CarrierRankRow[] {
   const audOrderIds = new Set(
-    store.orders.filter((o) => orderMatchesAudience(o.channel, audience)).map((o) => o.id),
+    store.orders.filter((o) => orderMatchesAudience(o.channel, audience) && !ehCancelado(o.tiny_status)).map((o) => o.id),
   );
   return store.carriers
     .map((carrier) => {

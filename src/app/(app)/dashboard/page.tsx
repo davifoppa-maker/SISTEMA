@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { loadStoreFor } from "@/lib/db";
 import { refreshSlaStatuses } from "@/lib/services/sla";
 import { carrierRanking, computeMetrics, isTodayBr, orderMatchesAudience, B2B_PROCESSING_STATUSES, type Audience } from "@/lib/services/dashboard";
+import { ehCancelado } from "@/lib/pedido";
 import { isPickupCarrier } from "@/lib/services/tiny";
 import { brl } from "@/lib/utils/format";
 import { DollarSign } from "lucide-react";
@@ -21,7 +22,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const m = computeMetrics(store, audience);
   const ranking = carrierRanking(store, audience);
   // Pedidos do público escolhido (recorta as listas/alertas dos cards).
-  const audOrderIds = new Set(store.orders.filter((o) => orderMatchesAudience(o.channel, audience)).map((o) => o.id));
+  const audOrderIds = new Set(store.orders.filter((o) => orderMatchesAudience(o.channel, audience) && !ehCancelado(o.tiny_status)).map((o) => o.id));
   const inAud = (orderId: string | null) => orderId != null && audOrderIds.has(orderId);
   // Retiradas no CD não geram atraso — não exibe alertas dessas expedições.
   const pickupShipmentIds = new Set(
