@@ -526,11 +526,15 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
  */
 export async function removeDeletedOlistOrders(
   store: DataStore,
-  cap = 12,
+  opts: number | { cap?: number; filter?: (o: Order) => boolean; ordenar?: "antigos" | "recentes" } = 12,
 ): Promise<{ checked: number; removed: number; removedIds: string[] }> {
+  const o = typeof opts === "number" ? { cap: opts } : opts;
+  const cap = o.cap ?? 12;
+  const filter = o.filter ?? (() => true);
+  const dir = o.ordenar === "recentes" ? -1 : 1; // padrão: mais antigos primeiro (rotação)
   const candidates = [...store.orders]
-    .filter((o) => o.tiny_id)
-    .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))
+    .filter((ord) => ord.tiny_id && filter(ord))
+    .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)) * dir)
     .slice(0, cap);
 
   let checked = 0;

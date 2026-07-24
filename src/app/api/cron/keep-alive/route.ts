@@ -81,7 +81,7 @@ async function run() {
     // Apaga do nosso banco os pedidos que foram deletados no Olist (só 404 confirmado).
     let removidos = 0;
     try {
-      const r = await removeDeletedOlistOrders(store, 12);
+      const r = await removeDeletedOlistOrders(store, { cap: 12 });
       removidos = r.removed;
       diag.pedidosRemovidos = r.removed;
       diag.pedidosVerificados = r.checked;
