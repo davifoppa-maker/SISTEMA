@@ -1,12 +1,12 @@
 import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok, fail } from "@/lib/api";
-import { ingestOrder } from "@/lib/services/tiny";
+import { ingestOrder, removeDeletedOlistOrders } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 import type { DataStore } from "@/lib/types";
 
-export const maxDuration = 10;
+export const maxDuration = 60;
 
 function defaultDataInicial(): string {
   const d = new Date();
@@ -79,7 +79,19 @@ export async function POST(req: Request) {
       await commitStore(store);
     }
 
-    return ok({ synced: results.length, results, dataInicial, diag });
+    // Remove os pedidos APAGADOS no Olist (404 confirmado). Mira os mais RECENTES
+    // (onde ficam as exclusões novas). Bounded para caber no tempo.
+    let removidos = 0;
+    try {
+      const r = await removeDeletedOlistOrders(store, { cap: 20, ordenar: "recentes" });
+      removidos = r.removed;
+      diag.removidos = r.removedIds;
+      if (r.removed > 0) await commitStore(store);
+    } catch (e) {
+      diag.removeErr = e instanceof Error ? e.message : String(e);
+    }
+
+    return ok({ synced: results.length, removidos, results, dataInicial, diag });
   } catch (err) {
     return fail(err instanceof Error ? err.message : "Erro interno no sync", 500);
   }
