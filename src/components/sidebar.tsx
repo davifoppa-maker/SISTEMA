@@ -82,6 +82,7 @@ const nav = [
   { href: "/alertas", label: "Alertas Comerciais", icon: AlertTriangle },
   { href: "/comercial", label: "Dashboard Comercial", icon: TrendingUp },
   { href: "/comercial/conferencia", label: "Conferência Olist", icon: TrendingUp },
+  { href: "/comercial/duplicados", label: "Pente-fino duplicados", icon: AlertTriangle },
   { href: "/bonificados", label: "Pedidos Bonificados", icon: Gift },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
