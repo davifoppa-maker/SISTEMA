@@ -556,17 +556,51 @@ export async function removeDeletedOlistOrders(
     if (existe) { order.updated_at = nowIso(); continue; } // mantém e rotaciona
     if (erro) continue; // dúvida: mantém
     // 404 confirmado nas duas contas → apagado no Olist. Remove daqui.
-    const shIds = store.shipments.filter((s) => s.order_id === order.id).map((s) => s.id);
-    store.orders = store.orders.filter((o) => o.id !== order.id);
-    store.order_items = store.order_items.filter((i) => i.order_id !== order.id);
-    store.invoices = store.invoices.filter((i) => i.order_id !== order.id);
-    store.shipments = store.shipments.filter((s) => s.order_id !== order.id);
-    const foraDoPedido = (shipmentId: string | null) => shipmentId == null || !shIds.includes(shipmentId);
-    store.shipment_volumes = store.shipment_volumes.filter((v) => foraDoPedido(v.shipment_id));
-    store.sla_records = store.sla_records.filter((r) => foraDoPedido(r.shipment_id));
+    removeOrderCascade(store, order.id);
     removedIds.push(order.id);
   }
   return { checked, removed: removedIds.length, removedIds };
+}
+
+// Remove um pedido e tudo que depende dele (itens, NF, expedição, volumes, SLA).
+export function removeOrderCascade(store: DataStore, orderId: string): void {
+  const shIds = store.shipments.filter((s) => s.order_id === orderId).map((s) => s.id);
+  store.orders = store.orders.filter((o) => o.id !== orderId);
+  store.order_items = store.order_items.filter((i) => i.order_id !== orderId);
+  store.invoices = store.invoices.filter((i) => i.order_id !== orderId);
+  store.shipments = store.shipments.filter((s) => s.order_id !== orderId);
+  const foraDoPedido = (shipmentId: string | null) => shipmentId == null || !shIds.includes(shipmentId);
+  store.shipment_volumes = store.shipment_volumes.filter((v) => foraDoPedido(v.shipment_id));
+  store.sla_records = store.sla_records.filter((r) => foraDoPedido(r.shipment_id));
+}
+
+// Remove pedidos DUPLICADOS (mesmo número + empresa, source tiny). Mantém 1 por
+// grupo — o mais completo (mais itens; empate = updated_at mais recente).
+export function dedupOrders(store: DataStore): { grupos: number; removed: number; removedIds: string[]; detalhe: { numero: string; empresa: string; copias: number; mantido: string }[] } {
+  const grupos = new Map<string, Order[]>();
+  for (const o of store.orders) {
+    if (o.source !== "tiny") continue;
+    const empresa = (o as any).empresa ?? "nyer";
+    const key = `${empresa}::${o.order_number}`;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key)!.push(o);
+  }
+  const removedIds: string[] = [];
+  const detalhe: { numero: string; empresa: string; copias: number; mantido: string }[] = [];
+  for (const [key, arr] of grupos) {
+    if (arr.length < 2) continue;
+    const [empresa, numero] = key.split("::");
+    const ranked = arr
+      .map((o) => ({ o, itens: store.order_items.filter((i) => i.order_id === o.id).length }))
+      .sort((a, b) => b.itens - a.itens || String(b.o.updated_at).localeCompare(String(a.o.updated_at)));
+    const manter = ranked[0].o;
+    for (const { o } of ranked.slice(1)) {
+      removeOrderCascade(store, o.id);
+      removedIds.push(o.id);
+    }
+    detalhe.push({ numero, empresa, copias: arr.length, mantido: manter.id });
+  }
+  return { grupos: detalhe.length, removed: removedIds.length, removedIds, detalhe };
 }
 
 function tinyDateToIso(v: unknown): string | null {

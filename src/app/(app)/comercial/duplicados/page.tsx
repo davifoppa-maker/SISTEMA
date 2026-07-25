@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { loadStoreFor } from "@/lib/db";
 import { ehCancelado } from "@/lib/pedido";
 import { brl } from "@/lib/utils/format";
+import { DedupButton } from "./dedup-button";
 import type { DataStore } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,13 @@ export default async function DuplicadosPage() {
   return (
     <>
       <PageHeader title="🧹 Pente-fino de duplicados" description="Pedidos e clientes repetidos que inflam faturamento e carteira." />
+
+      <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+        <p className="mb-3 text-sm text-slate-300">
+          Apaga os <b className="text-white">pedidos duplicados</b> (mesmo número/empresa), mantendo <b className="text-white">1 de cada</b> — o mais completo. Ação irreversível; roda um dry-run antes de confirmar.
+        </p>
+        <DedupButton />
+      </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Pedidos duplicados (nº)" value={String(dupNumero.length)} alerta={dupNumero.length > 0} />
