@@ -61,5 +61,11 @@ export default async function OrdemMargemPage() {
     }),
   }));
 
-  return <MargemPedidosClient orders={orders} />;
+  // Mês vigente (YYYY-MM) para abrir já filtrado. Nº de pedidos sem itens para
+  // o sync em segundo plano.
+  const now = new Date();
+  const mesVigente = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const semItensTotal = orders.filter((o) => o.items.length === 0).length;
+
+  return <MargemPedidosClient orders={orders} mesVigente={mesVigente} semItensTotal={semItensTotal} />;
 }

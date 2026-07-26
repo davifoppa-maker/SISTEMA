@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface OrderItem {
@@ -112,16 +113,36 @@ function MargemBar({ pct, min }: { pct: number | null; min: number }) {
   );
 }
 
-export function MargemPedidosClient({ orders }: { orders: Order[] }) {
+export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0 }: { orders: Order[]; mesVigente?: string; semItensTotal?: number }) {
   const [margemMin, setMargemMin] = useState(20);
   // costOverrides: sku → custo editado pelo usuário
   const [costOverrides, setCostOverrides] = useState<Record<string, number>>({});
 
   // Filtros: mês (YYYY-MM), intervalo personalizado (de/até) e vendedor.
-  const [mes, setMes] = useState("");
+  // Abre já no MÊS VIGENTE.
+  const [mes, setMes] = useState(mesVigente);
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
   const [vendedor, setVendedor] = useState("");
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  // Sync em SEGUNDO PLANO: se há pedidos sem itens, preenche do Tiny sem travar
+  // o carregamento. Ao terminar, recarrega os dados da página.
+  const router = useRouter();
+  const jaSincronizou = useRef(false);
+  useEffect(() => {
+    if (semItensTotal <= 0 || jaSincronizou.current) return;
+    jaSincronizou.current = true;
+    setSyncMsg(`Sincronizando ${semItensTotal} pedido(s) do Tiny…`);
+    fetch("/api/orders/enrich?cap=30", { method: "POST" })
+      .then((r) => r.json())
+      .then((r) => {
+        const n = r?.data?.enriched ?? r?.enriched ?? 0;
+        if (n > 0) { setSyncMsg(`${n} pedido(s) sincronizado(s). Atualizando…`); router.refresh(); }
+        else setSyncMsg(null);
+      })
+      .catch(() => setSyncMsg(null));
+  }, [semItensTotal, router]);
 
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   function aplicarMes(m: string) { setMes(m); setDe(""); setAte(""); }
@@ -257,11 +278,15 @@ export function MargemPedidosClient({ orders }: { orders: Order[] }) {
             ))}
           </div>
 
-          {semItens > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              <strong>{semItens}</strong> pedido(s) sem itens — clique em "Atualizar pedidos" para sincronizar do Tiny.
+          {syncMsg ? (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+              🔄 {syncMsg}
             </div>
-          )}
+          ) : semItens > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <strong>{semItens}</strong> pedido(s) sem itens — sincronizando do Tiny automaticamente…
+            </div>
+          ) : null}
 
           {/* Tabela de pedidos */}
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
