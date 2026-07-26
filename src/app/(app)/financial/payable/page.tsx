@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 interface Payable {
   id: string;
+  tiny_id?: string | null;
   supplier: string;
   description: string | null;
   value: number;
@@ -139,6 +140,7 @@ export default async function PayablePage({
           <Table>
             <Thead>
               <Tr>
+                <Th>Empresa</Th>
                 <Th>Fornecedor</Th>
                 <Th>Descrição</Th>
                 <Th>Valor</Th>
@@ -151,15 +153,19 @@ export default async function PayablePage({
             <tbody>
               {payables.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <EmptyState message="Nenhuma conta encontrada." />
                   </td>
                 </tr>
               ) : (
                 payables.map((p) => {
                   const { label: stLabel, cls: stCls } = statusBadge(p, today);
+                  const empresa = (p.tiny_id ?? "").startsWith("ecopro:") ? "Ecopro"
+                    : (p.tiny_id ?? "").startsWith("nyer:") ? "NRX"
+                    : (p.notes === "Ecopro" || p.notes === "NRX") ? p.notes : "Manual";
                   return (
                     <Tr key={p.id}>
+                      <Td className="text-slate-500">{empresa}</Td>
                       <Td className="font-medium text-slate-800">{p.supplier}</Td>
                       <Td className="text-slate-500">{p.description ?? "—"}</Td>
                       <Td className="font-semibold">{brl(Number(p.value))}</Td>

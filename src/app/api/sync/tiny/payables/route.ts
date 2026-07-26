@@ -4,58 +4,63 @@ import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 
 export const maxDuration = 60;
 
-async function fetchAll(situacao?: number) {
+const COMPANIES = [
+  { id: "nyer", label: "NRX" },
+  { id: "ecopro", label: "Ecopro" },
+] as const;
+
+async function fetchAll(companyId: string, situacao?: number) {
   const collected: Awaited<ReturnType<typeof fetchTinyPayables>> = [];
-  for (let offset = 0; offset < 2000; offset += 100) {
-    const page = await fetchTinyPayables({ situacao, limit: 100, offset });
+  for (let offset = 0; offset < 3000; offset += 100) {
+    const page = await fetchTinyPayables({ situacao, limit: 100, offset }, companyId);
     collected.push(...page);
     if (page.length < 100) break;
   }
   return collected;
 }
 
+// Sincroniza CONTAS A PAGAR das DUAS empresas (NRX + Ecopro) do Olist Tiny.
+// tiny_id é prefixado por empresa ("nyer:123") para não colidir entre as contas.
 export async function POST() {
-  if (!await isTinyConnected().catch(() => false)) {
-    return fail("Tiny não conectado", 400);
-  }
+  const diag: Record<string, unknown> = {};
+  const rows: any[] = [];
 
-  try {
-    // Busca todas as situações: sem filtro (pega tudo), + explicitamente pagas e vencidas
-    const [all, paid] = await Promise.all([
-      fetchAll(),        // sem filtro = pendentes/todas
-      fetchAll(2),       // situacao=2 = pagas
-    ]);
-
-    // Deduplica por tiny_id
-    const byId = new Map<string, (typeof all)[0]>();
-    for (const p of [...all, ...paid]) {
-      if (p.tiny_id) byId.set(p.tiny_id, p);
+  for (const emp of COMPANIES) {
+    const conectado = await isTinyConnected(emp.id).catch(() => false);
+    if (!conectado) { diag[emp.id] = "não conectado"; continue; }
+    try {
+      const [todas, pagas] = await Promise.all([fetchAll(emp.id), fetchAll(emp.id, 2)]);
+      // Deduplica por tiny_id dentro da empresa.
+      const byId = new Map<string, (typeof todas)[number]>();
+      for (const p of [...todas, ...pagas]) if (p.tiny_id) byId.set(p.tiny_id, p);
+      diag[emp.id] = byId.size;
+      for (const p of byId.values()) {
+        rows.push({
+          tiny_id: `${emp.id}:${p.tiny_id}`, // namespaced por empresa
+          supplier: p.supplier,
+          description: p.description,
+          value: p.value,
+          issue_date: p.issue_date ?? p.due_date,
+          due_date: p.due_date,
+          paid_at: p.paid_at,
+          category: p.category,
+          notes: emp.label, // guarda a empresa (não há coluna própria)
+        });
+      }
+    } catch (e) {
+      diag[`${emp.id}_erro`] = e instanceof Error ? e.message : String(e);
     }
-
-    const collected = Array.from(byId.values());
-    if (collected.length === 0) return ok({ synced: 0 });
-
-    const sb = getSupabaseAdmin();
-    const rows = collected.map((p) => ({
-      tiny_id: p.tiny_id,
-      supplier: p.supplier,
-      description: p.description,
-      value: p.value,
-      issue_date: p.issue_date ?? p.due_date,
-      due_date: p.due_date,
-      paid_at: p.paid_at,
-      category: p.category,
-      notes: null,
-    }));
-
-    const { error } = await sb
-      .from("payables")
-      .upsert(rows, { onConflict: "tiny_id" });
-
-    if (error) return fail(`Erro ao salvar: ${error.message}`, 500);
-
-    return ok({ synced: rows.length });
-  } catch (err) {
-    return fail("Erro ao buscar contas a pagar do Tiny", 502, err instanceof Error ? err.message : err);
   }
+
+  if (rows.length === 0) {
+    const algumConectado = Object.values(diag).some((v) => typeof v === "number");
+    if (!algumConectado) return fail("Tiny não conectado (nenhuma empresa)", 400, diag);
+    return ok({ synced: 0, diag });
+  }
+
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from("payables").upsert(rows, { onConflict: "tiny_id" });
+  if (error) return fail(`Erro ao salvar: ${error.message}`, 500);
+
+  return ok({ synced: rows.length, diag });
 }

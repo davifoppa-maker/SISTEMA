@@ -45,11 +45,15 @@ function extractSupplier(item: any, rawDesc: string): string {
 // Sempre responde 200 para o Tiny não re-enviar em loop.
 export async function POST(req: Request) {
   try {
+    const empresaParam = new URL(req.url).searchParams.get("empresa");
+    const empresa = empresaParam === "ecopro" ? "ecopro" : "nyer";
+    const empresaLabel = empresa === "ecopro" ? "Ecopro" : "NRX";
     const payload = await readBody(req);
     const entity = payload?.dados ?? payload?.contaPagar ?? payload?.conta ?? payload;
 
-    const tinyId = String(entity?.id ?? "");
-    if (!tinyId) return ok({ received: true, skipped: "sem id" });
+    const rawTinyId = String(entity?.id ?? "");
+    if (!rawTinyId) return ok({ received: true, skipped: "sem id" });
+    const tinyId = `${empresa}:${rawTinyId}`; // mesma chave da sync (namespaced)
 
     const rawDesc: string = entity?.historico ?? entity?.descricao ?? entity?.observacoes ?? "";
     const supplier = extractSupplier(entity, rawDesc);
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
       due_date: dueDate,
       paid_at: parseTinyDate(entity?.dataPagamento ?? entity?.dataBaixa),
       category: entity?.categoria?.descricao ?? entity?.categoria ?? null,
-      notes: null,
+      notes: empresaLabel,
     };
 
     const sb = getSupabaseAdmin();

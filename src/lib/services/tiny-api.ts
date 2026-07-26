@@ -1142,8 +1142,8 @@ export async function fetchTinyPayables(params: {
   situacao?: number; // 1=aberto, 2=pago, 3=vencido (Tiny V3)
   offset?: number;
   limit?: number;
-}): Promise<TinyPayable[]> {
-  const c = getTinyConfig();
+}, companyId = "nyer"): Promise<TinyPayable[]> {
+  const c = getTinyConfig(companyId);
   const url = new URL(`${c.apiBaseUrl}/contas-pagar`);
   if (params.dataInicial) url.searchParams.set("dataVencimentoInicial", params.dataInicial);
   if (params.dataFinal) url.searchParams.set("dataVencimentoFinal", params.dataFinal);
@@ -1151,7 +1151,7 @@ export async function fetchTinyPayables(params: {
   url.searchParams.set("limit", String(params.limit ?? 100));
   url.searchParams.set("offset", String(params.offset ?? 0));
 
-  const res = await tinyFetch(url.toString());
+  const res = await tinyFetch(url.toString(), {}, companyId);
   if (!res.ok) throw new Error(`Tiny contas-pagar ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
   const json = (await res.json()) as Record<string, any>;
