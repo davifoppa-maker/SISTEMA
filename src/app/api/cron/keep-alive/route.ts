@@ -4,6 +4,7 @@ import { ingestOrder, enrichOrderItems, removeDeletedOlistOrders } from "@/lib/s
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, getValidAccessToken, isTinyConnected } from "@/lib/services/tiny-api";
 import { syncUnknownProducts } from "@/lib/catalog";
+import { syncPayablesAllCompanies } from "@/lib/services/financeiro-sync";
 import { nowIso, uuid } from "@/lib/utils/ids";
 import type { DataStore } from "@/lib/types";
 
@@ -107,6 +108,15 @@ async function run() {
     diag.produtosNovos = r.adicionados;
   } catch (e) {
     diag.produtosErr = e instanceof Error ? e.message : String(e);
+  }
+
+  // FINANCEIRO espelhado: sincroniza contas a pagar das duas empresas (NRX+Ecopro).
+  try {
+    const r = await syncPayablesAllCompanies();
+    diag.contasPagar = r.synced;
+    diag.contasPagarDiag = r.diag;
+  } catch (e) {
+    diag.contasPagarErr = e instanceof Error ? e.message : String(e);
   }
 
   return ok({ synced, diag });
