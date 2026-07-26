@@ -4,6 +4,7 @@ import { loadStoreFor } from "@/lib/db";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { ehCancelado } from "@/lib/pedido";
 import { brl } from "@/lib/utils/format";
+import { RemoverApagadosButton } from "./remover-button";
 import type { DataStore } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -137,8 +138,11 @@ export default async function ConferenciaPage({
 
       <Card className="mb-4">
         <CardContent className="p-0">
-          <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
-            Pedidos no nosso sistema que NÃO estão no Olist ({soNoNosso.length}) — explicam faturamento MAIOR (apagados/cancelados)
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <span className="text-sm font-semibold text-white">
+              Pedidos no nosso sistema que NÃO estão no Olist ({soNoNosso.length}) — explicam faturamento MAIOR (apagados/cancelados)
+            </span>
+            {soNoNosso.length > 0 ? <RemoverApagadosButton numeros={soNoNosso.map((o) => o.numero)} /> : null}
           </div>
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="border-b border-white/10 text-left text-slate-400"><th className="px-3 py-1.5">Pedido</th><th className="px-3 py-1.5">Status</th><th className="px-3 py-1.5 text-right">Valor (nosso)</th></tr></thead>
