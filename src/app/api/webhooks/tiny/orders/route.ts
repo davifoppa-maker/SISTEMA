@@ -1,11 +1,29 @@
 import { loadStore, commitStore } from "@/lib/db";
 import { ok } from "@/lib/api";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
-import { ingestOrder, registerWebhook, applyTinyStatusByTinyId } from "@/lib/services/tiny";
+import { ingestOrder, registerWebhook, applyTinyStatusByTinyId, removeOrderCascade } from "@/lib/services/tiny";
 import { fetchOrderById, fetchOrderNF } from "@/lib/services/tiny-api";
 import { nowIso, uuid } from "@/lib/utils/ids";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Confirma se um pedido AINDA existe no Tiny. fetchOrderById devolve null em 404
+// e LANÇA em erro de rede/API — então distinguimos "apagado" de "indisponível".
+//   'existe'   → achou em alguma conta
+//   'apagado'  → 404 confirmado nas contas checadas, sem erro (foi excluído)
+//   'incerto'  → houve erro de rede/API: NÃO podemos concluir que sumiu
+async function estadoNoTiny(tinyId: string): Promise<"existe" | "apagado" | "incerto"> {
+  let algumErro = false;
+  for (const emp of ["nyer", "ecopro"] as const) {
+    try {
+      const p = await fetchOrderById(tinyId, emp);
+      if (p) return "existe";
+    } catch {
+      algumErro = true;
+    }
+  }
+  return algumErro ? "incerto" : "apagado";
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -81,6 +99,32 @@ export async function POST(req: Request) {
       full = await fetchOrderById(tinyId, companyId).catch(() => null);
     }
     if (!full) {
+      // EXCLUSÃO em tempo real: se o pedido não voltou no detalhe, confirma se
+      // foi APAGADO no Olist (404 nas duas contas). Se sim, remove daqui na hora.
+      if (tinyId) {
+        const estado = await estadoNoTiny(tinyId);
+        if (estado === "apagado") {
+          const alvo = store.orders.find((o) => o.tiny_id === tinyId);
+          if (alvo) {
+            const num = alvo.order_number;
+            removeOrderCascade(store, alvo.id);
+            event.status = "processed";
+            event.processed_at = nowIso();
+            store.api_sync_logs.push({
+              id: uuid(), source: "tiny", operation: "webhook_order", ok: true,
+              detail: `pedido ${num} APAGADO no Olist (404 confirmado) — removido em tempo real`,
+              created_at: nowIso(),
+            });
+            await commitStore(store);
+            return ok({ deleted: true, order_number: num, webhook_event_id: event.id });
+          }
+          // Já não existe aqui: nada a fazer.
+          event.status = "processed";
+          event.processed_at = nowIso();
+          await commitStore(store);
+          return ok({ deleted: true, already_absent: true, webhook_event_id: event.id });
+        }
+      }
       // Sem detalhe (Tiny indisponível): aplica ao menos o STATUS que veio no
       // próprio webhook — é o que move o pedido de etapa em tempo real (ex.:
       // "enviado" → checkout de expedição). O sync seguinte completa o resto.
