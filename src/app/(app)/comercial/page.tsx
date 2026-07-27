@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, margemFixaPct } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -123,10 +123,14 @@ export default async function ComercialPage({
     const foraMargem = clienteForaDaMargem(v.customerName);
 
     const sel = sellerOf(v.order.seller);
+    // Exceção de MARGEM FIXA (ex.: Murilo): custo distorcido → força a margem.
+    const pctFixa = margemFixaPct(sel) ?? margemFixaPct(v.customerName);
+    const custoMargem = pctFixa != null ? receita * (1 - pctFixa / 100) : custo;
+
     const a = porVendedor.get(sel) ?? novaAgg();
     a.faturamento += receita;
     a.pedidos += 1;
-    if (!foraMargem) { a.fatMargem += receita; a.custo += custo; }
+    if (!foraMargem) { a.fatMargem += receita; a.custo += custoMargem; }
     if (v.order.customer_id) a.clientes.add(v.order.customer_id);
     a.lista.push({
       numero: v.order.order_number,
@@ -138,7 +142,7 @@ export default async function ComercialPage({
     porVendedor.set(sel, a);
 
     fatTotal += receita; pedidosTotal += 1;
-    if (!foraMargem) { fatMargemTotal += receita; custoTotal += custo; }
+    if (!foraMargem) { fatMargemTotal += receita; custoTotal += custoMargem; }
     if (v.order.customer_id) positivadosGlobal.add(v.order.customer_id);
   }
 

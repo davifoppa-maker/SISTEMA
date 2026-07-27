@@ -26,6 +26,21 @@ export function clienteForaDaMargem(nome: string | null | undefined): boolean {
   return CLIENTES_FORA_DA_MARGEM.some((c) => n.includes(c));
 }
 
+// MARGEM FIXA por vendedor/cliente (exceções). Quando o custo real está
+// distorcido e joga a margem pra valores absurdos, forçamos uma margem fixa nesses
+// pedidos (custo = receita × (1 − pct/100)), sem tirá-los do faturamento.
+// Comparação por "contém" no nome normalizado.
+const MARGEM_FIXA: { match: string; pct: number }[] = [
+  { match: "murilo oliveira barbosa", pct: 5 },
+];
+
+export function margemFixaPct(nome: string | null | undefined): number | null {
+  const n = normNome(nome);
+  if (!n) return null;
+  const hit = MARGEM_FIXA.find((m) => n.includes(m.match));
+  return hit ? hit.pct : null;
+}
+
 // Pedidos EXCLUÍDOS das análises por número (ex.: transferência interna com custo
 // distorcido). Não some do banco (o cron reimporta do Olist), some das telas.
 const PEDIDOS_IGNORADOS = new Set<string>(["175"]);
