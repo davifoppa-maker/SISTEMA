@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { loadStoreFor } from "@/lib/db";
 import { fetchRecentOrders, isTinyConnected } from "@/lib/services/tiny-api";
 import { ehCancelado } from "@/lib/pedido";
+import { buildSellerCanonicalizer } from "@/lib/seller";
 import { brl } from "@/lib/utils/format";
 import { RemoverApagadosButton } from "./remover-button";
 import type { DataStore } from "@/lib/types";
@@ -29,7 +30,7 @@ export default async function ConferenciaPage({
   const ate = searchParams.ate || hoje();
 
   // OLIST: pagina os pedidos das duas contas no período.
-  const olist = new Map<string, { valor: number; situacao: string; empresa: string }>();
+  const olist = new Map<string, { valor: number; situacao: string; empresa: string; vendedor: string }>();
   const olistErros: string[] = [];
   for (const empresa of COMPANIES) {
     if (!(await isTinyConnected(empresa).catch(() => false))) { olistErros.push(`${empresa}: não conectado`); continue; }
@@ -39,7 +40,7 @@ export default async function ConferenciaPage({
         if (!lote.length) break;
         for (const p of lote as any[]) {
           const numero = String(p.numero ?? "");
-          if (numero && !olist.has(numero)) olist.set(numero, { valor: Number(p.valor ?? 0) || 0, situacao: String(p.situacao ?? ""), empresa });
+          if (numero && !olist.has(numero)) olist.set(numero, { valor: Number(p.valor ?? 0) || 0, situacao: String(p.situacao ?? ""), empresa, vendedor: String(p.vendedor ?? "") });
         }
         if (lote.length < 100) break;
       }
@@ -49,11 +50,25 @@ export default async function ConferenciaPage({
   // NOSSO SISTEMA: pedidos no mesmo período (por order_date).
   const store = await loadStoreFor(["orders"] as Array<keyof DataStore>);
   const dentro = (d: string | null) => { const x = (d ?? "").slice(0, 10); return !!x && x >= de && x <= ate; };
-  const nosso = new Map<string, { valor: number; situacao: string }>();
+  const nosso = new Map<string, { valor: number; situacao: string; vendedor: string }>();
   for (const o of store.orders) {
     if (!dentro(o.order_date)) continue;
-    nosso.set(String(o.order_number ?? ""), { valor: Number(o.total_value ?? 0) || 0, situacao: o.tiny_status ?? "" });
+    nosso.set(String(o.order_number ?? ""), { valor: Number(o.total_value ?? 0) || 0, situacao: o.tiny_status ?? "", vendedor: o.seller ?? "" });
   }
+
+  // COMPARAÇÃO POR VENDEDOR — mesmo canonicalizador nos dois lados (nomes alinhados).
+  const canonVend = buildSellerCanonicalizer([
+    ...[...olist.values()].map((v) => v.vendedor),
+    ...[...nosso.values()].map((v) => v.vendedor),
+  ]);
+  const olistVend = new Map<string, number>();
+  for (const v of olist.values()) { if (ehCancelado(v.situacao)) continue; const k = canonVend(v.vendedor); olistVend.set(k, (olistVend.get(k) ?? 0) + v.valor); }
+  const sysVend = new Map<string, number>();
+  for (const v of nosso.values()) { if (ehCancelado(v.situacao)) continue; const k = canonVend(v.vendedor); sysVend.set(k, (sysVend.get(k) ?? 0) + v.valor); }
+  const vendedores = [...new Set([...olistVend.keys(), ...sysVend.keys()])]
+    .map((nome) => ({ nome, olist: olistVend.get(nome) ?? 0, nosso: sysVend.get(nome) ?? 0 }))
+    .map((r) => ({ ...r, diff: r.olist - r.nosso }))
+    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 
   const somaOlist = [...olist.values()].filter((v) => !ehCancelado(v.situacao)).reduce((s, v) => s + v.valor, 0);
   const somaNosso = [...nosso.values()].filter((v) => !ehCancelado(v.situacao)).reduce((s, v) => s + v.valor, 0);
@@ -120,6 +135,32 @@ export default async function ConferenciaPage({
           </div>
         </div>
       </div>
+
+      <Card className="mb-4">
+        <CardContent className="p-0">
+          <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
+            Faturamento por VENDEDOR — Olist × Sistema (mesma canonicalização de nome)
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-xs">
+            <thead><tr className="border-b border-white/10 text-left text-slate-400">
+              <th className="px-3 py-1.5">Vendedor</th>
+              <th className="px-3 py-1.5 text-right">Olist</th>
+              <th className="px-3 py-1.5 text-right">Sistema</th>
+              <th className="px-3 py-1.5 text-right">Diferença</th>
+            </tr></thead>
+            <tbody className="divide-y divide-white/5">
+              {vendedores.map((v) => (
+                <tr key={v.nome}>
+                  <td className="px-3 py-1.5 text-white">{v.nome}</td>
+                  <td className="px-3 py-1.5 text-right text-slate-300">{brl(v.olist)}</td>
+                  <td className="px-3 py-1.5 text-right text-slate-300">{brl(v.nosso)}</td>
+                  <td className={`px-3 py-1.5 text-right font-semibold ${Math.abs(v.diff) < 1 ? "text-emerald-400" : "text-red-400"}`}>{brl(v.diff)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-4">
         <CardContent className="p-0">
