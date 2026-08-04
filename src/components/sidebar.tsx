@@ -38,7 +38,16 @@ import {
   Users,
 } from "lucide-react";
 
-const nav = [
+type NavChild = { href: string; label: string };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  children?: NavChild[];
+  external?: boolean;
+};
+
+const nav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/customers", label: "Clientes", icon: Users },
   {
@@ -77,6 +86,7 @@ const nav = [
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/quotes", label: "Cotação manual", icon: Calculator },
+  { href: "/calculadora-custos.html", label: "Calculadora de Custos", icon: Calculator, external: true },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
   { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
   { href: "/alertas", label: "Alertas Comerciais", icon: AlertTriangle },
@@ -175,6 +185,26 @@ function SidebarContent({ onNavigate, isRep }: { onNavigate?: () => void; isRep?
           }
 
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
+
+          // Páginas estáticas autônomas (ex.: a Calculadora de Custos servida de
+          // public/) precisam de navegação de página inteira, não do roteador do Next.
+          if (item.external) {
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </a>
+            );
+          }
+
           return (
             <Link
               key={item.href}
