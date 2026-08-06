@@ -30,13 +30,13 @@ export default async function ConferenciaPage({
   const ate = searchParams.ate || hoje();
 
   try {
-  // OLIST: pagina os pedidos das duas contas no período.
+  // OLIST: pagina os pedidos das duas contas EM PARALELO (evita timeout).
   const olist = new Map<string, { valor: number; situacao: string; empresa: string; vendedor: string }>();
   const olistErros: string[] = [];
-  for (const empresa of COMPANIES) {
-    if (!(await isTinyConnected(empresa).catch(() => false))) { olistErros.push(`${empresa}: não conectado`); continue; }
+  await Promise.all(COMPANIES.map(async (empresa) => {
+    if (!(await isTinyConnected(empresa).catch(() => false))) { olistErros.push(`${empresa}: não conectado`); return; }
     try {
-      for (let offset = 0; offset < 3000; offset += 100) {
+      for (let offset = 0; offset < 1500; offset += 100) { // teto de 15 páginas/conta
         const lote = await fetchRecentOrders({ dataInicial: de, dataFinal: ate, limit: 100, offset }, empresa);
         if (!lote.length) break;
         for (const p of lote as any[]) {
@@ -46,7 +46,7 @@ export default async function ConferenciaPage({
         if (lote.length < 100) break;
       }
     } catch (e) { olistErros.push(`${empresa}: ${e instanceof Error ? e.message : String(e)}`); }
-  }
+  }));
 
   // NOSSO SISTEMA: pedidos no mesmo período (por order_date).
   const store = await loadStoreFor(["orders"] as Array<keyof DataStore>);
