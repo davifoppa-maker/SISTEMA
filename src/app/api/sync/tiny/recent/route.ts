@@ -79,16 +79,20 @@ export async function POST(req: Request) {
       await commitStore(store);
     }
 
-    // Remove os pedidos APAGADOS no Olist (404 confirmado). Mira os mais RECENTES
-    // (onde ficam as exclusões novas). Bounded para caber no tempo.
+    // Remove os pedidos APAGADOS no Olist — SÓ no modo profundo (?deep=1), usado
+    // pelo botão "Atualizar pedidos". O AutoSync (a cada 2 min) NÃO faz isso, para
+    // não sobrecarregar (checar 404 no Tiny é caro).
     let removidos = 0;
-    try {
-      const r = await removeDeletedOlistOrders(store, { cap: 20, ordenar: "recentes" });
-      removidos = r.removed;
-      diag.removidos = r.removedIds;
-      if (r.removed > 0) await commitStore(store);
-    } catch (e) {
-      diag.removeErr = e instanceof Error ? e.message : String(e);
+    const deep = sp.get("deep") === "1";
+    if (deep) {
+      try {
+        const r = await removeDeletedOlistOrders(store, { cap: 20, ordenar: "recentes" });
+        removidos = r.removed;
+        diag.removidos = r.removedIds;
+        if (r.removed > 0) await commitStore(store);
+      } catch (e) {
+        diag.removeErr = e instanceof Error ? e.message : String(e);
+      }
     }
 
     return ok({ synced: results.length, removidos, results, dataInicial, diag });

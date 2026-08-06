@@ -21,7 +21,7 @@ export function RefreshTinyButton({ days = 4, label = "Atualizar (Tiny)" }: { da
     const fim = isoLocal(new Date());
     const inicio = isoLocal(new Date(Date.now() - days * 86400000));
     try {
-      const res = await fetch(`/api/sync/tiny/recent?inicio=${inicio}&fim=${fim}`, { method: "POST" });
+      const res = await fetch(`/api/sync/tiny/recent?inicio=${inicio}&fim=${fim}&deep=1`, { method: "POST" });
       const json = await res.json();
       if (res.ok && json.ok) {
         setMsg(`${json.data?.synced ?? 0} pedido(s) atualizado(s)${json.data?.nfEnriched ? ` · ${json.data.nfEnriched} NF` : ""}.`);
