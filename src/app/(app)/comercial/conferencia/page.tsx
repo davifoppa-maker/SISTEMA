@@ -29,6 +29,7 @@ export default async function ConferenciaPage({
   const de = searchParams.de || inicioDoMes();
   const ate = searchParams.ate || hoje();
 
+  try {
   // OLIST: pagina os pedidos das duas contas no período.
   const olist = new Map<string, { valor: number; situacao: string; empresa: string; vendedor: string }>();
   const olistErros: string[] = [];
@@ -211,4 +212,16 @@ export default async function ConferenciaPage({
       </Card>
     </>
   );
+  } catch (e) {
+    const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
+    return (
+      <>
+        <PageHeader title="🔎 Conferência Olist × Sistema" description="Ocorreu um erro ao montar a conferência." />
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          <p className="mb-2 font-semibold">Erro ao gerar a conferência:</p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs">{msg}</pre>
+        </div>
+      </>
+    );
+  }
 }
