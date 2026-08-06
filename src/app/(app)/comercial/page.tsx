@@ -26,6 +26,7 @@ export default async function ComercialPage({
   // Padrão: mês atual (1º dia → hoje).
   const de = searchParams.de || isoInicioDoMes();
   const ate = searchParams.ate || isoDaysAgo(0);
+  try {
 
   const [views, catalog] = await Promise.all([listOrderViewsFast(), getCatalog()]);
   const custoDe = new Map(catalog.map((p) => [p.sku, p.cost]));
@@ -260,4 +261,13 @@ export default async function ComercialPage({
   };
 
   return <ComercialClient dados={dados} />;
+  } catch (e) {
+    const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+        <p className="mb-2 font-semibold">Erro ao montar o Dashboard Comercial:</p>
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs">{msg}</pre>
+      </div>
+    );
+  }
 }
