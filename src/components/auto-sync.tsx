@@ -1,23 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-
-const INTERVAL_MS = 120_000; // 2 min (era 30s — aliviado para não sobrecarregar)
-
-async function runSync() {
-  // AutoSync é LEVE: só o sync recente de pedidos (sem remover apagados, sem
-  // contas a pagar). As partes pesadas ficam no cron diário e nos botões.
-  await Promise.allSettled([
-    fetch("/api/sync/tiny/recent", { method: "POST" }),
-  ]);
-}
-
+// AutoSync DESLIGADO temporariamente. Ele disparava sync a cada 30s em toda aba
+// e sobrecarregava Tiny/Supabase (site fora do ar). A sincronização agora é feita
+// pelo CRON diário (keep-alive) e pelos BOTÕES "Atualizar pedidos"/"Importar do
+// Olist". Sem nenhuma chamada automática no carregamento.
 export function AutoSync() {
-  useEffect(() => {
-    runSync();
-    const id = setInterval(runSync, INTERVAL_MS);
-    return () => clearInterval(id);
-  }, []);
-
   return null;
 }
