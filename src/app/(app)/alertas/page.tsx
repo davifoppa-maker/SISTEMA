@@ -33,8 +33,11 @@ export default async function AlertasPage() {
     itemsByOrder.set(item.order_id, arr);
   }
 
-  const custoDe = (sku: string | null) => catalog.find((p) => p.sku === sku)?.cost ?? null;
-  const nomeDe = (sku: string | null) => catalog.find((p) => p.sku === sku)?.name ?? sku ?? "Produto";
+  // Maps (evita catalog.find em loop — O(n) em vez de O(n²)).
+  const custoMap = new Map(catalog.map((p) => [p.sku, p.cost]));
+  const nomeMap = new Map(catalog.map((p) => [p.sku, p.name]));
+  const custoDe = (sku: string | null) => custoMap.get(sku ?? "") ?? null;
+  const nomeDe = (sku: string | null) => nomeMap.get(sku ?? "") ?? sku ?? "Produto";
 
   const alertas: AlertaPedido[] = [];
   for (const v of views) {

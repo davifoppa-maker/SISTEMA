@@ -30,6 +30,7 @@ export default async function ComercialPage({
 
   const [views, catalog] = await Promise.all([listOrderViewsFast(), getCatalog()]);
   const custoDe = new Map(catalog.map((p) => [p.sku, p.cost]));
+  const nomeDe = new Map(catalog.map((p) => [p.sku, p.name])); // evita catalog.find em loop
 
   // Itens (paginados — Supabase corta em 1000).
   const sb = getSupabaseAdmin();
@@ -111,7 +112,7 @@ export default async function ComercialPage({
       custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
       // ABC por produto (receita dos itens).
       const key = i.sku ?? "—";
-      const e = abcMap.get(key) ?? { nome: catalog.find((p) => p.sku === i.sku)?.name ?? (i.sku ?? "Produto"), receita: 0 };
+      const e = abcMap.get(key) ?? { nome: nomeDe.get(i.sku ?? "") ?? (i.sku ?? "Produto"), receita: 0 };
       e.receita += tot;
       abcMap.set(key, e);
     }

@@ -35,6 +35,7 @@ export default async function OrdemMargemPage() {
   }
 
   const sellerOf = buildSellerCanonicalizer(views.map((v) => v.order.seller));
+  const catalogBySku = new Map(CATALOG.map((p) => [p.sku, p])); // evita CATALOG.find em loop
 
   const orders = views
     .filter((v) => !ehCancelado(v.order.tiny_status)) // pedido cancelado não conta
@@ -50,7 +51,7 @@ export default async function OrdemMargemPage() {
     customerName: v.customerName,
     vendedor: sellerOf(v.order.seller),
     items: (itemsByOrder.get(v.order.id) ?? []).map((i) => {
-      const catalogProduct = CATALOG.find((p) => p.sku === i.sku);
+      const catalogProduct = catalogBySku.get(i.sku ?? "");
       return {
         sku: i.sku,
         quantity: i.quantity,
