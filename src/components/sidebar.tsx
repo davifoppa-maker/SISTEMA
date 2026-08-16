@@ -39,7 +39,6 @@ import {
 } from "lucide-react";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/customers", label: "Clientes", icon: Users },
   {
     href: "/orders",
@@ -56,6 +55,7 @@ const nav = [
     label: "Expedição",
     icon: ScanLine,
     children: [
+      { href: "/dashboard", label: "Dashboard" },
       { href: "/checkout", label: "Checkout expedição" },
       { href: "/batches", label: "Lotes de coleta" },
       { href: "/estoque", label: "Estoque" },
