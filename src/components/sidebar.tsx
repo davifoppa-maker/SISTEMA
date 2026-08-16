@@ -39,7 +39,6 @@ import {
 } from "lucide-react";
 
 const nav = [
-  { href: "/customers", label: "Clientes", icon: Users },
   {
     href: "/orders",
     label: "Pedidos",
