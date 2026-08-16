@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE, authCredentials, computeAuthToken } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken } from "@/lib/auth-token";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/auth/login — valida usuário/senha do ADMIN e grava o cookie de sessão.
-// (O login de representante foi removido.)
+// POST /api/auth/login — valida usuário/senha (admin OU expedição) e grava o cookie.
 export async function POST(req: Request) {
   let body: { username?: string; password?: string };
   try {
@@ -17,12 +16,19 @@ export async function POST(req: Request) {
   const pass = body.password ?? "";
 
   const admin = authCredentials();
-  if (user !== admin.username || pass !== admin.password) {
+  const exped = expedCredentials();
+
+  let cred: { username: string; password: string } | null = null;
+  let perfil: "admin" | "exped" | null = null;
+  if (user === admin.username && pass === admin.password) { cred = admin; perfil = "admin"; }
+  else if (user === exped.username && pass === exped.password) { cred = exped; perfil = "exped"; }
+
+  if (!cred) {
     return NextResponse.json({ ok: false, error: "Usuário ou senha inválidos." }, { status: 401 });
   }
 
-  const token = await computeAuthToken(admin.username, admin.password);
-  const res = NextResponse.json({ ok: true, perfil: "admin", redirect: null });
+  const token = await computeAuthToken(cred.username, cred.password);
+  const res = NextResponse.json({ ok: true, perfil, redirect: perfil === "exped" ? "/checkout" : null });
   res.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

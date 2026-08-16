@@ -17,17 +17,24 @@ export function authCredentials(): { username: string; password: string } {
   };
 }
 
-// Acesso do REPRESENTANTE (perfil restrito: só o Gestor de Margem).
-// Credenciais via env: REP_USERNAME / REP_PASSWORD.
-export function repCredentials(): { username: string; password: string } {
+// Acesso da EXPEDIÇÃO (perfil restrito: só a área de Expedição).
+// Credenciais via env: EXPED_USERNAME / EXPED_PASSWORD (⚠️ defina no Vercel).
+export function expedCredentials(): { username: string; password: string } {
   return {
-    username: process.env.REP_USERNAME || "representante",
-    password: process.env.REP_PASSWORD || "Nyer@Rep2026",
+    username: process.env.EXPED_USERNAME || "expedicao",
+    password: process.env.EXPED_PASSWORD || "Nyer@Exped2026",
   };
 }
 
-/** Caminhos que o representante pode acessar (só o Gestor de Margem). */
-export const REP_ALLOWED_PREFIXES = ["/margem"];
+/** Caminhos que o usuário de Expedição pode acessar. */
+export const EXPED_ALLOWED_PREFIXES = [
+  "/dashboard",
+  "/checkout",
+  "/batches",
+  "/estoque",
+  "/occurrences",
+  "/quotes",
+];
 
 /** Token determinístico (SHA-256) das credenciais — valor guardado no cookie. */
 export async function computeAuthToken(username: string, password: string): Promise<string> {

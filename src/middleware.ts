@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, authCredentials, computeAuthToken } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken, EXPED_ALLOWED_PREFIXES } from "@/lib/auth-token";
 
 // Rotas públicas (não exigem login):
 //  - /login e a API de autenticação
@@ -18,10 +18,25 @@ export async function middleware(req: NextRequest) {
 
   const token = req.cookies.get(AUTH_COOKIE)?.value;
   const admin = authCredentials();
+  const exped = expedCredentials();
   const adminToken = await computeAuthToken(admin.username, admin.password);
+  const expedToken = await computeAuthToken(exped.username, exped.password);
 
-  // Admin: acesso total. (Login de representante removido.)
+  // Admin: acesso total.
   if (token && token === adminToken) return NextResponse.next();
+
+  // Expedição: só a área de expedição (páginas permitidas) + as APIs (para os
+  // recursos funcionarem). Qualquer página fora disso → redireciona p/ checkout.
+  if (token && token === expedToken) {
+    const permitido =
+      pathname.startsWith("/api/") ||
+      EXPED_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    if (permitido) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = "/checkout";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   // Não autenticado. API → 401; páginas → login preservando o destino.
   if (pathname.startsWith("/api/")) {
