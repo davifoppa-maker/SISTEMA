@@ -499,10 +499,15 @@
     submitBtn.textContent = 'Enviando...';
 
     try {
+      // Envia como form-urlencoded em modo no-cors: evita o preflight de CORS
+      // (o webhook do n8n nao envia cabecalhos CORS). O n8n continua lendo os
+      // campos em $json.body.* porque os nomes sao os mesmos.
+      const params = new URLSearchParams();
+      Object.entries(data).forEach(([k, v]) => params.append(k, v));
       await fetch('https://nyernutrition.app.n8n.cloud/webhook/nyer-talentos-candidatura', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        mode: 'no-cors',
+        body: params
       });
       form.style.display = 'none';
       document.getElementById('confirmMsg').classList.add('show');
