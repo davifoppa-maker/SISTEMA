@@ -68,7 +68,6 @@ const nav = [
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
   { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
-  { href: "/alertas", label: "Alertas Comerciais", icon: AlertTriangle },
   { href: "/comercial", label: "Dashboard Comercial", icon: TrendingUp },
   { href: "/bonificados", label: "Pedidos Bonificados", icon: Gift },
   { href: "/settings", label: "Configurações", icon: Settings },
