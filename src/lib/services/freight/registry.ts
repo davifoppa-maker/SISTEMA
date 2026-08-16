@@ -16,6 +16,10 @@ import { isLenoirConfigured, quoteLenoir, trackLenoir } from "@/lib/services/fre
 import { isMultitransConfigured, quoteMultitrans, trackMultitrans } from "@/lib/services/freight/multitrans";
 import { isBrudamConfigured, quoteBrudam, trackBrudam } from "@/lib/services/freight/brudam";
 import { isBbmConfigured, quoteBbm, trackBbm } from "@/lib/services/freight/bbm";
+import { isCorreiosConfigured, quoteCorreios, trackCorreios } from "@/lib/services/freight/correios";
+import { isRodonavesConfigured, quoteRodonaves, trackRodonaves } from "@/lib/services/freight/rodonaves";
+import { isEsmConfigured, quoteEsm, trackEsm } from "@/lib/services/freight/esm";
+import { isFmConfigured, quoteFm, trackFm } from "@/lib/services/freight/fm";
 
 const braspress: FreightProvider = {
   id: "braspress",
@@ -73,6 +77,38 @@ const bbm: FreightProvider = {
   track: (nf) => trackBbm(nf),
 };
 
+const correios: FreightProvider = {
+  id: "correios",
+  label: "Correios",
+  isConfigured: isCorreiosConfigured,
+  quote: quoteCorreios,
+  track: (id) => trackCorreios(id),
+};
+
+const rodonaves: FreightProvider = {
+  id: "rodonaves",
+  label: "Rodonaves",
+  isConfigured: isRodonavesConfigured,
+  quote: quoteRodonaves,
+  track: (nf) => trackRodonaves(nf),
+};
+
+const esm: FreightProvider = {
+  id: "esm",
+  label: "Expresso São Miguel",
+  isConfigured: isEsmConfigured,
+  quote: quoteEsm,
+  track: (nf, cnpj) => trackEsm(nf, cnpj),
+};
+
+const fm: FreightProvider = {
+  id: "fm",
+  label: "FM Transportes",
+  isConfigured: isFmConfigured,
+  quote: quoteFm,
+  track: (id) => trackFm(id),
+};
+
 const PROVIDERS: Record<string, FreightProvider> = {
   [braspress.id]: braspress,
   [arlete.id]: arlete,
@@ -81,6 +117,10 @@ const PROVIDERS: Record<string, FreightProvider> = {
   [multitrans.id]: multitrans,
   [brudam.id]: brudam,
   [bbm.id]: bbm,
+  [correios.id]: correios,
+  [rodonaves.id]: rodonaves,
+  [esm.id]: esm,
+  [fm.id]: fm,
 };
 
 /** Transportadora padrão quando nenhuma é especificada. */
@@ -111,6 +151,10 @@ export function providerIdForCarrierName(name?: string | null): string | null {
   if (n.includes("multitrans")) return "multitrans";
   if (n.includes("brudam") || n.includes("multi ")) return "brudam";
   if (n.includes("translovato") || n.includes("bbm")) return "bbm";
+  if (n.includes("correio")) return "correios";
+  if (n.includes("rodonaves") || n.includes("rte")) return "rodonaves";
+  if (n.includes("são miguel") || n.includes("sao miguel") || n.includes("expresso s")) return "esm";
+  if (n.includes("fm transporte") || n.includes("fmtransporte")) return "fm";
   return null;
 }
 
