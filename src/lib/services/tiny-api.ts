@@ -1044,6 +1044,12 @@ export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; 
     debug.item0 = itens[0] ?? null;
     debug.idNotaFiscal = pedido?.idNotaFiscal ?? null;
     debug.pesoNoPedido = deepFindGrossWeight(pedido);
+    // Diagnóstico de CEP: mostra os objetos de endereço e o CEP encontrado.
+    debug.enderecoEntrega = endEntrega;
+    debug.clienteEndereco = endCliente;
+    debug.clienteKeys = isObj(pedido?.cliente) ? Object.keys(pedido.cliente) : null;
+    debug.cepEncontrado = cepDestino;
+    debug.deepCep = deepFindCep(pedido);
   }
 
   // 1) campo direto no nível do pedido (busca recursiva por "peso bruto")
