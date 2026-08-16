@@ -912,6 +912,26 @@ function numAny(v: unknown): number {
 // Procura recursivamente, num objeto, a 1ª chave de "peso bruto" (pesoBruto,
 // peso_bruto, peso_bruto_kg…) e devolve o valor numérico. Não desce em arrays
 // (para não pegar peso por-item quando queremos o peso do produto/unidade).
+// Varre recursivamente por qualquer campo "cep" com valor de 8 dígitos (robusto
+// às variações de estrutura do Tiny V3: enderecoEntrega, cliente.endereco, etc.).
+function deepFindCep(obj: unknown, depth = 0): string | null {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj) || depth > 6) return null;
+  const entries = Object.entries(obj as Record<string, unknown>);
+  for (const [k, v] of entries) {
+    if (/cep/i.test(k) && (typeof v === "string" || typeof v === "number")) {
+      const digits = String(v).replace(/\D/g, "");
+      if (digits.length === 8) return digits;
+    }
+  }
+  for (const [, v] of entries) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const found = deepFindCep(v, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function deepFindGrossWeight(obj: unknown, depth = 0): number {
   if (!obj || typeof obj !== "object" || Array.isArray(obj) || depth > 6) return 0;
   const entries = Object.entries(obj as Record<string, unknown>);
@@ -1001,10 +1021,19 @@ export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; 
   const pedido = isObj(raw?.pedido) ? raw.pedido : isObj(raw?.data) ? raw.data : raw;
   const itens: any[] = (Array.isArray(pedido?.itens) ? pedido.itens : Array.isArray(pedido?.items) ? pedido.items : []) as any[];
 
-  // CEP do destinatário (entrega) — usa o endereço de entrega; senão o do cliente.
+  // CEP do destinatário (entrega) — usa o endereço de entrega; senão o do cliente;
+  // senão VARRE recursivamente o pedido por qualquer campo "cep" (robusto às
+  // variações da estrutura V3 do Tiny).
   const endEntrega = isObj(pedido?.enderecoEntrega) ? pedido.enderecoEntrega : null;
   const endCliente = isObj(pedido?.cliente?.endereco) ? pedido.cliente.endereco : null;
-  const cepRaw = endEntrega?.cep ?? endCliente?.cep ?? null;
+  const cepRaw =
+    endEntrega?.cep ??
+    endEntrega?.CEP ??
+    endCliente?.cep ??
+    endCliente?.CEP ??
+    pedido?.cliente?.cep ??
+    deepFindCep(pedido) ??
+    null;
   const cepDestino = cepRaw ? String(cepRaw).trim() : null;
 
   const debug: Record<string, unknown> = {};
