@@ -47,7 +47,6 @@ const nav = [
     children: [
       { href: "/orders", label: "Todos os pedidos" },
       { href: "/orders/lancar", label: "Lançar pedido (IA)" },
-      { href: "/quotes", label: "Cotações" },
     ],
   },
   {
