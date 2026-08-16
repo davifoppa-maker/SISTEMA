@@ -47,7 +47,6 @@ const nav = [
     icon: Package,
     children: [
       { href: "/orders", label: "Todos os pedidos" },
-      { href: "/orders/margem", label: "Margem de pedidos" },
       { href: "/orders/lancar", label: "Lançar pedido (IA)" },
       { href: "/quotes", label: "Cotações" },
     ],
@@ -64,7 +63,15 @@ const nav = [
     ],
   },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
-  { href: "/financial/custos", label: "Custos do estoque", icon: TrendingUp },
+  {
+    href: "/orders/margem",
+    label: "ADM",
+    icon: BarChart2,
+    children: [
+      { href: "/orders/margem", label: "Margem de pedidos" },
+      { href: "/financial/custos", label: "Custos do estoque" },
+    ],
+  },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
   { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
