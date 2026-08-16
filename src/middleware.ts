@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken, EXPED_ALLOWED_PREFIXES } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken, EXPED_ALLOWED_PREFIXES, EXPED_ALLOWED_API_PREFIXES } from "@/lib/auth-token";
 
 // Rotas públicas (não exigem login):
 //  - /login e a API de autenticação
@@ -25,13 +25,15 @@ export async function middleware(req: NextRequest) {
   // Admin: acesso total.
   if (token && token === adminToken) return NextResponse.next();
 
-  // Expedição: só a área de expedição (páginas permitidas) + as APIs (para os
-  // recursos funcionarem). Qualquer página fora disso → redireciona p/ checkout.
+  // Expedição: SÓ a área de expedição — páginas permitidas + APIs da allowlist.
+  // Página fora → redireciona p/ checkout. API fora → 403.
   if (token && token === expedToken) {
-    const permitido =
-      pathname.startsWith("/api/") ||
-      EXPED_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-    if (permitido) return NextResponse.next();
+    const paginaOk = EXPED_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    const apiOk = EXPED_ALLOWED_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    if (paginaOk || apiOk) return NextResponse.next();
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
+    }
     const url = req.nextUrl.clone();
     url.pathname = "/checkout";
     url.search = "";

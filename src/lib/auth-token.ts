@@ -26,7 +26,7 @@ export function expedCredentials(): { username: string; password: string } {
   };
 }
 
-/** Caminhos que o usuário de Expedição pode acessar. */
+/** Páginas que o usuário de Expedição pode acessar. */
 export const EXPED_ALLOWED_PREFIXES = [
   "/dashboard",
   "/checkout",
@@ -34,6 +34,21 @@ export const EXPED_ALLOWED_PREFIXES = [
   "/estoque",
   "/occurrences",
   "/quotes",
+];
+
+/** APIs que a expedição pode chamar (só as que as telas de expedição usam). */
+export const EXPED_ALLOWED_API_PREFIXES = [
+  "/api/auth/logout",
+  "/api/checkout",
+  "/api/batches",
+  "/api/carriers",
+  "/api/cotacao",
+  "/api/quotes",
+  "/api/occurrences",
+  "/api/orders",
+  "/api/sync/tiny/nf",
+  "/api/sync/tiny/recent",
+  "/api/notifications/deliveries",
 ];
 
 /** Token determinístico (SHA-256) das credenciais — valor guardado no cookie. */
