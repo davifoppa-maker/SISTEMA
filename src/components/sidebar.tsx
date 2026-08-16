@@ -53,19 +53,19 @@ const nav = [
     ],
   },
   {
-    href: "/estoque",
-    label: "Estoque",
-    icon: Warehouse,
+    href: "/checkout",
+    label: "Expedição",
+    icon: ScanLine,
     children: [
-      { href: "/estoque", label: "Relatórios" },
+      { href: "/checkout", label: "Checkout expedição" },
+      { href: "/batches", label: "Lotes de coleta" },
+      { href: "/estoque", label: "Estoque" },
+      { href: "/quotes", label: "Cotação manual" },
     ],
   },
-  { href: "/checkout", label: "Checkout expedição", icon: ScanLine },
-  { href: "/batches", label: "Lotes de coleta", icon: Boxes },
   { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
   { href: "/financial/custos", label: "Custos do estoque", icon: TrendingUp },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { href: "/quotes", label: "Cotação manual", icon: Calculator },
   { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
   { href: "/catalogo", label: "Custos & Preços", icon: Calculator },
   { href: "/alertas", label: "Alertas Comerciais", icon: AlertTriangle },
@@ -122,7 +122,10 @@ function SidebarContent({ onNavigate, isRep }: { onNavigate?: () => void; isRep?
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const parentActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const parentActive =
+            pathname === item.href ||
+            pathname.startsWith(item.href + "/") ||
+            (item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + "/")) ?? false);
 
           if (item.children) {
             return (
