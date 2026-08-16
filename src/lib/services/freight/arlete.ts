@@ -123,6 +123,7 @@ export async function quoteArlete(params: QuoteParams): Promise<QuoteOutcome> {
       method: "POST",
       headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "urn:sswinfbr.sswCotacao#cotar" },
       body: envelope,
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar o SSW: ${(err as Error).message}` };
@@ -309,6 +310,7 @@ export async function trackArlete(notaFiscal: string): Promise<TrackingOutcome> 
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ chave_nfe: chave }),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar o SSW: ${(err as Error).message}` };

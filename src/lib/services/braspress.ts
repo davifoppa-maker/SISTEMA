@@ -94,6 +94,7 @@ export async function quoteFreight(params: QuoteParams): Promise<QuoteOutcome> {
         Accept: "application/json",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar a Braspress: ${(err as Error).message}` };
@@ -180,6 +181,7 @@ export async function trackByNf(notaFiscal: string, cnpj?: string): Promise<Trac
     res = await fetch(`${c.apiBaseUrl}/v1/tracking/${cnpjRem}/${nf}/json`, {
       method: "GET",
       headers: { Authorization: `Basic ${auth}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar a Braspress: ${(err as Error).message}` };

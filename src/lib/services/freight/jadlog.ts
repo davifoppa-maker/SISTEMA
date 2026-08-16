@@ -93,6 +93,7 @@ export async function quoteJadlog(params: QuoteParams): Promise<QuoteOutcome> {
         Authorization: `Bearer ${c.token}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar a JadLog: ${(err as Error).message}` };
@@ -202,6 +203,7 @@ export async function trackJadlog(identificador: string): Promise<TrackingOutcom
         Authorization: `Bearer ${c.token}`,
       },
       body: JSON.stringify({ consulta: [consultaItem] }),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
     return { ok: false, error: `Falha de rede ao chamar a JadLog: ${(err as Error).message}` };
@@ -272,6 +274,7 @@ export async function probeJadlog(opts: { nf?: string; chave?: string; codigo?: 
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${c.token}` },
         body: JSON.stringify({ consulta: [cand.item] }),
+        signal: AbortSignal.timeout(20000),
       });
       status = res.status;
       const t = await res.text();
