@@ -57,10 +57,10 @@ const nav = [
       { href: "/checkout", label: "Checkout expedição" },
       { href: "/batches", label: "Lotes de coleta" },
       { href: "/estoque", label: "Estoque" },
+      { href: "/occurrences", label: "Ocorrências" },
       { href: "/quotes", label: "Cotação manual" },
     ],
   },
-  { href: "/occurrences", label: "Ocorrências", icon: AlertTriangle },
   {
     href: "/orders/margem",
     label: "ADM",
