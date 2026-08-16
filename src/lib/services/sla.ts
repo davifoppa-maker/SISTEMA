@@ -63,7 +63,7 @@ export function refreshSlaStatuses(store: DataStore, nowIso?: string): void {
   const shipmentById = new Map(store.shipments.map((s) => [s.id, s]));
   for (const record of store.sla_records) {
     if (record.sla_type !== "coleta_entrega") continue;
-    const shipment = shipmentById.get(record.shipment_id);
+    const shipment = record.shipment_id ? shipmentById.get(record.shipment_id) : undefined;
     const status = evaluateSla({
       deadlineIso: record.deadline_at,
       deliveredAtIso: shipment?.delivered_at ?? null,

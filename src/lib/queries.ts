@@ -95,17 +95,18 @@ export function buildAllOrderViews(store: DataStore): OrderView[] {
   const customerById = new Map(store.customers.map((c) => [c.id, c]));
   const carrierById = new Map(store.carriers.map((c) => [c.id, c]));
   const shipmentByOrder = new Map<string, (typeof store.shipments)[number]>();
-  for (const s of store.shipments) if (!shipmentByOrder.has(s.order_id)) shipmentByOrder.set(s.order_id, s);
+  for (const s of store.shipments) if (s.order_id && !shipmentByOrder.has(s.order_id)) shipmentByOrder.set(s.order_id, s);
   const invoiceByOrder = new Map<string, (typeof store.invoices)[number]>();
-  for (const i of store.invoices) if (!invoiceByOrder.has(i.order_id)) invoiceByOrder.set(i.order_id, i);
+  for (const i of store.invoices) if (i.order_id && !invoiceByOrder.has(i.order_id)) invoiceByOrder.set(i.order_id, i);
   const volumesByShipment = new Map<string, (typeof store.shipment_volumes)[number][]>();
   for (const v of store.shipment_volumes) {
+    if (!v.shipment_id) continue;
     const a = volumesByShipment.get(v.shipment_id);
     if (a) a.push(v); else volumesByShipment.set(v.shipment_id, [v]);
   }
   const slaByShipment = new Map<string, (typeof store.sla_records)[number]>();
   for (const s of store.sla_records) {
-    if (s.sla_type === "coleta_entrega" && !slaByShipment.has(s.shipment_id)) slaByShipment.set(s.shipment_id, s);
+    if (s.sla_type === "coleta_entrega" && s.shipment_id && !slaByShipment.has(s.shipment_id)) slaByShipment.set(s.shipment_id, s);
   }
 
   const views: OrderView[] = [];
