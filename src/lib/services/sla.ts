@@ -59,9 +59,11 @@ export function startDeliverySla(
  * em_risco / atrasado / concluido). Idempotente.
  */
 export function refreshSlaStatuses(store: DataStore, nowIso?: string): void {
+  // Indexa expedições por id (evita .find por registro — O(n²)).
+  const shipmentById = new Map(store.shipments.map((s) => [s.id, s]));
   for (const record of store.sla_records) {
     if (record.sla_type !== "coleta_entrega") continue;
-    const shipment = store.shipments.find((s) => s.id === record.shipment_id);
+    const shipment = shipmentById.get(record.shipment_id);
     const status = evaluateSla({
       deadlineIso: record.deadline_at,
       deliveredAtIso: shipment?.delivered_at ?? null,
