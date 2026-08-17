@@ -62,6 +62,14 @@ const nav = [
     ],
   },
   {
+    href: "/producao/necessidades",
+    label: "Produção",
+    icon: Warehouse,
+    children: [
+      { href: "/producao/necessidades", label: "Necessidades" },
+    ],
+  },
+  {
     href: "/orders/margem",
     label: "ADM",
     icon: BarChart2,
