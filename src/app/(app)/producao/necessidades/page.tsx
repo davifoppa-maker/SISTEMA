@@ -29,6 +29,19 @@ export default async function NecessidadesPage() {
   // Nome do produto por SKU (catálogo).
   const nomeDeSku = new Map(catalog.map((p) => [p.sku, p.name]));
 
+  // SKU por NOME — para itens que vêm SEM SKU no pedido (o balanço tem o SKU).
+  // Comparação por "contém" no nome normalizado (sem acento/minúsculo).
+  const SKU_POR_NOME: { match: string; sku: string }[] = [
+    { match: "coqueteleira", sku: "ACC003" },
+    { match: "termogenico", sku: "NYER26023" },
+    { match: "diuretico", sku: "NYER26024" },
+    { match: "multivitaminico", sku: "NYER26025" },
+  ];
+  const skuPorNome = (s: string): string => {
+    const n = norm(s);
+    return n ? (SKU_POR_NOME.find((a) => n.includes(a.match))?.sku ?? "") : "";
+  };
+
   // Tokenização para casar por NOME (palavras significativas).
   const STOP = new Set(["pote", "un", "nyer", "de", "e", "da", "do", "sleev"]);
   const toks = (s: string) => norm(s).split(/[^a-z0-9]+/).filter((t) => t && !STOP.has(t));
@@ -43,9 +56,11 @@ export default async function NecessidadesPage() {
   const need = new Map<string, Need>();
   for (const it of store.order_items) {
     if (!idsAlvo.has(it.order_id)) continue;
-    const sku = (it.sku ?? "").trim().toUpperCase();
+    const skuBruto = (it.sku ?? "").trim().toUpperCase();
     const desc = (it.description ?? "").trim();
-    const nome = nomeDeSku.get((it.sku ?? "").trim()) ?? desc ?? sku;
+    const nome = nomeDeSku.get((it.sku ?? "").trim()) ?? desc ?? skuBruto;
+    // Sem SKU no pedido → resolve pelo nome (mapa de apelidos).
+    const sku = skuBruto || skuPorNome(nome) || skuPorNome(desc);
     const key = sku || norm(nome); // agrupa por SKU; sem SKU, por nome
     if (!key) continue;
     const cur = need.get(key) ?? { sku, nome, desc, necessario: 0, pedidos: new Set<string>() };
