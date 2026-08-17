@@ -57,16 +57,9 @@ const nav = [
       { href: "/checkout", label: "Checkout expedição" },
       { href: "/batches", label: "Lotes de coleta" },
       { href: "/estoque", label: "Estoque" },
+      { href: "/producao/necessidades", label: "Necessidades de produção" },
       { href: "/occurrences", label: "Ocorrências" },
       { href: "/quotes", label: "Cotação manual" },
-    ],
-  },
-  {
-    href: "/producao/necessidades",
-    label: "Produção",
-    icon: Warehouse,
-    children: [
-      { href: "/producao/necessidades", label: "Necessidades" },
     ],
   },
   {
