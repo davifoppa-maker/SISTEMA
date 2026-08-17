@@ -1,11 +1,16 @@
-import { getCatalog } from "@/lib/catalog";
+import { getCatalog, syncUnknownProducts } from "@/lib/catalog";
 import { CATALOG } from "@/lib/product-costs";
 import { matchStandard } from "@/lib/sku-normalize";
 import { CatalogoClient } from "./catalogo-client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function CatalogoPage() {
+  // Cadastra automaticamente (com custo 0) todo produto que já foi vendido e
+  // ainda não está aqui — assim ele aparece na lista para você preencher o custo.
+  await syncUnknownProducts().catch(() => null);
+
   const produtos = await getCatalog();
   const padraoSkus = new Set(CATALOG.map((p) => p.sku));
 

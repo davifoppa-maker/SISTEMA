@@ -18,16 +18,23 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 export function CatalogoClient({ produtos }: { produtos: Product[] }) {
   const [rows, setRows] = useState<Product[]>(produtos);
   const [busca, setBusca] = useState("");
+  const [soZerados, setSoZerados] = useState(false); // filtro: só produtos sem custo
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // SKUs alterados (para salvar só o que mudou).
   const [alterados, setAlterados] = useState<Set<string>>(new Set());
 
+  // Quantos produtos estão com custo zerado (precisam ser preenchidos).
+  const zerados = useMemo(() => rows.filter((p) => !(p.cost > 0)).length, [rows]);
+
   const visiveis = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
-  }, [rows, busca]);
+    let lista = rows;
+    if (soZerados) lista = lista.filter((p) => !(p.cost > 0));
+    if (q) lista = lista.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+    // SEMPRE em ordem alfabética por nome do produto.
+    return [...lista].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+  }, [rows, busca, soZerados]);
 
   function update(sku: string, patch: Partial<Product>) {
     setRows((prev) => prev.map((p) => (p.sku === sku ? { ...p, ...patch } : p)));
@@ -85,7 +92,21 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
 
       <Card>
         <CardContent className="space-y-3 pt-4">
-          <Input placeholder="🔎 Buscar por nome ou SKU…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Input placeholder="🔎 Buscar por nome ou SKU…" value={busca} onChange={(e) => setBusca(e.target.value)} className="flex-1 min-w-[220px]" />
+            <button
+              type="button"
+              onClick={() => setSoZerados((v) => !v)}
+              className={`h-9 shrink-0 rounded-lg border px-3 text-xs font-medium transition ${
+                soZerados
+                  ? "border-amber-500 bg-amber-500 text-white"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {soZerados ? "✓ " : ""}Só sem custo ({zerados})
+            </button>
+            <span className="shrink-0 text-xs text-slate-400">{visiveis.length} produto(s) · A–Z</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -99,7 +120,7 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
               <tbody className="divide-y divide-slate-100">
                 {visiveis.map((p, i) => {
                   return (
-                    <tr key={p.sku || `novo-${i}`}>
+                    <tr key={p.sku || `novo-${i}`} className={!(p.cost > 0) ? "bg-amber-50/60" : ""}>
                       <td className="px-2 py-1.5">
                         <Input value={p.name} onChange={(e) => update(p.sku, { name: e.target.value })} className="min-w-[220px]" />
                       </td>
@@ -119,7 +140,7 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
                         <Input
                           type="number" step="0.01" value={String(p.cost)}
                           onChange={(e) => update(p.sku, { cost: Number(e.target.value) || 0 })}
-                          className="w-24 text-right"
+                          className={`w-24 text-right ${!(p.cost > 0) ? "border-amber-400" : ""}`}
                         />
                       </td>
                     </tr>
