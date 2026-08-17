@@ -20,7 +20,11 @@ function statusEntra(s: string | null | undefined): boolean {
 const norm = (s: string | null | undefined) =>
   String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
-export default async function NecessidadesPage() {
+export default async function NecessidadesPage({
+  searchParams,
+}: {
+  searchParams?: { empresa?: string };
+}) {
   const [store, catalog] = await Promise.all([
     loadStoreFor(["orders", "order_items"] as Array<keyof DataStore>),
     getCatalog(),
@@ -47,7 +51,14 @@ export default async function NecessidadesPage() {
   const toks = (s: string) => norm(s).split(/[^a-z0-9]+/).filter((t) => t && !STOP.has(t));
 
   // Pedidos ALVO (aprovado / preparando / separação / pronto), não cancelados.
-  const pedidosAlvo = store.orders.filter((o) => !ehCancelado(o.tiny_status) && statusEntra(o.tiny_status));
+  // Filtro de EMPRESA: o balanço é da NYER/NRX, então o padrão é só nyer
+  // (?empresa=todas para ver as duas, ?empresa=ecopro para a Ecopro).
+  const empresaFiltro = (searchParams?.empresa ?? "nyer").toLowerCase();
+  const pedidosAlvo = store.orders.filter((o) => {
+    if (ehCancelado(o.tiny_status) || !statusEntra(o.tiny_status)) return false;
+    if (empresaFiltro === "todas") return true;
+    return ((o as any).empresa ?? "nyer") === empresaFiltro;
+  });
   const idsAlvo = new Set(pedidosAlvo.map((o) => o.id));
 
   // Soma a quantidade NECESSÁRIA por SKU (agora que o balanço está linkado por SKU).
@@ -76,8 +87,9 @@ export default async function NecessidadesPage() {
   const balItens: { nome: string; toks: Set<string>; qtd: number }[] = [];
   try {
     const rep = await getEstoqueReport();
+    // TODAS as abas do balanço (produto acabado, embalagens, acessórios…) — um
+    // produto vendido pode estar em qualquer uma delas.
     for (const item of rep.itens) {
-      if (item.categoria !== "produto_acabado") continue;
       if (item.sku) {
         const s = item.sku.toUpperCase();
         const prev = estoquePorSku.get(s);
@@ -150,6 +162,27 @@ export default async function NecessidadesPage() {
       <div className="print-only mb-3">
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Demanda de Produção — NYER</h1>
         <p style={{ fontSize: 12 }}>Gerado em {hojeStr} · {pedidosAlvo.length} pedidos · {linhas.length} produtos a produzir</p>
+      </div>
+
+      {/* Filtro de empresa (o balanço é da NYER/NRX) */}
+      <div className="no-print mb-4 flex flex-wrap gap-2">
+        {[
+          { k: "nyer", label: "NRX (NYER)" },
+          { k: "ecopro", label: "Ecopro" },
+          { k: "todas", label: "Todas" },
+        ].map((o) => (
+          <a
+            key={o.k}
+            href={`/producao/necessidades?empresa=${o.k}`}
+            className={`h-8 rounded-lg border px-3 py-1 text-xs font-medium ${
+              empresaFiltro === o.k
+                ? "border-brand-400 bg-brand-600 text-white"
+                : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            {o.label}
+          </a>
+        ))}
       </div>
 
       {/* ALERTA de demanda */}
