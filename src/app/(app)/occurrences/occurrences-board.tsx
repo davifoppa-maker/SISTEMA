@@ -16,21 +16,21 @@ export interface OccItem {
   carrier_name: string | null;
 }
 
-// Colunas do quadro. As 3 primeiras são CATEGORIAS (campo type); a última é o
-// estado "resolvida" (status).
-type ColKey = "urgencia" | "problema" | "cliente_piti" | "resolvido";
-const CATEGORIAS = new Set(["urgencia", "problema", "cliente_piti"]);
-const COLUMNS: { key: ColKey; title: string; emoji: string; accent: string; head: string }[] = [
-  { key: "urgencia", title: "Urgência", emoji: "🔴", accent: "border-red-300", head: "text-red-600" },
-  { key: "problema", title: "Problema a resolver", emoji: "🛠️", accent: "border-amber-300", head: "text-amber-600" },
-  { key: "cliente_piti", title: "Cliente dando piti", emoji: "😤", accent: "border-fuchsia-300", head: "text-fuchsia-600" },
-  { key: "resolvido", title: "Resolvido", emoji: "✅", accent: "border-emerald-300", head: "text-emerald-600" },
+// Colunas do quadro. As 3 primeiras são CATEGORIAS (campo severity); a última é
+// o estado "resolvida" (status).
+type ColKey = "urgencia" | "problema" | "reclamacao" | "resolvido";
+const CATEGORIAS = new Set(["urgencia", "problema", "reclamacao"]);
+const COLUMNS: { key: ColKey; title: string; emoji: string; head: string }[] = [
+  { key: "urgencia", title: "Urgência", emoji: "🔴", head: "text-red-600" },
+  { key: "problema", title: "Problema a resolver", emoji: "🛠️", head: "text-amber-600" },
+  { key: "reclamacao", title: "Reclamação de cliente", emoji: "📞", head: "text-sky-600" },
+  { key: "resolvido", title: "Resolvido", emoji: "✅", head: "text-emerald-600" },
 ];
 
-// Coluna em que o card aparece.
+// Coluna em que o card aparece (categoria guardada em `severity`).
 function colunaDoCard(o: OccItem): ColKey {
   if (o.status === "resolvida") return "resolvido";
-  return (CATEGORIAS.has(o.type) ? o.type : "problema") as ColKey;
+  return (CATEGORIAS.has(o.severity) ? o.severity : "problema") as ColKey;
 }
 
 export function OccurrencesBoard({ items }: { items: OccItem[] }) {
@@ -48,9 +48,9 @@ export function OccurrencesBoard({ items }: { items: OccItem[] }) {
     if (!current || colunaDoCard(current) === col) return;
     // Otimista.
     setCards((cs) => cs.map((c) => (c.id === id
-      ? { ...c, status: col === "resolvido" ? "resolvida" : "aberta", type: col === "resolvido" ? c.type : col }
+      ? { ...c, status: col === "resolvido" ? "resolvida" : "aberta", severity: col === "resolvido" ? c.severity : col }
       : c)));
-    const body = col === "resolvido" ? { status: "resolvida" } : { type: col };
+    const body = col === "resolvido" ? { status: "resolvida" } : { categoria: col };
     try {
       await fetch(`/api/occurrences/${id}`, {
         method: "PATCH",
@@ -71,7 +71,7 @@ export function OccurrencesBoard({ items }: { items: OccItem[] }) {
       await fetch(`/api/occurrences`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: col, description: texto }),
+        body: JSON.stringify({ categoria: col, description: texto }),
       });
       setNovo((n) => ({ ...n, [col]: "" }));
       router.refresh();

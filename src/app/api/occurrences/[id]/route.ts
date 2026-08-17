@@ -5,18 +5,18 @@ import { nowIso } from "@/lib/utils/ids";
 export const dynamic = "force-dynamic";
 
 // Atualiza o status de uma ocorrência (ex.: resolver) ou remove-a (?delete=1).
-const CATEGORIAS = ["urgencia", "problema", "cliente_piti"];
+const CATEGORIAS = ["urgencia", "problema", "reclamacao"];
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const body = (await req.json().catch(() => ({}))) as { status?: string; type?: string };
+  const body = (await req.json().catch(() => ({}))) as { status?: string; categoria?: string };
   const store = await loadStore();
   const occ = store.occurrences.find((o) => o.id === params.id);
   if (!occ) return fail("Ocorrência não encontrada", 404);
 
-  // Mudança de CATEGORIA (mover entre colunas do quadro). Ao voltar para uma
-  // categoria, reabre (status = aberta).
-  if (body.type && CATEGORIAS.includes(body.type)) {
-    occ.type = body.type as typeof occ.type;
+  // Mudança de CATEGORIA (mover entre colunas). Guardada em `severity` (texto).
+  // Ao voltar para uma categoria, reabre (status = aberta).
+  if (body.categoria && CATEGORIAS.includes(body.categoria)) {
+    occ.severity = body.categoria as typeof occ.severity;
     if (!body.status) { occ.status = "aberta"; occ.resolved_at = null; }
   }
 
