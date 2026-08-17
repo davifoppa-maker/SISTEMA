@@ -109,6 +109,8 @@ export default async function ComercialPage({
   let fatTotal = 0, fatMargemTotal = 0, custoTotal = 0, pedidosTotal = 0;
   // Faturamento que ficou FORA da base de margem (sem itens / sem custo cadastrado).
   let fatSemMargem = 0, pedidosSemMargem = 0;
+  // Motivo de ficar fora: bonificado (brinde), produto sem custo, ou sem itens.
+  let pedidosBonificados = 0, pedidosSemCusto = 0, pedidosSemItens = 0;
 
   for (const v of views) {
     if (!dentroPeriodo(v.order.order_date)) continue;
@@ -145,9 +147,23 @@ export default async function ComercialPage({
     //  • custo zerado (produto sem custo cadastrado)
     // ⇒ fica FORA da margem (mas continua no faturamento, para bater com o Olist).
     // Sem isso o pedido entrava com custo 0 e margem de 100%, inflando o total.
-    const semDadoDeCusto = pctFixa == null && (recItens <= 0 || custo <= 0);
+    // BONIFICADO: tem itens, mas nenhum com valor (a receita vem só do frete).
+    // Não é "produto sem custo" — é brinde. Fica fora da margem e é contado à parte.
+    const ehBonificado = its.length > 0 && recItens <= 0;
+    // SEM CUSTO de verdade: vendeu com valor, mas o produto não tem custo cadastrado.
+    const semCustoCadastrado = pctFixa == null && recItens > 0 && custo <= 0;
+    // Sem itens ainda (aguardando sincronização) — também não dá para calcular.
+    const semItens = its.length === 0;
+
+    const semDadoDeCusto = pctFixa == null && (ehBonificado || semCustoCadastrado || semItens);
     const foraMargem = clienteForaDaMargem(v.customerName) || semDadoDeCusto;
-    if (semDadoDeCusto) { fatSemMargem += receita; pedidosSemMargem += 1; }
+    if (semDadoDeCusto) {
+      fatSemMargem += receita;
+      pedidosSemMargem += 1;
+      if (ehBonificado) pedidosBonificados += 1;
+      else if (semCustoCadastrado) pedidosSemCusto += 1;
+      else pedidosSemItens += 1;
+    }
 
     const a = porVendedor.get(sel) ?? novaAgg();
     a.faturamento += receita;
@@ -276,6 +292,9 @@ export default async function ComercialPage({
       margemCobertura: fatTotal > 0 ? (fatMargemTotal / fatTotal) * 100 : 0,
       fatSemMargem,
       pedidosSemMargem,
+      pedidosBonificados,
+      pedidosSemCusto,
+      pedidosSemItens,
       positivacao: carteiraGlobal.size > 0 ? (positivadosGlobal.size / carteiraGlobal.size) * 100 : 0,
       clientesPositivados: positivadosGlobal.size,
       carteiraTotal: carteiraGlobal.size,

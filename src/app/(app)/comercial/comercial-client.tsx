@@ -21,6 +21,9 @@ export interface DadosComercial {
     margemCobertura: number;
     fatSemMargem: number;
     pedidosSemMargem: number;
+    pedidosBonificados: number;
+    pedidosSemCusto: number;
+    pedidosSemItens: number;
   };
   vendedores: {
     nome: string;
@@ -177,11 +180,15 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
         <Kpi
           label="Margem líquida"
           value={`${kpis.margem.toFixed(1)}%`}
-          sub={
-            kpis.margemCobertura >= 99.5
-              ? "base: 100% do faturamento"
-              : `base: ${kpis.margemCobertura.toFixed(0)}% · ${kpis.pedidosSemMargem} s/ custo`
-          }
+          sub={(() => {
+            if (kpis.margemCobertura >= 99.5) return "base: 100% do faturamento";
+            // Mostra o motivo real de ficar fora da base (bonificado ≠ sem custo).
+            const partes: string[] = [];
+            if (kpis.pedidosBonificados > 0) partes.push(`${kpis.pedidosBonificados} bonif.`);
+            if (kpis.pedidosSemCusto > 0) partes.push(`${kpis.pedidosSemCusto} s/ custo`);
+            if (kpis.pedidosSemItens > 0) partes.push(`${kpis.pedidosSemItens} s/ itens`);
+            return `base: ${kpis.margemCobertura.toFixed(0)}%${partes.length ? " · " + partes.join(" · ") : ""}`;
+          })()}
         />
         <Kpi label="Positivação" value={`${kpis.positivacao.toFixed(1)}%`} sub={`${kpis.clientesPositivados}/${kpis.carteiraTotal} clientes`} />
         <Kpi label="Clientes ativos" value={String(kpis.clientesPositivados)} sub="no período" />
