@@ -496,16 +496,19 @@ export async function enrichOrderItems(store: DataStore, cap = 50): Promise<numb
         }
       }
       if (itensTiny.length > 0) {
-        // Substitui itens do pedido com IDs determinísticos (sem duplicar).
+        // Substitui os itens do pedido. O id PRECISA ser um UUID válido — a coluna
+        // `order_items.id` é uuid no Postgres (ids como "<order>:item:0" faziam o
+        // upsert falhar e os itens nunca eram gravados).
         store.order_items = store.order_items.filter((i) => i.order_id !== order.id);
-        itensTiny.forEach((it, idx) => {
+        itensTiny.forEach((it) => {
           store.order_items.push({
-            id: `${order.id}:item:${idx}`,
+            id: uuid(),
             order_id: order.id,
             sku: str(it.codigo),
             description: str(it.descricao) ?? "Item",
-            quantity: num(it.quantidade),
-            unit_value: num(it.valor_unitario),
+            // Colunas NOT NULL no banco — nunca enviar null.
+            quantity: num(it.quantidade) ?? 0,
+            unit_value: num(it.valor_unitario) ?? 0,
           });
         });
         order.updated_at = nowIso();

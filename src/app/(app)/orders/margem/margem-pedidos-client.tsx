@@ -225,9 +225,14 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordersFiltrados, costOverrides]);
 
-  const totalReceita = rows.reduce((s, r) => s + r.receita, 0);
-  const totalLucro = rows.reduce((s, r) => s + r.lucro, 0);
-  const totalCusto = rows.reduce((s, r) => s + r.custoProdutos, 0);
+  // Pedidos ZERADOS (receita 0: bonificado ou ainda sem itens) NÃO entram na
+  // margem — ficam só na tela de Pedidos Bonificados.
+  const zerados = rows.filter((r) => r.receita <= 0);
+  const rowsComMargem = rows.filter((r) => r.receita > 0);
+
+  const totalReceita = rowsComMargem.reduce((s, r) => s + r.receita, 0);
+  const totalLucro = rowsComMargem.reduce((s, r) => s + r.lucro, 0);
+  const totalCusto = rowsComMargem.reduce((s, r) => s + r.custoProdutos, 0);
   const margemGeral = totalReceita > 0 ? (totalLucro / totalReceita) * 100 : 0;
   const semItens = ordersFiltrados.filter((o) => o.items.length === 0).length;
 
@@ -276,7 +281,7 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
             <label className="mb-1 block text-xs font-medium text-slate-600">Até</label>
             <input type="date" value={ate} onChange={(e) => { setAte(e.target.value); setMes(""); }} className="h-10 rounded-lg border border-slate-300 px-3 text-sm" />
           </div>
-          <span className="pb-2 text-xs text-slate-400">{rows.length} pedido(s)</span>
+          <span className="pb-2 text-xs text-slate-400">{rowsComMargem.length} pedido(s) com margem</span>
         </div>
       </div>
 
@@ -302,15 +307,20 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
             <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
               🔄 {syncMsg}
             </div>
-          ) : semItens > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              <span><strong>{semItens}</strong> pedido(s) sem itens (não entram na margem).</span>
-              <button
-                onClick={() => { jaSincronizou.current = false; setSyncMsg("Sincronizando…"); router.refresh(); }}
-                className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
-              >
-                Sincronizar agora
-              </button>
+          ) : zerados.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+              <span>
+                <strong>{zerados.length}</strong> pedido(s) zerado(s) fora desta lista — veja em{" "}
+                <Link href="/bonificados" className="font-medium text-brand-700 hover:underline">Pedidos Bonificados</Link>.
+              </span>
+              {semItens > 0 ? (
+                <button
+                  onClick={() => { jaSincronizou.current = false; setSyncMsg("Sincronizando…"); router.refresh(); }}
+                  className="rounded-lg bg-slate-600 px-3 py-1 font-medium text-white hover:bg-slate-700"
+                >
+                  Sincronizar itens
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -330,7 +340,7 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {rows.map(({ order, receita, custoProdutos, lucro, margem }) => (
+                  {rowsComMargem.map(({ order, receita, custoProdutos, lucro, margem }) => (
                     <tr key={order.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <Link href={`/orders/${order.id}`} className="font-semibold text-brand-700 hover:underline">
