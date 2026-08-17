@@ -51,36 +51,46 @@ export default async function NecessidadesPage() {
   // Estoque (balanço) — produto acabado por nome. Pode estar indisponível.
   let estoqueErro: string | null = null;
   const estoquePorNome = new Map<string, number>();
+  const estoquePorSku = new Map<string, number>(); // SKU (col C do balanço) → saldo
   try {
     const rep = await getEstoqueReport();
     for (const item of rep.itens) {
       if (item.categoria !== "produto_acabado") continue;
-      const k = norm(item.nome);
-      estoquePorNome.set(k, (estoquePorNome.get(k) ?? 0) + item.quantidade);
+      estoquePorNome.set(norm(item.nome), (estoquePorNome.get(norm(item.nome)) ?? 0) + item.quantidade);
+      if (item.sku) {
+        const k = item.sku.toUpperCase();
+        estoquePorSku.set(k, (estoquePorSku.get(k) ?? 0) + item.quantidade);
+      }
     }
   } catch (e) {
     estoqueErro = e instanceof EstoqueIndisponivelError ? e.message : "Não foi possível ler o balanço de estoque.";
   }
 
-  // Casa o produto necessário com o saldo do balanço (por nome normalizado).
-  function saldoDe(nome: string): number | null {
+  // Casa por NOME (fallback quando não há SKU no balanço).
+  function saldoPorNome(nome: string): number | null {
     if (estoquePorNome.size === 0) return null;
     const p = norm(nome);
     if (estoquePorNome.has(p)) return estoquePorNome.get(p)!;
-    // fallback: nome do balanço que contém o do produto (ou vice-versa).
     for (const [k, v] of estoquePorNome) {
-      if (k === p) return v;
       if (k.includes(p) || p.includes(k)) return v;
     }
-    return null; // não encontrado no balanço
+    return null;
+  }
+
+  // Saldo do produto: por SKU primeiro (mais confiável), senão por nome.
+  function saldoDe(sku: string, nome: string): { saldo: number | null; via: "sku" | "nome" | null } {
+    const s = (sku || "").toUpperCase();
+    if (s && estoquePorSku.has(s)) return { saldo: estoquePorSku.get(s)!, via: "sku" };
+    const porNome = saldoPorNome(nome);
+    return { saldo: porNome, via: porNome !== null ? "nome" : null };
   }
 
   const linhas = [...need.values()]
     .map((n) => {
-      const saldo = saldoDe(n.nome);
+      const { saldo, via } = saldoDe(n.sku, n.nome);
       const emEstoque = saldo ?? 0;
       const falta = n.necessario - emEstoque;
-      return { ...n, emEstoque, saldoEncontrado: saldo !== null, falta };
+      return { ...n, emEstoque, saldoEncontrado: saldo !== null, via, falta };
     })
     .filter((l) => l.falta > 0) // só o que FALTA vira necessidade
     .sort((a, b) => b.falta - a.falta);

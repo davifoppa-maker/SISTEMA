@@ -28,6 +28,7 @@ export type CustoFonte = "planilha" | "catalogo";
 
 export interface EstoqueItem {
   nome: string;
+  sku?: string;
   quantidade: number;
   unidade: "un" | "kg";
   grupo: string;
@@ -415,9 +416,11 @@ function parseProdutoAcabado(rows: string[][], overrides: CustoOverrides): Estoq
       continue;
     }
     const nome = name.replace(/\s+/g, " ");
+    const sku = (row[2] ?? "").trim().toUpperCase() || undefined; // coluna C = SKU
     const c = custoDe(nome, overrides);
     itens.push({
       nome,
+      sku,
       quantidade: qtd,
       unidade: "un",
       grupo,
