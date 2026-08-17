@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Status de pedido que geram necessidade de produção (pré-expedição).
-const STATUS_ALVO = ["aprovad", "preparando", "pronto", "separa"];
+const STATUS_ALVO = ["abert", "aprovad", "preparando", "pronto", "separa"];
 function statusEntra(s: string | null | undefined): boolean {
   const n = String(s ?? "").toLowerCase();
   return STATUS_ALVO.some((k) => n.includes(k));
@@ -153,7 +153,7 @@ export default async function NecessidadesPage({
       <div className="no-print mb-1 flex items-start justify-between gap-3">
         <PageHeader
           title="🏭 Necessidades de Produção"
-          description="Produtos a produzir: soma dos pedidos aprovados / preparando / em separação / prontos para envio, menos o balanço de estoque."
+          description="Produtos a produzir: soma dos pedidos em aberto / aprovados / preparando / em separação / prontos para envio, menos o balanço de estoque."
         />
         <ImprimirButton />
       </div>
@@ -202,7 +202,7 @@ export default async function NecessidadesPage({
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="text-xs uppercase text-slate-400">Pedidos considerados</div>
           <div className="mt-1 text-2xl font-bold text-white">{pedidosAlvo.length}</div>
-          <div className="text-[11px] text-slate-400">aprovado · preparando · pronto p/ envio</div>
+          <div className="text-[11px] text-slate-400">aberto · aprovado · preparando · separação · pronto</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="text-xs uppercase text-slate-400">Produtos em falta</div>
