@@ -4,13 +4,14 @@ import { loadStoreFor } from "@/lib/db";
 import { getCatalog } from "@/lib/catalog";
 import { getEstoqueReport, EstoqueIndisponivelError } from "@/lib/services/estoque";
 import { ehCancelado } from "@/lib/pedido";
+import { ImprimirButton } from "./imprimir-button";
 import type { DataStore } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Status de pedido que geram necessidade de produção (pré-expedição).
-const STATUS_ALVO = ["aprovad", "preparando", "pronto"];
+const STATUS_ALVO = ["aprovad", "preparando", "pronto", "separa"];
 function statusEntra(s: string | null | undefined): boolean {
   const n = String(s ?? "").toLowerCase();
   return STATUS_ALVO.some((k) => n.includes(k));
@@ -86,12 +87,30 @@ export default async function NecessidadesPage() {
 
   const brl = (n: number) => n.toLocaleString("pt-BR");
 
+  const hojeStr = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
   return (
     <>
-      <PageHeader
-        title="🏭 Necessidades de Produção"
-        description="Produtos a produzir: soma dos pedidos aprovados / preparando / prontos para envio, menos o que há no balanço de estoque."
-      />
+      <div className="no-print mb-1 flex items-start justify-between gap-3">
+        <PageHeader
+          title="🏭 Necessidades de Produção"
+          description="Produtos a produzir: soma dos pedidos aprovados / preparando / em separação / prontos para envio, menos o balanço de estoque."
+        />
+        <ImprimirButton />
+      </div>
+
+      {/* Cabeçalho só na impressão */}
+      <div className="print-only mb-3">
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Demanda de Produção — NYER</h1>
+        <p style={{ fontSize: 12 }}>Gerado em {hojeStr} · {pedidosAlvo.length} pedidos · {linhas.length} produtos a produzir</p>
+      </div>
+
+      {/* ALERTA de demanda */}
+      {linhas.length > 0 ? (
+        <div className="no-print mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+          🔔 <b>{linhas.length}</b> produto(s) precisam de produção — {brl(linhas.reduce((s, l) => s + l.falta, 0))} unidades no total.
+        </div>
+      ) : null}
 
       {estoqueErro ? (
         <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
@@ -99,7 +118,7 @@ export default async function NecessidadesPage() {
         </div>
       ) : null}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="no-print mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="text-xs uppercase text-slate-400">Pedidos considerados</div>
           <div className="mt-1 text-2xl font-bold text-white">{pedidosAlvo.length}</div>
@@ -117,7 +136,7 @@ export default async function NecessidadesPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="print-area">
         <CardContent className="p-0">
           <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
             Solicitações de demanda (produzir)

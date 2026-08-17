@@ -54,3 +54,19 @@ input::placeholder, textarea::placeholder { color: #64748b; }
 .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
   border-color: #1e293b !important;
 }
+
+/* ===== Impressão ===== */
+@media print {
+  .no-print { display: none !important; }
+  aside { display: none !important; }
+  body { background: #fff !important; }
+  main { margin: 0 !important; }
+  /* Área imprimível: preto no branco (economiza tinta e fica legível) */
+  .print-area, .print-area * {
+    color: #000 !important;
+    background: #fff !important;
+    border-color: #bbb !important;
+  }
+  .print-only { display: block !important; }
+}
+.print-only { display: none; }
