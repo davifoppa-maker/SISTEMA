@@ -29,68 +29,78 @@ export default async function NecessidadesPage() {
   // Nome do produto por SKU (catálogo).
   const nomeDeSku = new Map(catalog.map((p) => [p.sku, p.name]));
 
-  // Pedidos ALVO (aprovado / preparando / pronto), não cancelados.
+  // Tokenização para casar por NOME (palavras significativas).
+  const STOP = new Set(["pote", "un", "nyer", "de", "e", "da", "do", "sleev"]);
+  const toks = (s: string) => norm(s).split(/[^a-z0-9]+/).filter((t) => t && !STOP.has(t));
+
+  // Pedidos ALVO (aprovado / preparando / separação / pronto), não cancelados.
   const pedidosAlvo = store.orders.filter((o) => !ehCancelado(o.tiny_status) && statusEntra(o.tiny_status));
   const idsAlvo = new Set(pedidosAlvo.map((o) => o.id));
 
-  // Soma a quantidade NECESSÁRIA por SKU (itens dos pedidos alvo).
-  interface Need { sku: string; nome: string; necessario: number; pedidos: Set<string> }
+  // Soma a quantidade NECESSÁRIA por PRODUTO (agrupado por NOME).
+  interface Need { sku: string; nome: string; desc: string; necessario: number; pedidos: Set<string> }
   const need = new Map<string, Need>();
   for (const it of store.order_items) {
     if (!idsAlvo.has(it.order_id)) continue;
     const sku = (it.sku ?? "").trim();
-    const key = sku || (it.description ?? "").trim();
+    const desc = (it.description ?? "").trim();
+    const nome = nomeDeSku.get(sku) ?? desc ?? sku;
+    const key = norm(nome); // agrupa por NOME (não por SKU)
     if (!key) continue;
-    const nome = nomeDeSku.get(sku) ?? it.description ?? sku;
-    const cur = need.get(key) ?? { sku: sku || "—", nome, necessario: 0, pedidos: new Set<string>() };
+    const cur = need.get(key) ?? { sku: sku || "—", nome, desc, necessario: 0, pedidos: new Set<string>() };
     cur.necessario += Number(it.quantity) || 0;
     cur.pedidos.add(it.order_id);
     need.set(key, cur);
   }
 
-  // Estoque (balanço) — produto acabado por nome. Pode estar indisponível.
+  // Estoque (balanço) — produto acabado por NOME. Pode estar indisponível.
   let estoqueErro: string | null = null;
-  const estoquePorNome = new Map<string, number>();
-  const estoquePorSku = new Map<string, number>(); // SKU (col C do balanço) → saldo
+  const estoqueExato = new Map<string, number>();
+  const balItens: { nomeNorm: string; toks: Set<string>; qtd: number }[] = [];
   try {
     const rep = await getEstoqueReport();
     for (const item of rep.itens) {
       if (item.categoria !== "produto_acabado") continue;
-      estoquePorNome.set(norm(item.nome), (estoquePorNome.get(norm(item.nome)) ?? 0) + item.quantidade);
-      if (item.sku) {
-        const k = item.sku.toUpperCase();
-        estoquePorSku.set(k, (estoquePorSku.get(k) ?? 0) + item.quantidade);
-      }
+      const k = norm(item.nome);
+      estoqueExato.set(k, (estoqueExato.get(k) ?? 0) + item.quantidade);
+      balItens.push({ nomeNorm: k, toks: new Set(toks(item.nome)), qtd: item.quantidade });
     }
   } catch (e) {
     estoqueErro = e instanceof EstoqueIndisponivelError ? e.message : "Não foi possível ler o balanço de estoque.";
   }
 
-  // Casa por NOME (fallback quando não há SKU no balanço).
-  function saldoPorNome(nome: string): number | null {
-    if (estoquePorNome.size === 0) return null;
-    const p = norm(nome);
-    if (estoquePorNome.has(p)) return estoquePorNome.get(p)!;
-    for (const [k, v] of estoquePorNome) {
-      if (k.includes(p) || p.includes(k)) return v;
+  // Casa o produto com o balanço POR NOME: exato → maior sobreposição de palavras
+  // (com bônus quando um nome é subconjunto do outro — separa "Chocolate" de
+  // "Chocolate Maltado").
+  function saldoDe(nome: string, alt: string): number | null {
+    if (balItens.length === 0) return null;
+    for (const c of [nome, alt]) {
+      const k = norm(c);
+      if (k && estoqueExato.has(k)) return estoqueExato.get(k)!;
     }
-    return null;
-  }
-
-  // Saldo do produto: por SKU primeiro (mais confiável), senão por nome.
-  function saldoDe(sku: string, nome: string): { saldo: number | null; via: "sku" | "nome" | null } {
-    const s = (sku || "").toUpperCase();
-    if (s && estoquePorSku.has(s)) return { saldo: estoquePorSku.get(s)!, via: "sku" };
-    const porNome = saldoPorNome(nome);
-    return { saldo: porNome, via: porNome !== null ? "nome" : null };
+    let best: { qtd: number; score: number } | null = null;
+    for (const c of [nome, alt]) {
+      const pt = toks(c);
+      if (pt.length === 0) continue;
+      for (const b of balItens) {
+        let shared = 0;
+        for (const t of pt) if (b.toks.has(t)) shared++;
+        if (shared === 0) continue;
+        const balArr = [...b.toks];
+        const subset = pt.every((t) => b.toks.has(t)) || balArr.every((t) => pt.includes(t));
+        const score = shared + (subset ? 5 : 0);
+        if (shared >= Math.min(2, pt.length) && (!best || score > best.score)) best = { qtd: b.qtd, score };
+      }
+    }
+    return best ? best.qtd : null;
   }
 
   const linhas = [...need.values()]
     .map((n) => {
-      const { saldo, via } = saldoDe(n.sku, n.nome);
+      const saldo = saldoDe(n.nome, n.desc);
       const emEstoque = saldo ?? 0;
       const falta = n.necessario - emEstoque;
-      return { ...n, emEstoque, saldoEncontrado: saldo !== null, via, falta };
+      return { ...n, emEstoque, saldoEncontrado: saldo !== null, falta };
     })
     .filter((l) => l.falta > 0) // só o que FALTA vira necessidade
     .sort((a, b) => b.falta - a.falta);
