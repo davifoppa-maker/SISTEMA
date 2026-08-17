@@ -37,48 +37,58 @@ export default async function NecessidadesPage() {
   const pedidosAlvo = store.orders.filter((o) => !ehCancelado(o.tiny_status) && statusEntra(o.tiny_status));
   const idsAlvo = new Set(pedidosAlvo.map((o) => o.id));
 
-  // Soma a quantidade NECESSÁRIA por PRODUTO (agrupado por NOME).
+  // Soma a quantidade NECESSÁRIA por SKU (agora que o balanço está linkado por SKU).
+  // Item sem SKU cai no fallback por nome.
   interface Need { sku: string; nome: string; desc: string; necessario: number; pedidos: Set<string> }
   const need = new Map<string, Need>();
   for (const it of store.order_items) {
     if (!idsAlvo.has(it.order_id)) continue;
-    const sku = (it.sku ?? "").trim();
+    const sku = (it.sku ?? "").trim().toUpperCase();
     const desc = (it.description ?? "").trim();
-    const nome = nomeDeSku.get(sku) ?? desc ?? sku;
-    const key = norm(nome); // agrupa por NOME (não por SKU)
+    const nome = nomeDeSku.get((it.sku ?? "").trim()) ?? desc ?? sku;
+    const key = sku || norm(nome); // agrupa por SKU; sem SKU, por nome
     if (!key) continue;
-    const cur = need.get(key) ?? { sku: sku || "—", nome, desc, necessario: 0, pedidos: new Set<string>() };
+    const cur = need.get(key) ?? { sku, nome, desc, necessario: 0, pedidos: new Set<string>() };
     cur.necessario += Number(it.quantity) || 0;
     cur.pedidos.add(it.order_id);
     need.set(key, cur);
   }
 
-  // Estoque (balanço) — produto acabado por NOME. Pode estar indisponível.
+  // Balanço (produto acabado): índice por SKU (col C) e por nome (fallback).
   let estoqueErro: string | null = null;
+  const estoquePorSku = new Map<string, { qtd: number; nome: string }>();
   const estoqueExato = new Map<string, { qtd: number; nome: string }>();
-  const balItens: { nome: string; nomeNorm: string; toks: Set<string>; qtd: number }[] = [];
+  const balItens: { nome: string; toks: Set<string>; qtd: number }[] = [];
   try {
     const rep = await getEstoqueReport();
     for (const item of rep.itens) {
       if (item.categoria !== "produto_acabado") continue;
+      if (item.sku) {
+        const s = item.sku.toUpperCase();
+        const prev = estoquePorSku.get(s);
+        estoquePorSku.set(s, { qtd: (prev?.qtd ?? 0) + item.quantidade, nome: item.nome });
+      }
       const k = norm(item.nome);
-      const prev = estoqueExato.get(k);
-      estoqueExato.set(k, { qtd: (prev?.qtd ?? 0) + item.quantidade, nome: item.nome });
-      balItens.push({ nome: item.nome, nomeNorm: k, toks: new Set(toks(item.nome)), qtd: item.quantidade });
+      const prevN = estoqueExato.get(k);
+      estoqueExato.set(k, { qtd: (prevN?.qtd ?? 0) + item.quantidade, nome: item.nome });
+      balItens.push({ nome: item.nome, toks: new Set(toks(item.nome)), qtd: item.quantidade });
     }
   } catch (e) {
     estoqueErro = e instanceof EstoqueIndisponivelError ? e.message : "Não foi possível ler o balanço de estoque.";
   }
 
-  // Casa o produto com o balanço POR NOME: exato → maior sobreposição de palavras
-  // (com bônus quando um nome é subconjunto do outro — separa "Chocolate" de
-  // "Chocolate Maltado").
-  function saldoDe(nome: string, alt: string): { saldo: number | null; casou: string | null } {
-    if (balItens.length === 0) return { saldo: null, casou: null };
+  // Casa POR SKU (principal). Sem SKU no balanço → fallback por nome.
+  function saldoDe(sku: string, nome: string, alt: string): { saldo: number | null; casou: string | null; via: string } {
+    const s = (sku || "").toUpperCase();
+    if (s && estoquePorSku.has(s)) {
+      const hit = estoquePorSku.get(s)!;
+      return { saldo: hit.qtd, casou: `${hit.nome} [SKU]`, via: "sku" };
+    }
+    if (balItens.length === 0) return { saldo: null, casou: null, via: "-" };
     for (const c of [nome, alt]) {
       const k = norm(c);
       const hit = k && estoqueExato.get(k);
-      if (hit) return { saldo: hit.qtd, casou: hit.nome };
+      if (hit) return { saldo: hit.qtd, casou: hit.nome, via: "nome" };
     }
     let best: { qtd: number; score: number; nome: string } | null = null;
     for (const c of [nome, alt]) {
@@ -88,19 +98,18 @@ export default async function NecessidadesPage() {
         let shared = 0;
         for (const t of pt) if (b.toks.has(t)) shared++;
         if (shared === 0) continue;
-        const balArr = [...b.toks];
-        const subset = pt.every((t) => b.toks.has(t)) || balArr.every((t) => pt.includes(t));
+        const subset = pt.every((t) => b.toks.has(t)) || [...b.toks].every((t) => pt.includes(t));
         const score = shared + (subset ? 5 : 0);
         if (shared >= Math.min(2, pt.length) && (!best || score > best.score)) best = { qtd: b.qtd, score, nome: b.nome };
       }
     }
-    return best ? { saldo: best.qtd, casou: best.nome } : { saldo: null, casou: null };
+    return best ? { saldo: best.qtd, casou: best.nome, via: "nome~" } : { saldo: null, casou: null, via: "-" };
   }
 
-  // TODAS as linhas (para diagnóstico do casamento), ordenadas por falta.
+  // TODAS as linhas (para diagnóstico), ordenadas por falta.
   const todas = [...need.values()]
     .map((n) => {
-      const { saldo, casou } = saldoDe(n.nome, n.desc);
+      const { saldo, casou } = saldoDe(n.sku, n.nome, n.desc);
       const emEstoque = saldo ?? 0;
       const falta = n.necessario - emEstoque;
       return { ...n, emEstoque, saldoEncontrado: saldo !== null, casou, falta };
@@ -181,7 +190,10 @@ export default async function NecessidadesPage() {
                   <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Nenhum item nos pedidos alvo.</td></tr>
                 ) : todas.map((l) => (
                   <tr key={l.nome} className={l.falta > 0 ? "" : "opacity-60"}>
-                    <td className="px-4 py-2 font-medium text-white">{l.nome}</td>
+                    <td className="px-4 py-2 font-medium text-white">
+                      {l.nome}
+                      <div className="text-[10px] font-mono text-slate-500">{l.sku}</div>
+                    </td>
                     <td className="px-4 py-2 text-xs">
                       {l.casou ? <span className="text-sky-300">{l.casou}</span> : <span className="text-amber-400">✗ não casou</span>}
                     </td>
