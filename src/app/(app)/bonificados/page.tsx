@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, produtoNaoBonificado } from "@/lib/pedido";
 import { BonificadosClient, type DadosBonificados, type LinhaBonificada } from "./bonificados-client";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,7 @@ export default async function BonificadosPage({
     const its = itemsByOrder.get(v.order.id) ?? [];
     for (const i of its) {
       if ((i.unit_value ?? 0) > 0 || i.quantity <= 0) continue; // só bonificados
+      if (produtoNaoBonificado(i.description ?? i.sku)) continue; // ex.: nota de transporte
       const p = prodDe.get(i.sku ?? "");
       const custoUnit = p?.cost ?? 0;
       const valorUnit = p?.tabela ?? 0; // valor de tabela (mercado) do que foi investido

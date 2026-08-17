@@ -114,7 +114,7 @@ function MargemBar({ pct, min }: { pct: number | null; min: number }) {
 }
 
 export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0 }: { orders: Order[]; mesVigente?: string; semItensTotal?: number }) {
-  const [margemMin, setMargemMin] = useState(20);
+  const [margemMin] = useState(18); // verde a partir de 18%
   // costOverrides: sku → custo editado pelo usuário
   const [costOverrides, setCostOverrides] = useState<Record<string, number>>({});
 
@@ -369,30 +369,6 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
           </div>
         </div>
 
-        {/* Painel lateral */}
-        <div className="flex flex-col gap-4 lg:w-72 shrink-0">
-          {/* Margem mínima (alerta) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Margem mínima</h2>
-            <Slider label="Alerta abaixo de" value={margemMin} onChange={setMargemMin} />
-            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              O custo cadastrado já inclui impostos, comissão e logística. A margem é
-              calculada como <strong className="text-slate-700">(receita − custo) ÷ receita</strong>.
-            </div>
-          </div>
-
-          {/* Origem dos custos */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-1 text-sm font-semibold text-slate-800">Custos dos produtos</h2>
-            <p className="text-xs text-slate-500">
-              Os custos vêm da base central em <strong>Custos &amp; Preços</strong>.
-              Edite por lá — as mudanças refletem aqui automaticamente.
-            </p>
-            <a href="/catalogo" className="mt-3 inline-block text-xs font-medium text-brand-600 hover:underline">
-              Abrir Custos &amp; Preços →
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -41,6 +41,16 @@ export function margemFixaPct(nome: string | null | undefined): number | null {
   return hit ? hit.pct : null;
 }
 
+// Produtos que NÃO são bonificação, mesmo entrando com valor 0 (ex.: notas de
+// transporte / remessa de insumo). Comparação por "contém" no nome normalizado.
+const NAO_BONIFICADOS = ["creatina granel"];
+
+export function produtoNaoBonificado(nome: string | null | undefined): boolean {
+  const n = normNome(nome);
+  if (!n) return false;
+  return NAO_BONIFICADOS.some((p) => n.includes(p));
+}
+
 // Pedidos EXCLUÍDOS das análises por número (ex.: transferência interna com custo
 // distorcido). Não some do banco (o cron reimporta do Olist), some das telas.
 const PEDIDOS_IGNORADOS = new Set<string>(["175"]);
