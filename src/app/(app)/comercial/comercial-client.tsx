@@ -51,10 +51,17 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-white">{value}</div>
-      {sub ? <div className="text-[11px] text-slate-400">{sub}</div> : null}
+    <div className="flex h-full min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      {/* Fonte encolhe conforme o tamanho do número, para nunca vazar do card. */}
+      <div
+        className={`mt-1 font-bold tabular-nums text-white ${
+          value.length > 13 ? "text-lg" : value.length > 10 ? "text-xl" : "text-2xl"
+        }`}
+      >
+        {value}
+      </div>
+      {sub ? <div className="mt-auto truncate pt-1 text-[11px] text-slate-400" title={sub}>{sub}</div> : null}
     </div>
   );
 }
@@ -164,7 +171,7 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
       </div>
 
       {/* KPIs */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="mb-5 grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label="Faturamento" value={brl(kpis.faturamento)} sub={`${kpis.pedidos} pedidos`} />
         <Kpi label="Ticket médio" value={brl(kpis.ticketMedio)} />
         <Kpi
@@ -172,8 +179,8 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
           value={`${kpis.margem.toFixed(1)}%`}
           sub={
             kpis.margemCobertura >= 99.5
-              ? "sobre 100% do faturamento"
-              : `sobre ${kpis.margemCobertura.toFixed(0)}% do faturamento · ${kpis.pedidosSemMargem} pedido(s) sem custo`
+              ? "base: 100% do faturamento"
+              : `base: ${kpis.margemCobertura.toFixed(0)}% · ${kpis.pedidosSemMargem} s/ custo`
           }
         />
         <Kpi label="Positivação" value={`${kpis.positivacao.toFixed(1)}%`} sub={`${kpis.clientesPositivados}/${kpis.carteiraTotal} clientes`} />
