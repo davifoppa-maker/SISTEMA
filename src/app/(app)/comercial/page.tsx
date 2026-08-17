@@ -96,6 +96,8 @@ export default async function ComercialPage({
   const abcMap = new Map<string, { nome: string; receita: number }>();
   const positivadosGlobal = new Set<string>();
   let fatTotal = 0, fatMargemTotal = 0, custoTotal = 0, pedidosTotal = 0;
+  // Faturamento que ficou FORA da base de margem (sem itens / sem custo cadastrado).
+  let fatSemMargem = 0, pedidosSemMargem = 0;
 
   for (const v of views) {
     if (!dentroPeriodo(v.order.order_date)) continue;
@@ -121,13 +123,20 @@ export default async function ComercialPage({
     const receita = (v.order.total_value ?? 0) > 0 ? (v.order.total_value as number) : recItens;
     if (receita <= 0) continue;
 
-    // Exx (e afins): conta no faturamento, mas fora do cálculo de margem.
-    const foraMargem = clienteForaDaMargem(v.customerName);
-
     const sel = sellerOf(v.order.seller);
     // Exceção de MARGEM FIXA (ex.: Murilo): custo distorcido → força a margem.
     const pctFixa = margemFixaPct(sel) ?? margemFixaPct(v.customerName);
     const custoMargem = pctFixa != null ? receita * (1 - pctFixa / 100) : custo;
+
+    // BASE DA MARGEM — o pedido só entra se tiver dado suficiente:
+    //  • cliente fora da margem (Exx), OU
+    //  • sem itens valorizados, OU
+    //  • custo zerado (produto sem custo cadastrado)
+    // ⇒ fica FORA da margem (mas continua no faturamento, para bater com o Olist).
+    // Sem isso o pedido entrava com custo 0 e margem de 100%, inflando o total.
+    const semDadoDeCusto = pctFixa == null && (recItens <= 0 || custo <= 0);
+    const foraMargem = clienteForaDaMargem(v.customerName) || semDadoDeCusto;
+    if (semDadoDeCusto) { fatSemMargem += receita; pedidosSemMargem += 1; }
 
     const a = porVendedor.get(sel) ?? novaAgg();
     a.faturamento += receita;
@@ -250,6 +259,10 @@ export default async function ComercialPage({
       pedidos: pedidosTotal,
       ticketMedio: pedidosTotal > 0 ? fatTotal / pedidosTotal : 0,
       margem: fatMargemTotal > 0 ? ((fatMargemTotal - custoTotal) / fatMargemTotal) * 100 : 0,
+      // Transparência: sobre quanto do faturamento a margem foi calculada.
+      margemCobertura: fatTotal > 0 ? (fatMargemTotal / fatTotal) * 100 : 0,
+      fatSemMargem,
+      pedidosSemMargem,
       positivacao: carteiraGlobal.size > 0 ? (positivadosGlobal.size / carteiraGlobal.size) * 100 : 0,
       clientesPositivados: positivadosGlobal.size,
       carteiraTotal: carteiraGlobal.size,

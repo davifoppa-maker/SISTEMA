@@ -18,6 +18,9 @@ export interface DadosComercial {
     carteiraTotal: number;
     clientesNovos: number;
     primeirasVendas: number;
+    margemCobertura: number;
+    fatSemMargem: number;
+    pedidosSemMargem: number;
   };
   vendedores: {
     nome: string;
@@ -163,7 +166,15 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Kpi label="Faturamento" value={brl(kpis.faturamento)} sub={`${kpis.pedidos} pedidos`} />
         <Kpi label="Ticket médio" value={brl(kpis.ticketMedio)} />
-        <Kpi label="Margem líquida" value={`${kpis.margem.toFixed(1)}%`} />
+        <Kpi
+          label="Margem líquida"
+          value={`${kpis.margem.toFixed(1)}%`}
+          sub={
+            kpis.margemCobertura >= 99.5
+              ? "sobre 100% do faturamento"
+              : `sobre ${kpis.margemCobertura.toFixed(0)}% do faturamento · ${kpis.pedidosSemMargem} pedido(s) sem custo`
+          }
+        />
         <Kpi label="Positivação" value={`${kpis.positivacao.toFixed(1)}%`} sub={`${kpis.clientesPositivados}/${kpis.carteiraTotal} clientes`} />
         <Kpi label="Clientes ativos" value={String(kpis.clientesPositivados)} sub="no período" />
         <Kpi label="Clientes novos" value={String(kpis.clientesNovos)} sub={`${brl(kpis.primeirasVendas)} em 1ª venda`} />
