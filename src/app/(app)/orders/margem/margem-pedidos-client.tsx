@@ -133,15 +133,35 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
   useEffect(() => {
     if (semItensTotal <= 0 || jaSincronizou.current) return;
     jaSincronizou.current = true;
-    setSyncMsg(`Sincronizando ${semItensTotal} pedido(s) do Tiny…`);
-    fetch("/api/orders/enrich?cap=30", { method: "POST" })
-      .then((r) => r.json())
-      .then((r) => {
-        const n = r?.data?.enriched ?? r?.enriched ?? 0;
-        if (n > 0) { setSyncMsg(`${n} pedido(s) sincronizado(s). Atualizando…`); router.refresh(); }
-        else setSyncMsg(null);
-      })
-      .catch(() => setSyncMsg(null));
+    let cancelado = false;
+
+    // Sincroniza em RODADAS até acabar (o endpoint preenche até 30 por vez).
+    (async () => {
+      let restantes = semItensTotal;
+      let total = 0;
+      for (let rodada = 1; rodada <= 8 && restantes > 0 && !cancelado; rodada++) {
+        setSyncMsg(`Sincronizando itens do Tiny… ${total}/${semItensTotal}`);
+        try {
+          const r = await fetch("/api/orders/enrich?cap=30", { method: "POST" }).then((x) => x.json());
+          const n = r?.data?.enriched ?? r?.enriched ?? 0;
+          if (n <= 0) break; // nada mais a preencher (ou Tiny sem dados)
+          total += n;
+          restantes -= n;
+        } catch {
+          break;
+        }
+      }
+      if (cancelado) return;
+      if (total > 0) {
+        setSyncMsg(`${total} pedido(s) sincronizado(s). Atualizando…`);
+        router.refresh();
+        setTimeout(() => setSyncMsg(null), 2500);
+      } else {
+        setSyncMsg(null);
+      }
+    })();
+
+    return () => { cancelado = true; };
   }, [semItensTotal, router]);
 
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -283,8 +303,14 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
               🔄 {syncMsg}
             </div>
           ) : semItens > 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              <strong>{semItens}</strong> pedido(s) sem itens — sincronizando do Tiny automaticamente…
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <span><strong>{semItens}</strong> pedido(s) sem itens (não entram na margem).</span>
+              <button
+                onClick={() => { jaSincronizou.current = false; setSyncMsg("Sincronizando…"); router.refresh(); }}
+                className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+              >
+                Sincronizar agora
+              </button>
             </div>
           ) : null}
 
@@ -316,13 +342,13 @@ export function MargemPedidosClient({ orders, mesVigente = "", semItensTotal = 0
                       <td className="max-w-[140px] truncate px-4 py-3 text-slate-700">{order.customerName}</td>
                       <td className="px-4 py-3 text-right font-medium text-slate-800">{receita > 0 ? fmtBRL(receita) : "—"}</td>
                       <td className="px-4 py-3 text-right text-slate-600">{custoProdutos > 0 ? fmtBRL(custoProdutos) : "—"}</td>
-                      <td className={`px-4 py-3 text-right font-semibold ${lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        {order.items.length > 0 ? fmtBRL(lucro) : "—"}
+                      <td className={`px-4 py-3 text-right font-semibold ${receita > 0 ? (lucro >= 0 ? "text-emerald-600" : "text-red-600") : "text-slate-400"}`}>
+                        {receita > 0 ? fmtBRL(lucro) : "—"}
                       </td>
                       <td className="px-4 py-3">
-                        {order.items.length > 0
+                        {receita > 0
                           ? <MargemBar pct={margem} min={margemMin} />
-                          : <Link href={`/orders/${order.id}`} className="text-xs text-amber-600 hover:underline">Sincronizar</Link>
+                          : <Link href={`/orders/${order.id}`} className="text-xs text-amber-600 hover:underline">sem dados — abrir</Link>
                         }
                       </td>
                     </tr>
