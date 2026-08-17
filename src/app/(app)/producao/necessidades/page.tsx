@@ -53,7 +53,7 @@ export default async function NecessidadesPage({
   // Pedidos ALVO (aprovado / preparando / separação / pronto), não cancelados.
   // Filtro de EMPRESA: o balanço é da NYER/NRX, então o padrão é só nyer
   // (?empresa=todas para ver as duas, ?empresa=ecopro para a Ecopro).
-  const empresaFiltro = (searchParams?.empresa ?? "nyer").toLowerCase();
+  const empresaFiltro = (searchParams?.empresa ?? "todas").toLowerCase();
   const pedidosAlvo = store.orders.filter((o) => {
     if (ehCancelado(o.tiny_status) || !statusEntra(o.tiny_status)) return false;
     if (empresaFiltro === "todas") return true;
