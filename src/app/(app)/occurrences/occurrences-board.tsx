@@ -68,13 +68,20 @@ export function OccurrencesBoard({ items }: { items: OccItem[] }) {
     if (!texto || col === "resolvido") return;
     setSalvando(col);
     try {
-      await fetch(`/api/occurrences`, {
+      const res = await fetch(`/api/occurrences`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ categoria: col, description: texto }),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(`Não salvou: ${j?.error ?? res.status}`);
+        return;
+      }
       setNovo((n) => ({ ...n, [col]: "" }));
       router.refresh();
+    } catch (e) {
+      alert(`Falha de rede: ${e instanceof Error ? e.message : e}`);
     } finally {
       setSalvando(null);
     }
