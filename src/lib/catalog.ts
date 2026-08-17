@@ -20,6 +20,8 @@ import { normalizarSkus, matchStandard } from "@/lib/sku-normalize";
 // recadastrados pela peneira e são apagados da tabela no próximo sync.
 export const IGNORED_SKUS = new Set<string>([
   "SITE040367", // Creatina Monohidratada Pura NYER (apresentação avulsa — descartado)
+  "SITE040351", // Pré Treino Dark Pump 300g Frutas Vermelhas (duplicata do SKU padrão)
+  "SITE040349", // Pré Treino Dark Pump 300g UVA (duplicata do SKU padrão)
 ]);
 
 /**
