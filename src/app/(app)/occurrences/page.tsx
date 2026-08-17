@@ -31,7 +31,7 @@ export default async function OccurrencesPage() {
     <>
       <PageHeader
         title="Ocorrências"
-        description="Quadro Kanban — arraste os cards entre Aberta, Em andamento e Resolvida. Atraso gera alerta interno primeiro (não notifica o cliente automaticamente)."
+        description="Quadro da expedição — escreva um card na coluna e dê Enter. Arraste entre Urgência, Problema a resolver, Cliente dando piti e Resolvido."
       />
       <OccurrencesBoard items={items} />
     </>
