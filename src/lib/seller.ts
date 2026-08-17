@@ -5,6 +5,16 @@
 
 export const SEM_VENDEDOR = "Sem vendedor";
 
+// Vendedores que NÃO aparecem na lista de desempenho (mas continuam contando no
+// faturamento e na margem). Comparação por "contém", sem acento/minúsculo.
+const VENDEDORES_OCULTOS = ["luana vitoria tarter", "funcionarios", "sem vendedor"];
+
+export function vendedorOculto(nome: string | null | undefined): boolean {
+  const n = String(nome ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  if (!n) return true;
+  return VENDEDORES_OCULTOS.some((v) => n.includes(v));
+}
+
 // Apelidos EXPLÍCITOS de vendedor: chave normalizada (sem acento/minúscula) ->
 // nome canônico. Garante a união mesmo quando a heurística automática não pega.
 const SELLER_ALIASES: Record<string, string> = {

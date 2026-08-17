@@ -1,7 +1,7 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
-import { buildSellerCanonicalizer } from "@/lib/seller";
+import { buildSellerCanonicalizer, vendedorOculto } from "@/lib/seller";
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, margemFixaPct } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
@@ -194,7 +194,7 @@ export default async function ComercialPage({
   }
 
   const vendedores = [...porVendedor.entries()]
-    .filter(([, a]) => a.faturamento > 0) // ignora vendedores com venda zerada
+    .filter(([nome, a]) => a.faturamento > 0 && !vendedorOculto(nome)) // some da lista (segue nos totais)
     .map(([nome, a]) => {
       const carteira = carteiraPorVendedor.get(nome)?.size ?? a.clientes.size;
       return {
