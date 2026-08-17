@@ -55,15 +55,16 @@ export default async function NecessidadesPage() {
 
   // Estoque (balanço) — produto acabado por NOME. Pode estar indisponível.
   let estoqueErro: string | null = null;
-  const estoqueExato = new Map<string, number>();
-  const balItens: { nomeNorm: string; toks: Set<string>; qtd: number }[] = [];
+  const estoqueExato = new Map<string, { qtd: number; nome: string }>();
+  const balItens: { nome: string; nomeNorm: string; toks: Set<string>; qtd: number }[] = [];
   try {
     const rep = await getEstoqueReport();
     for (const item of rep.itens) {
       if (item.categoria !== "produto_acabado") continue;
       const k = norm(item.nome);
-      estoqueExato.set(k, (estoqueExato.get(k) ?? 0) + item.quantidade);
-      balItens.push({ nomeNorm: k, toks: new Set(toks(item.nome)), qtd: item.quantidade });
+      const prev = estoqueExato.get(k);
+      estoqueExato.set(k, { qtd: (prev?.qtd ?? 0) + item.quantidade, nome: item.nome });
+      balItens.push({ nome: item.nome, nomeNorm: k, toks: new Set(toks(item.nome)), qtd: item.quantidade });
     }
   } catch (e) {
     estoqueErro = e instanceof EstoqueIndisponivelError ? e.message : "Não foi possível ler o balanço de estoque.";
@@ -72,13 +73,14 @@ export default async function NecessidadesPage() {
   // Casa o produto com o balanço POR NOME: exato → maior sobreposição de palavras
   // (com bônus quando um nome é subconjunto do outro — separa "Chocolate" de
   // "Chocolate Maltado").
-  function saldoDe(nome: string, alt: string): number | null {
-    if (balItens.length === 0) return null;
+  function saldoDe(nome: string, alt: string): { saldo: number | null; casou: string | null } {
+    if (balItens.length === 0) return { saldo: null, casou: null };
     for (const c of [nome, alt]) {
       const k = norm(c);
-      if (k && estoqueExato.has(k)) return estoqueExato.get(k)!;
+      const hit = k && estoqueExato.get(k);
+      if (hit) return { saldo: hit.qtd, casou: hit.nome };
     }
-    let best: { qtd: number; score: number } | null = null;
+    let best: { qtd: number; score: number; nome: string } | null = null;
     for (const c of [nome, alt]) {
       const pt = toks(c);
       if (pt.length === 0) continue;
@@ -89,21 +91,22 @@ export default async function NecessidadesPage() {
         const balArr = [...b.toks];
         const subset = pt.every((t) => b.toks.has(t)) || balArr.every((t) => pt.includes(t));
         const score = shared + (subset ? 5 : 0);
-        if (shared >= Math.min(2, pt.length) && (!best || score > best.score)) best = { qtd: b.qtd, score };
+        if (shared >= Math.min(2, pt.length) && (!best || score > best.score)) best = { qtd: b.qtd, score, nome: b.nome };
       }
     }
-    return best ? best.qtd : null;
+    return best ? { saldo: best.qtd, casou: best.nome } : { saldo: null, casou: null };
   }
 
-  const linhas = [...need.values()]
+  // TODAS as linhas (para diagnóstico do casamento), ordenadas por falta.
+  const todas = [...need.values()]
     .map((n) => {
-      const saldo = saldoDe(n.nome, n.desc);
+      const { saldo, casou } = saldoDe(n.nome, n.desc);
       const emEstoque = saldo ?? 0;
       const falta = n.necessario - emEstoque;
-      return { ...n, emEstoque, saldoEncontrado: saldo !== null, falta };
+      return { ...n, emEstoque, saldoEncontrado: saldo !== null, casou, falta };
     })
-    .filter((l) => l.falta > 0) // só o que FALTA vira necessidade
     .sort((a, b) => b.falta - a.falta);
+  const linhas = todas.filter((l) => l.falta > 0); // demanda (o que falta)
 
   const brl = (n: number) => n.toLocaleString("pt-BR");
 
@@ -159,32 +162,32 @@ export default async function NecessidadesPage() {
       <Card className="print-area">
         <CardContent className="p-0">
           <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
-            Solicitações de demanda (produzir)
+            Demanda × balanço (confira a coluna "Casou com")
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs text-slate-400">
-                  <th className="px-4 py-2">Produto</th>
-                  <th className="px-4 py-2">SKU</th>
+                  <th className="px-4 py-2">Nome no pedido</th>
+                  <th className="px-4 py-2">Casou com (balanço)</th>
                   <th className="px-4 py-2 text-right">Necessário</th>
                   <th className="px-4 py-2 text-right">Em estoque</th>
-                  <th className="px-4 py-2 text-right">Falta (produzir)</th>
+                  <th className="px-4 py-2 text-right">Falta</th>
                   <th className="px-4 py-2 text-right">Pedidos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {linhas.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-emerald-400">Tudo coberto pelo estoque. Nada a produzir. ✅</td></tr>
-                ) : linhas.map((l) => (
-                  <tr key={l.sku + l.nome}>
+                {todas.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Nenhum item nos pedidos alvo.</td></tr>
+                ) : todas.map((l) => (
+                  <tr key={l.nome} className={l.falta > 0 ? "" : "opacity-60"}>
                     <td className="px-4 py-2 font-medium text-white">{l.nome}</td>
-                    <td className="px-4 py-2 text-slate-400">{l.sku}</td>
-                    <td className="px-4 py-2 text-right text-slate-300">{brl(l.necessario)}</td>
-                    <td className="px-4 py-2 text-right text-slate-300">
-                      {l.saldoEncontrado ? brl(l.emEstoque) : <span className="text-amber-400" title="Produto não encontrado no balanço">—</span>}
+                    <td className="px-4 py-2 text-xs">
+                      {l.casou ? <span className="text-sky-300">{l.casou}</span> : <span className="text-amber-400">✗ não casou</span>}
                     </td>
-                    <td className="px-4 py-2 text-right font-bold text-red-400">{brl(l.falta)}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{brl(l.necessario)}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{l.saldoEncontrado ? brl(l.emEstoque) : "—"}</td>
+                    <td className={`px-4 py-2 text-right font-bold ${l.falta > 0 ? "text-red-400" : "text-emerald-400"}`}>{l.falta > 0 ? brl(l.falta) : "0"}</td>
                     <td className="px-4 py-2 text-right text-slate-400">{l.pedidos.size}</td>
                   </tr>
                 ))}
