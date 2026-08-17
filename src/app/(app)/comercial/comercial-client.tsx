@@ -28,6 +28,7 @@ export interface DadosComercial {
     pedidos: number;
     ticketMedio: number;
     margem: number;
+    margemCobertura: number;
     clientesPositivados: number;
     carteira: number;
     positivacao: number;
@@ -212,8 +213,13 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
                     <td className="px-4 py-2 text-right font-semibold text-white">{brl(v.faturamento)}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{v.pedidos}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{brl(v.ticketMedio)}</td>
-                    <td className={`px-4 py-2 text-right font-semibold ${v.margem >= 26 ? "text-emerald-400" : v.margem >= 0 ? "text-amber-400" : "text-red-400"}`}>
-                      {v.margem.toFixed(1)}%
+                    <td className={`px-4 py-2 text-right font-semibold ${v.margem >= 18 ? "text-emerald-400" : v.margem >= 0 ? "text-amber-400" : "text-red-400"}`}>
+                      {v.margemCobertura > 0 ? `${v.margem.toFixed(1)}%` : <span className="text-slate-500">—</span>}
+                      {v.margemCobertura > 0 && v.margemCobertura < 90 ? (
+                        <div className="text-[10px] font-normal text-amber-400/80" title="Parte do faturamento não tem custo cadastrado">
+                          ⚠ {v.margemCobertura.toFixed(0)}% do fat.
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2 text-right font-medium text-sky-300">{v.clientesNovos}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{brl(v.primeirasVendas)}</td>

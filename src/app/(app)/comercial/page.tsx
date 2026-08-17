@@ -75,15 +75,26 @@ export default async function ComercialPage({
     !ehCancelado(v.order.tiny_status) && !clienteIgnorado(v.customerName) &&
     !pedidoNumIgnorado(v.order.order_number) && receitaDeVenda(v.order) > 0;
 
+  // Identidade do cliente: customer_id quando existe; senão o NOME normalizado.
+  // Sem isso, pedido sem cliente vinculado sumia da carteira/positivação e os
+  // números dos vendedores ficavam menores que a realidade.
+  const chaveCliente = (v: (typeof views)[number]): string => {
+    const cid = (v.order.customer_id ?? "").trim();
+    if (cid) return cid;
+    const nome = (v.customerName ?? "").trim();
+    return nome && nome !== "—" ? `nome:${nome.toLowerCase()}` : "";
+  };
+
   // Carteira = clientes que já compraram (venda real; pedido zerado não conta).
   const carteiraGlobal = new Set<string>();
   const carteiraPorVendedor = new Map<string, Set<string>>();
   for (const v of views) {
-    if (v.order.customer_id && pedidoEhVenda(v)) {
-      carteiraGlobal.add(v.order.customer_id);
+    const ck = chaveCliente(v);
+    if (ck && pedidoEhVenda(v)) {
+      carteiraGlobal.add(ck);
       const sel = sellerOf(v.order.seller);
       if (!carteiraPorVendedor.has(sel)) carteiraPorVendedor.set(sel, new Set());
-      carteiraPorVendedor.get(sel)!.add(v.order.customer_id);
+      carteiraPorVendedor.get(sel)!.add(ck);
     }
   }
 
@@ -142,7 +153,7 @@ export default async function ComercialPage({
     a.faturamento += receita;
     a.pedidos += 1;
     if (!foraMargem) { a.fatMargem += receita; a.custo += custoMargem; }
-    if (v.order.customer_id) a.clientes.add(v.order.customer_id);
+    { const ck = chaveCliente(v); if (ck) a.clientes.add(ck); }
     a.lista.push({
       numero: v.order.order_number,
       data: (v.order.order_date ?? "").slice(0, 10),
@@ -154,7 +165,7 @@ export default async function ComercialPage({
 
     fatTotal += receita; pedidosTotal += 1;
     if (!foraMargem) { fatMargemTotal += receita; custoTotal += custoMargem; }
-    if (v.order.customer_id) positivadosGlobal.add(v.order.customer_id);
+    { const ck = chaveCliente(v); if (ck) positivadosGlobal.add(ck); }
   }
 
   // 1ª compra de cada cliente (TODOS os tempos, só venda real). Quando essa 1ª
@@ -162,7 +173,7 @@ export default async function ComercialPage({
   const anoOk = (d: string) => { const a = Number(d.slice(0, 4)); return a >= 2015 && a <= 2030; };
   const primeiraCompra = new Map<string, { date: string; sel: string; receita: number }>();
   for (const v of views) {
-    const cid = v.order.customer_id;
+    const cid = chaveCliente(v);
     if (!cid || !pedidoEhVenda(v)) continue;
     const dia = (v.order.order_date ?? "").slice(0, 10);
     if (dia.length !== 10 || !anoOk(dia)) continue;
@@ -192,6 +203,8 @@ export default async function ComercialPage({
         pedidos: a.pedidos,
         ticketMedio: a.pedidos > 0 ? a.faturamento / a.pedidos : 0,
         margem: a.fatMargem > 0 ? ((a.fatMargem - a.custo) / a.fatMargem) * 100 : 0,
+        // Sobre quanto do faturamento DESTE vendedor a margem foi calculada.
+        margemCobertura: a.faturamento > 0 ? (a.fatMargem / a.faturamento) * 100 : 0,
         clientesPositivados: a.clientes.size,
         carteira,
         positivacao: carteira > 0 ? (a.clientes.size / carteira) * 100 : 0,
