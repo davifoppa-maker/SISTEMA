@@ -20,7 +20,13 @@ function statusEntra(s: string | null | undefined): boolean {
 const norm = (s: string | null | undefined) =>
   String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
-export default async function NecessidadesPage() {
+export default async function NecessidadesPage({
+  searchParams,
+}: {
+  searchParams?: { de?: string; ate?: string };
+}) {
+  const de = searchParams?.de || "";
+  const ate = searchParams?.ate || "";
   const [store, catalog] = await Promise.all([
     loadStoreFor(["orders", "order_items"] as Array<keyof DataStore>),
     getCatalog(),
@@ -48,8 +54,14 @@ export default async function NecessidadesPage() {
 
   // Pedidos ALVO (aberto / aprovado / preparando / separação / pronto), não
   // cancelados. SEMPRE as duas empresas (NRX + Ecopro), sem filtro.
+  const dentroPeriodo = (d: string | null) => {
+    const dia = (d ?? "").slice(0, 10);
+    if (de && (!dia || dia < de)) return false;
+    if (ate && (!dia || dia > ate)) return false;
+    return true;
+  };
   const pedidosAlvo = store.orders.filter(
-    (o) => !ehCancelado(o.tiny_status) && statusEntra(o.tiny_status),
+    (o) => !ehCancelado(o.tiny_status) && statusEntra(o.tiny_status) && dentroPeriodo(o.order_date),
   );
   const idsAlvo = new Set(pedidosAlvo.map((o) => o.id));
 
@@ -153,8 +165,28 @@ export default async function NecessidadesPage() {
       {/* Cabeçalho só na impressão */}
       <div className="print-only mb-3">
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Demanda de Produção — NYER</h1>
-        <p style={{ fontSize: 12 }}>Gerado em {hojeStr} · {pedidosAlvo.length} pedidos · {linhas.length} produtos a produzir</p>
+        <p style={{ fontSize: 12 }}>
+          Gerado em {hojeStr} · {pedidosAlvo.length} pedidos · {linhas.length} produtos a produzir
+          {(de || ate) ? ` · período: ${de || "início"} a ${ate || "hoje"}` : ""}
+        </p>
       </div>
+
+      {/* Filtro de período (data do pedido) */}
+      <form method="get" className="no-print mb-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">De</label>
+          <input type="date" name="de" defaultValue={de} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Até</label>
+          <input type="date" name="ate" defaultValue={ate} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+        </div>
+        <button className="h-10 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Filtrar</button>
+        {(de || ate) ? (
+          <a href="/producao/necessidades" className="h-10 flex items-center rounded-lg border border-white/15 px-4 text-sm text-slate-300 hover:bg-white/5">Limpar</a>
+        ) : null}
+        <span className="pb-2 text-xs text-slate-500">Filtra pela data do pedido. Sem período = todos os pedidos em aberto.</span>
+      </form>
 
       {/* ALERTA de demanda */}
       {linhas.length > 0 ? (
