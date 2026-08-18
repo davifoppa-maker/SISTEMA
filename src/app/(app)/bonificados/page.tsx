@@ -99,11 +99,36 @@ export default async function BonificadosPage({
   }
   const porProduto = [...porProdutoMap.values()].sort((a, b) => b.custoTotal - a.custoTotal);
 
+  // Resumo POR ESTADO — ignora o filtro de UF (senão sobraria só um estado),
+  // mas respeita o filtro de mês.
+  const baseEstado = todas.filter((l) => (mesFiltro ? l.mes === mesFiltro : true));
+  const porEstadoMap = new Map<string, { uf: string; quantidade: number; custoTotal: number; valorTotal: number; pedidos: Set<string> }>();
+  for (const l of baseEstado) {
+    const e = porEstadoMap.get(l.uf) ?? { uf: l.uf, quantidade: 0, custoTotal: 0, valorTotal: 0, pedidos: new Set<string>() };
+    e.quantidade += l.quantidade;
+    e.custoTotal += l.custoTotal;
+    e.valorTotal += l.valorTotal;
+    e.pedidos.add(l.pedido);
+    porEstadoMap.set(l.uf, e);
+  }
+  const custoEstadoTotal = [...porEstadoMap.values()].reduce((s, e) => s + e.custoTotal, 0);
+  const porEstado = [...porEstadoMap.values()]
+    .map((e) => ({
+      uf: e.uf,
+      quantidade: e.quantidade,
+      custoTotal: e.custoTotal,
+      valorTotal: e.valorTotal,
+      pedidos: e.pedidos.size,
+      pct: custoEstadoTotal > 0 ? (e.custoTotal / custoEstadoTotal) * 100 : 0,
+    }))
+    .sort((a, b) => b.custoTotal - a.custoTotal);
+
   const dados: DadosBonificados = {
     mesFiltro, ufFiltro, meses, ufs,
     kpis: { custoInvestido, valorMercado, unidades, pedidos, linhas: linhas.length },
     linhas: linhas.slice(0, 500),
     porProduto,
+    porEstado,
   };
 
   return <BonificadosClient dados={dados} />;

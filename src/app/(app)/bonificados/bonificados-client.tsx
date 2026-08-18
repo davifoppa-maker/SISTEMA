@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -26,6 +28,7 @@ export interface DadosBonificados {
   kpis: { custoInvestido: number; valorMercado: number; unidades: number; pedidos: number; linhas: number };
   linhas: LinhaBonificada[];
   porProduto: { produto: string; quantidade: number; custoTotal: number; valorTotal: number }[];
+  porEstado: { uf: string; quantidade: number; custoTotal: number; valorTotal: number; pedidos: number; pct: number }[];
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -53,7 +56,8 @@ function fmtData(d: string | null) {
 }
 
 export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
-  const { kpis, linhas, porProduto, meses, ufs } = dados;
+  const { kpis, linhas, porProduto, porEstado, meses, ufs } = dados;
+  const [aba, setAba] = useState<"produtos" | "estados" | "detalhe">("produtos");
 
   return (
     <>
@@ -94,7 +98,19 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
       </div>
 
       {/* Resumo por produto */}
-      <Card className="mb-5">
+      {/* Abas */}
+      <div className="mb-4 flex gap-1 border-b border-white/10">
+        {([["produtos", "Por produto"], ["estados", "Por estado"], ["detalhe", "Detalhe"]] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setAba(k)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+              aba === k ? "border-amber-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+{aba === "produtos" ? (
+      <Card>
         <CardContent className="p-0">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">📦 Investimento por produto</h2>
@@ -125,8 +141,54 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
           </div>
         </CardContent>
       </Card>
+) : null}
 
-      {/* Detalhe */}
+{aba === "estados" ? (
+      <Card>
+        <CardContent className="p-0">
+          <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
+            Bonificação por estado (UF)
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                  <th className="px-4 py-2">UF</th>
+                  <th className="px-4 py-2 text-right">Pedidos</th>
+                  <th className="px-4 py-2 text-right">Unid.</th>
+                  <th className="px-4 py-2 text-right">Custo investido</th>
+                  <th className="px-4 py-2 text-right">Valor de mercado</th>
+                  <th className="px-4 py-2">% do investido</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {porEstado.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Sem bonificações no período.</td></tr>
+                ) : porEstado.map((e) => (
+                  <tr key={e.uf}>
+                    <td className="px-4 py-2 font-semibold text-white">{e.uf}</td>
+                    <td className="px-4 py-2 text-right text-slate-400">{e.pedidos}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{e.quantidade}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-amber-400">{brl(e.custoTotal)}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{brl(e.valorTotal)}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-24 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.min(e.pct, 100)}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-400">{e.pct.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+) : null}
+
+{aba === "detalhe" ? (
       <Card>
         <CardContent className="p-0">
           <div className="border-b border-white/10 px-4 py-3">
@@ -173,6 +235,7 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
           </div>
         </CardContent>
       </Card>
+) : null}
     </>
   );
 }
