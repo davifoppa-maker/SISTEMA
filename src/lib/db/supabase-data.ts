@@ -140,21 +140,33 @@ async function readTableWith(
   }
 
   const PAGE = 1000;
-  const all: Array<Record<string, unknown>> = [];
-  for (let from = 0; ; from += PAGE) {
-    let rows = await runQuery(() =>
-      sb.from(table).select(sel).order("id", { ascending: true }).range(from, from + PAGE - 1),
+  // Primeira página primeiro (com o retry de "leitura instável" de sempre) —
+  // decide se há mais páginas a buscar.
+  let primeira = await runQuery(() =>
+    sb.from(table).select(sel).order("id", { ascending: true }).range(0, PAGE - 1),
+  );
+  if (primeira.length === 0) {
+    await sleep(250);
+    primeira = await runQuery(() =>
+      sb.from(table).select(sel).order("id", { ascending: true }).range(0, PAGE - 1),
     );
-    // 1ª página vazia pode ser leitura instável → tenta de novo uma vez.
-    if (from === 0 && rows.length === 0) {
-      await sleep(250);
-      rows = await runQuery(() =>
-        sb.from(table).select(sel).order("id", { ascending: true }).range(from, from + PAGE - 1),
-      );
-    }
-    all.push(...rows);
-    if (rows.length < PAGE) break;
   }
+  if (primeira.length < PAGE) return primeira;
+
+  // Tabela grande: busca o TOTAL de linhas e dispara as páginas restantes EM
+  // PARALELO (antes eram sequenciais — uma tabela com 5000 linhas levava 5
+  // idas-e-voltas de rede em série; agora é 1 count + N páginas simultâneas).
+  const { count } = await sb.from(table).select(sel, { count: "exact", head: true });
+  const total = count ?? primeira.length;
+  const restantes: number[] = [];
+  for (let from = PAGE; from < total; from += PAGE) restantes.push(from);
+
+  const paginas = await Promise.all(
+    restantes.map((from) => runQuery(() => sb.from(table).select(sel).order("id", { ascending: true }).range(from, from + PAGE - 1))),
+  );
+
+  const all = [...primeira];
+  for (const p of paginas) all.push(...p);
   return all;
 }
 
