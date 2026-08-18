@@ -41,6 +41,23 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
     setAlterados((prev) => new Set(prev).add(sku));
   }
 
+  async function excluir(sku: string) {
+    if (!sku.trim()) { setRows((prev) => prev.filter((p) => p.sku !== sku)); return; } // linha nova ainda não salva
+    if (!confirm(`Excluir "${sku}" do catálogo? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const res = await fetch(`/api/catalogo?sku=${encodeURIComponent(sku)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setRows((prev) => prev.filter((p) => p.sku !== sku));
+        setMsg({ ok: true, text: `"${sku}" excluído.` });
+      } else {
+        setMsg({ ok: false, text: json.error ?? "Não foi possível excluir." });
+      }
+    } catch {
+      setMsg({ ok: false, text: "Falha de rede ao excluir." });
+    }
+  }
+
   function addNovo() {
     const novo: Product = { sku: "", name: "", tabela: 0, cost: 0, type: "proteico" };
     setRows((prev) => [novo, ...prev]);
@@ -114,7 +131,10 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
                   <th className="px-2 py-2">Produto</th>
                   <th className="px-2 py-2">SKU</th>
                   <th className="px-2 py-2">Tipo</th>
+                  <th className="px-2 py-2 text-right">Preço tabela (R$)</th>
                   <th className="px-2 py-2 text-right">Custo (R$)</th>
+                  <th className="px-2 py-2 text-right">Margem</th>
+                  <th className="px-2 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -138,10 +158,38 @@ export function CatalogoClient({ produtos }: { produtos: Product[] }) {
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         <Input
+                          type="number" step="0.01" value={String(p.tabela)}
+                          onChange={(e) => update(p.sku, { tabela: Number(e.target.value) || 0 })}
+                          className={`w-24 text-right ${!(p.tabela > 0) ? "border-amber-400" : ""}`}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        <Input
                           type="number" step="0.01" value={String(p.cost)}
                           onChange={(e) => update(p.sku, { cost: Number(e.target.value) || 0 })}
                           className={`w-24 text-right ${!(p.cost > 0) ? "border-amber-400" : ""}`}
                         />
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        {p.tabela > 0 && p.cost > 0 ? (
+                          (() => {
+                            const m = ((p.tabela - p.cost) / p.tabela) * 100;
+                            const cor = m >= 18 ? "text-emerald-600" : m >= 0 ? "text-amber-600" : "text-red-600";
+                            return <span className={`text-xs font-semibold ${cor}`}>{m.toFixed(0)}%</span>;
+                          })()
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => excluir(p.sku)}
+                          title="Excluir produto"
+                          className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        >
+                          🗑
+                        </button>
                       </td>
                     </tr>
                   );

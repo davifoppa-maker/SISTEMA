@@ -1,6 +1,7 @@
 import { ok, fail } from "@/lib/api";
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
+import { CATALOG } from "@/lib/product-costs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,4 +39,23 @@ export async function POST(req: Request) {
   if (error) return fail(`Erro ao salvar: ${error.message}`, 500);
 
   return ok({ salvos: rows.length });
+}
+
+// DELETE?sku=XXX → remove um produto AUTO-CADASTRADO (só existe no banco).
+// Produtos padrão do sistema (hardcoded em product-costs.ts) não podem ser
+// removidos por aqui — precisam de alteração no código.
+export async function DELETE(req: Request) {
+  if (!isSupabaseConfigured()) return fail("Banco não configurado.", 503);
+  const sku = new URL(req.url).searchParams.get("sku")?.trim();
+  if (!sku) return fail("Informe o SKU.", 400);
+
+  if (CATALOG.some((p) => p.sku === sku)) {
+    return fail("Este é um produto padrão do sistema — não pode ser excluído por aqui, só editado.", 400);
+  }
+
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from("catalog_custos").delete().eq("sku", sku);
+  if (error) return fail(`Erro ao excluir: ${error.message}`, 500);
+
+  return ok({ excluido: sku });
 }
