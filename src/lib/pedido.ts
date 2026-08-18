@@ -67,3 +67,44 @@ export function ehCancelado(tinyStatus: string | null | undefined): boolean {
   if (!s) return false;
   return s === "2" || s.includes("cancel");
 }
+
+// ————————————————————————————————————————————————————————————————
+// CLASSIFICAÇÃO DA BONIFICAÇÃO pela natureza de operação do Olist.
+// Padrão adotado (ago/2026):
+//   • Bonificação influencer (dentro/fora do estado)            → Influencer
+//   • Bonificação nutri/med (dentro/fora do estado)             → Nutri/Med
+//   • Remessa em bonificação, doação ou brinde (dentro/fora)    → Lojista
+export type CategoriaBonificacao = "influencer" | "nutri_med" | "lojista" | "outro";
+
+export interface ClassificacaoBonificacao {
+  categoria: CategoriaBonificacao;
+  /** Rótulo pronto para exibição. */
+  label: string;
+  /** "dentro" | "fora" do estado, quando a natureza informa. */
+  escopo: "dentro" | "fora" | null;
+}
+
+const LABEL_CATEGORIA: Record<CategoriaBonificacao, string> = {
+  influencer: "Influencer",
+  nutri_med: "Nutri/Med",
+  lojista: "Lojista",
+  outro: "Outro",
+};
+
+export function classificaBonificacao(natOperacao: string | null | undefined): ClassificacaoBonificacao {
+  const n = normNome(natOperacao);
+
+  let categoria: CategoriaBonificacao = "outro";
+  if (n.includes("influ")) categoria = "influencer";
+  else if (n.includes("nutri") || n.includes("med")) categoria = "nutri_med";
+  else if (n.includes("remessa") || n.includes("doacao") || n.includes("brinde") || n.includes("lojista")) {
+    categoria = "lojista";
+  }
+
+  // "dentro do estado" / "fora do estado" (aceita variações de escrita).
+  let escopo: "dentro" | "fora" | null = null;
+  if (n.includes("dentro")) escopo = "dentro";
+  else if (n.includes("fora")) escopo = "fora";
+
+  return { categoria, label: LABEL_CATEGORIA[categoria], escopo };
+}

@@ -2,7 +2,7 @@ import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, produtoNaoBonificado } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, produtoNaoBonificado, classificaBonificacao } from "@/lib/pedido";
 import { BonificadosClient, type DadosBonificados, type LinhaBonificada } from "./bonificados-client";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
 export default async function BonificadosPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; uf?: string; tag?: string };
+  searchParams: { mes?: string; uf?: string; tag?: string; cat?: string };
 }) {
   const mesFiltro = searchParams.mes || ""; // "YYYY-MM" ou "" (todos)
   const ufFiltro = (searchParams.uf || "").toUpperCase(); // "" (todos)
   const tagFiltro = searchParams.tag || ""; // marcador do Olist (ex.: INFLUENCER)
+  const catFiltro = searchParams.cat || ""; // categoria pela natureza de operação
 
   const [views, catalog] = await Promise.all([listOrderViewsFast(), getCatalog()]);
   const prodDe = new Map(catalog.map((p) => [p.sku, p]));
@@ -49,6 +50,8 @@ export default async function BonificadosPage({
     const dia = (v.order.order_date ?? "").slice(0, 10);
     const mes = dia.slice(0, 7);
     const uf = (v.order.state ?? "").toUpperCase() || "—";
+    const natOp = (v.order as any).nat_operacao ?? null;
+    const cls = classificaBonificacao(natOp);
     const its = itemsByOrder.get(v.order.id) ?? [];
     for (const i of its) {
       if ((i.unit_value ?? 0) > 0 || i.quantity <= 0) continue; // só bonificados
@@ -61,6 +64,10 @@ export default async function BonificadosPage({
         mes: mes || "—",
         uf,
         tags: (v.order.tags ?? []) as string[],
+        natOperacao: natOp,
+        categoria: cls.categoria,
+        categoriaLabel: cls.label,
+        escopo: cls.escopo,
         pedido: v.order.order_number,
         cliente: v.customerName,
         vendedor: sellerOf(v.order.seller),
@@ -84,6 +91,7 @@ export default async function BonificadosPage({
     .filter((l) => (mesFiltro ? l.mes === mesFiltro : true))
     .filter((l) => (ufFiltro ? l.uf === ufFiltro : true))
     .filter((l) => (tagFiltro ? (tagFiltro === "__sem__" ? l.tags.length === 0 : l.tags.includes(tagFiltro)) : true))
+    .filter((l) => (catFiltro ? l.categoria === catFiltro : true))
     .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
 
   // KPIs e resumo por produto.
@@ -115,6 +123,25 @@ export default async function BonificadosPage({
     e.pedidos.add(l.pedido);
     porEstadoMap.set(l.uf, e);
   }
+  // Resumo POR MOTIVO (natureza de operação) — respeita o mês, ignora o filtro
+  // de categoria para mostrar a distribuição completa.
+  const baseMotivo = todas.filter((l) => (mesFiltro ? l.mes === mesFiltro : true));
+  const porMotivoMap = new Map<string, { categoria: string; label: string; escopo: string; quantidade: number; custoTotal: number; valorTotal: number; pedidos: Set<string> }>();
+  for (const l of baseMotivo) {
+    const escopoLabel = l.escopo === "dentro" ? "Dentro do estado" : l.escopo === "fora" ? "Fora do estado" : "—";
+    const k = `${l.categoria}|${escopoLabel}`;
+    const e = porMotivoMap.get(k) ?? { categoria: l.categoria, label: l.categoriaLabel, escopo: escopoLabel, quantidade: 0, custoTotal: 0, valorTotal: 0, pedidos: new Set<string>() };
+    e.quantidade += l.quantidade;
+    e.custoTotal += l.custoTotal;
+    e.valorTotal += l.valorTotal;
+    e.pedidos.add(l.pedido);
+    porMotivoMap.set(k, e);
+  }
+  const custoMotivoTotal = [...porMotivoMap.values()].reduce((s, e) => s + e.custoTotal, 0);
+  const porMotivo = [...porMotivoMap.values()]
+    .map((e) => ({ categoria: e.categoria, label: e.label, escopo: e.escopo, quantidade: e.quantidade, custoTotal: e.custoTotal, valorTotal: e.valorTotal, pedidos: e.pedidos.size, pct: custoMotivoTotal > 0 ? (e.custoTotal / custoMotivoTotal) * 100 : 0 }))
+    .sort((a, b) => b.custoTotal - a.custoTotal);
+
   const custoEstadoTotal = [...porEstadoMap.values()].reduce((s, e) => s + e.custoTotal, 0);
   const porEstado = [...porEstadoMap.values()]
     .map((e) => ({
@@ -128,11 +155,12 @@ export default async function BonificadosPage({
     .sort((a, b) => b.custoTotal - a.custoTotal);
 
   const dados: DadosBonificados = {
-    mesFiltro, ufFiltro, tagFiltro, meses, ufs, tagsDisponiveis,
+    mesFiltro, ufFiltro, tagFiltro, catFiltro, meses, ufs, tagsDisponiveis,
     kpis: { custoInvestido, valorMercado, unidades, pedidos, linhas: linhas.length },
     linhas: linhas.slice(0, 500),
     porProduto,
     porEstado,
+    porMotivo,
   };
 
   return <BonificadosClient dados={dados} />;

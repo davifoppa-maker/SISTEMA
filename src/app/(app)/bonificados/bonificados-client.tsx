@@ -10,6 +10,10 @@ export interface LinhaBonificada {
   mes: string;
   uf: string;
   tags: string[];
+  natOperacao: string | null;
+  categoria: string;
+  categoriaLabel: string;
+  escopo: string | null;
   pedido: string;
   cliente: string;
   vendedor: string;
@@ -25,6 +29,7 @@ export interface DadosBonificados {
   mesFiltro: string;
   ufFiltro: string;
   tagFiltro: string;
+  catFiltro: string;
   meses: string[];
   ufs: string[];
   tagsDisponiveis: string[];
@@ -32,6 +37,7 @@ export interface DadosBonificados {
   linhas: LinhaBonificada[];
   porProduto: { produto: string; quantidade: number; custoTotal: number; valorTotal: number }[];
   porEstado: { uf: string; quantidade: number; custoTotal: number; valorTotal: number; pedidos: number; pct: number }[];
+  porMotivo: { categoria: string; label: string; escopo: string; quantidade: number; custoTotal: number; valorTotal: number; pedidos: number; pct: number }[];
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -59,8 +65,8 @@ function fmtData(d: string | null) {
 }
 
 export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
-  const { kpis, linhas, porProduto, porEstado, meses, ufs, tagsDisponiveis } = dados;
-  const [aba, setAba] = useState<"produtos" | "estados" | "detalhe">("produtos");
+  const { kpis, linhas, porProduto, porEstado, porMotivo, meses, ufs, tagsDisponiveis } = dados;
+  const [aba, setAba] = useState<"motivo" | "produtos" | "estados" | "detalhe">("motivo");
 
   return (
     <>
@@ -99,6 +105,16 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
             <option value="__sem__">— sem marcador —</option>
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Motivo</label>
+          <select name="cat" defaultValue={dados.catFiltro} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+            <option value="">Todos</option>
+            <option value="influencer">Influencer</option>
+            <option value="nutri_med">Nutri/Med</option>
+            <option value="lojista">Lojista</option>
+            <option value="outro">Outro / sem natureza</option>
+          </select>
+        </div>
         <button className="h-10 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Aplicar</button>
       </form>
 
@@ -113,7 +129,7 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
       {/* Resumo por produto */}
       {/* Abas */}
       <div className="mb-4 flex gap-1 border-b border-white/10">
-        {([["produtos", "Por produto"], ["estados", "Por estado"], ["detalhe", "Detalhe"]] as const).map(([k, label]) => (
+        {([["motivo", "Por motivo"], ["produtos", "Por produto"], ["estados", "Por estado"], ["detalhe", "Detalhe"]] as const).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setAba(k)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
               aba === k ? "border-amber-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
@@ -121,6 +137,53 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
           </button>
         ))}
       </div>
+
+{aba === "motivo" ? (
+      <Card>
+        <CardContent className="p-0">
+          <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
+            Bonificação por motivo (natureza de operação)
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                  <th className="px-4 py-2">Motivo</th>
+                  <th className="px-4 py-2">Escopo</th>
+                  <th className="px-4 py-2 text-right">Pedidos</th>
+                  <th className="px-4 py-2 text-right">Unid.</th>
+                  <th className="px-4 py-2 text-right">Custo investido</th>
+                  <th className="px-4 py-2 text-right">Valor de mercado</th>
+                  <th className="px-4 py-2">% do investido</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {porMotivo.length === 0 ? (
+                  <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-400">Sem bonificações no período.</td></tr>
+                ) : porMotivo.map((m, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-2 font-semibold text-white">{m.label}</td>
+                    <td className="px-4 py-2 text-slate-400">{m.escopo}</td>
+                    <td className="px-4 py-2 text-right text-slate-400">{m.pedidos}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{m.quantidade}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-amber-400">{brl(m.custoTotal)}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{brl(m.valorTotal)}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-24 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.min(m.pct, 100)}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-400">{m.pct.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+) : null}
 
 {aba === "produtos" ? (
       <Card>
