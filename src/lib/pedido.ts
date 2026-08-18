@@ -53,7 +53,10 @@ export function produtoNaoBonificado(nome: string | null | undefined): boolean {
 
 // Pedidos EXCLUÍDOS das análises por número (ex.: transferência interna com custo
 // distorcido). Não some do banco (o cron reimporta do Olist), some das telas.
-const PEDIDOS_IGNORADOS = new Set<string>(["175"]);
+const PEDIDOS_IGNORADOS = new Set<string>([
+  "175",
+  "325", // BENI INDUSTRIA E COMERCIO LTDA (13/08/2026) — fora do faturamento
+]);
 
 export function pedidoNumIgnorado(orderNumber: string | null | undefined): boolean {
   const n = String(orderNumber ?? "").trim();
