@@ -479,6 +479,46 @@ export async function enrichOrderDates(store: DataStore, cap = 40): Promise<numb
  * Busca itens via fetchOrderById para todos os pedidos que ainda não têm itens.
  * Chamado após o sync recente para preencher automaticamente.
  */
+/**
+ * Preenche NATUREZA DE OPERAÇÃO e MARCADORES dos pedidos que ainda não têm esse
+ * dado — a lista leve do Tiny (usada no sync automático) NÃO traz esses campos,
+ * só o detalhe individual do pedido. Sem isso, o pedido fica classificado como
+ * "Outro" (bonificados) mesmo já tendo a natureza certa no Olist.
+ * Roda automaticamente pelo cron — não depende do usuário clicar em nada.
+ */
+export async function enrichOrderMetadata(store: DataStore, cap = 40): Promise<number> {
+  const pendentes = store.orders.filter(
+    (o) => o.tiny_id && !(o as any).nat_operacao,
+  ).slice(0, cap);
+
+  let atualizados = 0;
+  for (const order of pendentes) {
+    try {
+      const empAtual = (order as any).empresa ?? "nyer";
+      const ordem = empAtual === "ecopro" ? ["ecopro", "nyer"] : ["nyer", "ecopro"];
+      for (const emp of ordem) {
+        const payload = await fetchOrderById(order.tiny_id!, emp).catch(() => null);
+        if (!payload) continue;
+        const natOp = str((payload as Record<string, unknown>).nat_operacao);
+        const tags = Array.isArray((payload as any).marcadores)
+          ? ((payload as any).marcadores as any[])
+              .map((m) => String(m?.descricao ?? m?.marcador?.descricao ?? m ?? "").trim())
+              .filter(Boolean)
+          : [];
+        if (natOp || tags.length > 0) {
+          if (natOp) (order as any).nat_operacao = natOp;
+          if (tags.length > 0) order.tags = tags;
+          if (((order as any).empresa ?? "nyer") !== emp) (order as any).empresa = emp;
+          order.updated_at = nowIso();
+          atualizados++;
+          break;
+        }
+      }
+    } catch { /* ignora e tenta no próximo ciclo */ }
+  }
+  return atualizados;
+}
+
 export async function enrichOrderItems(store: DataStore, cap = 50): Promise<number> {
   const ordersWithoutItems = store.orders.filter(
     (o) => o.tiny_id && store.order_items.filter((i) => i.order_id === o.id).length === 0

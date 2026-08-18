@@ -1,6 +1,6 @@
 import { loadStoreFor, commitStore } from "@/lib/db";
 import { ok } from "@/lib/api";
-import { ingestOrder, enrichOrderItems, removeDeletedOlistOrders } from "@/lib/services/tiny";
+import { ingestOrder, enrichOrderItems, enrichOrderMetadata, removeDeletedOlistOrders } from "@/lib/services/tiny";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
 import { fetchRecentOrders, getValidAccessToken, isTinyConnected } from "@/lib/services/tiny-api";
 import { syncUnknownProducts } from "@/lib/catalog";
@@ -79,6 +79,16 @@ async function run() {
     }
     diag.itensPreenchidos = itensPreenchidos;
 
+    // Preenche NATUREZA DE OPERAÇÃO e MARCADORES (a lista leve do sync automático
+    // não traz esses campos — só o detalhe). Automático, sem depender de clique.
+    let metadataAtualizada = 0;
+    try {
+      metadataAtualizada = await enrichOrderMetadata(store, 40);
+    } catch (e) {
+      diag.metadataErr = e instanceof Error ? e.message : String(e);
+    }
+    diag.metadataAtualizada = metadataAtualizada;
+
     // Apaga do nosso banco os pedidos que foram deletados no Olist (só 404 confirmado).
     let removidos = 0;
     try {
@@ -90,10 +100,10 @@ async function run() {
       diag.removeErr = e instanceof Error ? e.message : String(e);
     }
 
-    if (synced > 0 || itensPreenchidos > 0 || removidos > 0) {
+    if (synced > 0 || itensPreenchidos > 0 || metadataAtualizada > 0 || removidos > 0) {
       store.api_sync_logs.push({
         id: uuid(), source: "tiny", operation: "cron_keep_alive", ok: true,
-        detail: `${synced} pedidos + ${itensPreenchidos} com itens + ${removidos} removidos (desde ${dataInicial})`,
+        detail: `${synced} pedidos + ${itensPreenchidos} com itens + ${metadataAtualizada} com natureza/marcadores + ${removidos} removidos (desde ${dataInicial})`,
         created_at: nowIso(),
       });
       await commitStore(store);
