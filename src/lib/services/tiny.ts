@@ -274,7 +274,14 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
         ((o as any).empresa ?? "nyer") === companyId,
     );
 
-  const marcador = payload.marcadores?.[0]?.descricao;
+  // TODOS os marcadores do Olist (não só o primeiro) — usados para separar
+  // Influencer / B2B / permuta etc. nas telas.
+  const marcadores: string[] = Array.isArray(payload.marcadores)
+    ? (payload.marcadores as any[])
+        .map((m) => String(m?.descricao ?? m?.marcador?.descricao ?? m ?? "").trim())
+        .filter(Boolean)
+    : [];
+  const marcador = marcadores[0];
 
   // Converte data do Tiny (DD/MM/YYYY ou YYYY-MM-DD) para ISO date string.
   function tinyDateToIso(v: unknown): string | null {
@@ -302,7 +309,7 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
     nat_operacao: str((payload as Record<string, unknown>).nat_operacao),
     order_date: tinyDateToIso((payload as Record<string, unknown>).data),
     due_date: tinyDateToIso((payload as Record<string, unknown>).vencimento),
-    tags: marcador ? [marcador] : [],
+    tags: marcadores,
     raw_payload: payload,
   };
 

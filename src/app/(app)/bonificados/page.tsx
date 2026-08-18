@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function BonificadosPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; uf?: string };
+  searchParams: { mes?: string; uf?: string; tag?: string };
 }) {
   const mesFiltro = searchParams.mes || ""; // "YYYY-MM" ou "" (todos)
   const ufFiltro = (searchParams.uf || "").toUpperCase(); // "" (todos)
+  const tagFiltro = searchParams.tag || ""; // marcador do Olist (ex.: INFLUENCER)
 
   const [views, catalog] = await Promise.all([listOrderViewsFast(), getCatalog()]);
   const prodDe = new Map(catalog.map((p) => [p.sku, p]));
@@ -59,6 +60,7 @@ export default async function BonificadosPage({
         data: dia || null,
         mes: mes || "—",
         uf,
+        tags: (v.order.tags ?? []) as string[],
         pedido: v.order.order_number,
         cliente: v.customerName,
         vendedor: sellerOf(v.order.seller),
@@ -75,11 +77,13 @@ export default async function BonificadosPage({
   // Opções de filtro (a partir de TODAS as linhas, antes de filtrar).
   const meses = [...new Set(todas.map((l) => l.mes).filter((m) => m !== "—"))].sort().reverse();
   const ufs = [...new Set(todas.map((l) => l.uf).filter((u) => u !== "—"))].sort();
+  const tagsDisponiveis = [...new Set(todas.flatMap((l) => l.tags))].filter(Boolean).sort();
 
   // Aplica filtros.
   const linhas = todas
     .filter((l) => (mesFiltro ? l.mes === mesFiltro : true))
     .filter((l) => (ufFiltro ? l.uf === ufFiltro : true))
+    .filter((l) => (tagFiltro ? (tagFiltro === "__sem__" ? l.tags.length === 0 : l.tags.includes(tagFiltro)) : true))
     .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
 
   // KPIs e resumo por produto.
@@ -124,7 +128,7 @@ export default async function BonificadosPage({
     .sort((a, b) => b.custoTotal - a.custoTotal);
 
   const dados: DadosBonificados = {
-    mesFiltro, ufFiltro, meses, ufs,
+    mesFiltro, ufFiltro, tagFiltro, meses, ufs, tagsDisponiveis,
     kpis: { custoInvestido, valorMercado, unidades, pedidos, linhas: linhas.length },
     linhas: linhas.slice(0, 500),
     porProduto,

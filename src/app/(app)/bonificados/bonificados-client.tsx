@@ -9,6 +9,7 @@ export interface LinhaBonificada {
   data: string | null;
   mes: string;
   uf: string;
+  tags: string[];
   pedido: string;
   cliente: string;
   vendedor: string;
@@ -23,8 +24,10 @@ export interface LinhaBonificada {
 export interface DadosBonificados {
   mesFiltro: string;
   ufFiltro: string;
+  tagFiltro: string;
   meses: string[];
   ufs: string[];
+  tagsDisponiveis: string[];
   kpis: { custoInvestido: number; valorMercado: number; unidades: number; pedidos: number; linhas: number };
   linhas: LinhaBonificada[];
   porProduto: { produto: string; quantidade: number; custoTotal: number; valorTotal: number }[];
@@ -56,7 +59,7 @@ function fmtData(d: string | null) {
 }
 
 export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
-  const { kpis, linhas, porProduto, porEstado, meses, ufs } = dados;
+  const { kpis, linhas, porProduto, porEstado, meses, ufs, tagsDisponiveis } = dados;
   const [aba, setAba] = useState<"produtos" | "estados" | "detalhe">("produtos");
 
   return (
@@ -84,6 +87,16 @@ export function BonificadosClient({ dados }: { dados: DadosBonificados }) {
             {ufs.map((u) => (
               <option key={u} value={u}>{u}</option>
             ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Marcador (Olist)</label>
+          <select name="tag" defaultValue={dados.tagFiltro} className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+            <option value="">Todos</option>
+            {tagsDisponiveis.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+            <option value="__sem__">— sem marcador —</option>
           </select>
         </div>
         <button className="h-10 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Aplicar</button>
