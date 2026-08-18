@@ -768,6 +768,13 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
     },
     vendedor: v3.vendedor?.nome ?? v3.vendedor ?? v3.nomeVendedor,
     lista_preco: v3.listaPreco?.nome ?? v3.listaPreco,
+    // Natureza de operação (V3 manda em `naturezaOperacao`, objeto ou string).
+    nat_operacao:
+      v3.naturezaOperacao?.nome ??
+      v3.naturezaOperacao?.descricao ??
+      (typeof v3.naturezaOperacao === "string" ? v3.naturezaOperacao : undefined) ??
+      v3.natureza_operacao ??
+      undefined,
     transportadora,
     // Data real do pedido no Tiny.
     data: v3.dataCriacao ?? (typeof v3.data === "string" && v3.data.length >= 8 ? v3.data : undefined),
