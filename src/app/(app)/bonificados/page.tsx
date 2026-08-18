@@ -1,5 +1,6 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
+import { fetchAllRows } from "@/lib/db/fetch-all";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer } from "@/lib/seller";
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, produtoNaoBonificado, classificaBonificacao } from "@/lib/pedido";
@@ -23,17 +24,7 @@ export default async function BonificadosPage({
 
   // Itens (paginados) — precisa da descrição também.
   const sb = getSupabaseAdmin();
-  const allItems: { order_id: string; sku: string | null; description: string | null; quantity: number; unit_value: number | null }[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data } = await sb
-      .from("order_items")
-      .select("order_id, sku, description, quantity, unit_value")
-      .order("order_id", { ascending: true })
-      .range(from, from + 999);
-    if (!data || data.length === 0) break;
-    allItems.push(...(data as any[]));
-    if (data.length < 1000) break;
-  }
+  const allItems = await fetchAllRows<{ order_id: string; sku: string | null; description: string | null; quantity: number; unit_value: number | null }>(sb, "order_items", "order_id, sku, description, quantity, unit_value", "order_id");
   const itemsByOrder = new Map<string, typeof allItems>();
   for (const it of allItems) {
     const arr = itemsByOrder.get(it.order_id) ?? [];

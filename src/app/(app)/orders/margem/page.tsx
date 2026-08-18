@@ -1,5 +1,6 @@
 import { listOrderViewsFast } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/db/supabase-store";
+import { fetchAllRows } from "@/lib/db/fetch-all";
 import { getCatalog } from "@/lib/catalog";
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem } from "@/lib/pedido";
 import { buildSellerCanonicalizer } from "@/lib/seller";
@@ -15,17 +16,7 @@ export default async function OrdemMargemPage() {
 
   const sb = getSupabaseAdmin();
   // Pagina TODOS os itens (o Supabase corta em 1000 por consulta).
-  const allItems: { order_id: string; sku: string | null; quantity: number; unit_value: number | null }[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data } = await sb
-      .from("order_items")
-      .select("order_id, sku, quantity, unit_value")
-      .order("order_id", { ascending: true })
-      .range(from, from + 999);
-    if (!data || data.length === 0) break;
-    allItems.push(...(data as any[]));
-    if (data.length < 1000) break;
-  }
+  const allItems = await fetchAllRows<{ order_id: string; sku: string | null; quantity: number; unit_value: number | null }>(sb, "order_items", "order_id, sku, quantity, unit_value", "order_id");
 
   const itemsByOrder = new Map<string, { sku: string | null; quantity: number; unit_value: number }[]>();
   for (const item of allItems ?? []) {
