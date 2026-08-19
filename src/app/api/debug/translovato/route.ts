@@ -113,5 +113,92 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.json({ versao: "v2-sonda-empresa", ok: true, config: configVisivel, loginTeste, cotacaoTeste, sondaEmpresa });
+  // SONDA DE VARIANTES (&var=1): a chave vem da geraChaveAcessoJSON — pode ser
+  // que só funcione com a operação JSON de cotação. Testa 3 variantes:
+  //   V1 SimulacaoFrete + chave extraída (atual)
+  //   V2 SimulacaoFreteJSON2 + chave extraída (variante JSON do WSDL)
+  //   V3 SimulacaoFrete + o <return> COMPLETO como ChaveAcesso (JSON inteiro)
+  let sondaVariantes: Record<string, unknown> | null = null;
+  if (u.searchParams.get("var") === "1") {
+    const { getTranslovatoConfig: cfg2 } = await import("@/lib/services/freight/translovato");
+    const conf = cfg2();
+    const xmlEsc = (v: string | number) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const ns = "urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete";
+
+    // Gera a chave e guarda TAMBÉM o <return> bruto (para a V3).
+    const senhaB64 = Buffer.from(conf.senha, "utf-8").toString("base64");
+    const envChave =
+      `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="${ns}">` +
+      `<soapenv:Header/><soapenv:Body><urn:geraChaveAcessoJSON soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
+      `<CNPJ xsi:type="xsd:string">${xmlEsc(conf.cnpj)}</CNPJ>` +
+      `<Usuario xsi:type="xsd:string">${xmlEsc(conf.usuario)}</Usuario>` +
+      `<Senha xsi:type="xsd:string">${xmlEsc(senhaB64)}</Senha>` +
+      `</urn:geraChaveAcessoJSON></soapenv:Body></soapenv:Envelope>`;
+    const rc = await fetch(conf.wsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `${ns}#geraChaveAcessoJSON` },
+      body: envChave,
+    });
+    const xmlChave = await rc.text();
+    const retorno = (xmlChave.match(/<return[^>]*>([\s\S]*?)<\/return>/i) ?? [])[1]?.trim() ?? "";
+    const retornoLimpo = retorno.replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+    const chaveExtraida = (retornoLimpo.match(/"chave"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? "";
+
+    const corpoParams = (chave: string, extraCubado: boolean) =>
+      `<CNPJ xsi:type="xsd:string">${xmlEsc(conf.cnpj)}</CNPJ>` +
+      `<Usuario xsi:type="xsd:string">${xmlEsc(conf.usuario)}</Usuario>` +
+      `<ChaveAcesso xsi:type="xsd:string">${xmlEsc(chave)}</ChaveAcesso>` +
+      `<CdEmpresa xsi:type="xsd:int">${conf.cdEmpresa}</CdEmpresa>` +
+      `<CdRemetente xsi:type="xsd:string">${xmlEsc(conf.cnpjRemetente)}</CdRemetente>` +
+      `<CdDestinatario xsi:type="xsd:string"></CdDestinatario>` +
+      (extraCubado ? `<CdConsignatario xsi:type="xsd:string"></CdConsignatario>` : "") +
+      `<NrCepColeta xsi:type="xsd:int">${Number(conf.cepOrigem)}</NrCepColeta>` +
+      `<NrCepCalcAte xsi:type="xsd:int">${Number(cep)}</NrCepCalcAte>` +
+      `<InTipoFrete xsi:type="xsd:int">1</InTipoFrete>` +
+      `<InICMS xsi:type="xsd:int">0</InICMS>` +
+      `<CdNatureza xsi:type="xsd:int">${conf.cdNatureza}</CdNatureza>` +
+      `<CdTransporte xsi:type="xsd:int">1</CdTransporte>` +
+      `<CdTipoVeiculo xsi:type="xsd:int">0</CdTipoVeiculo>` +
+      `<VlMercadoria xsi:type="xsd:double">${valor}</VlMercadoria>` +
+      `<QtPeso xsi:type="xsd:double">${peso}</QtPeso>` +
+      (extraCubado ? `<QtPesoCubado xsi:type="xsd:double">${peso}</QtPesoCubado>` : "") +
+      `<QtVolumes xsi:type="xsd:double">1</QtVolumes>` +
+      `<QtMetrosCubicos xsi:type="xsd:double">0.027</QtMetrosCubicos>` +
+      `<QtPares xsi:type="xsd:double">0</QtPares>`;
+
+    const chama = async (op: string, chave: string, extraCubado: boolean): Promise<string> => {
+      const env =
+        `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="${ns}">` +
+        `<soapenv:Header/><soapenv:Body><urn:${op} soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
+        corpoParams(chave, extraCubado) +
+        `</urn:${op}></soapenv:Body></soapenv:Envelope>`;
+      try {
+        const r = await fetch(conf.wsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `${ns}#${op}` },
+          body: env,
+        });
+        const xml = await r.text();
+        const frete = (xml.match(/<Frete[^>]*xsd:double[^>]*>([^<]+)<\/Frete>/i) ?? [])[1];
+        if (frete && Number(frete) > 0) return `FRETE R$ ${frete}`;
+        const desc = (xml.match(/<Descricao[^>]*>([^<]+)<\/Descricao>/i) ?? [])[1];
+        if (desc) return `erro: ${desc.slice(0, 150)}`;
+        // Retorno JSON (SimulacaoFreteJSON2): pega o <return> cru.
+        const ret = (xml.match(/<return[^>]*>([\s\S]*?)<\/return>/i) ?? [])[1];
+        if (ret) return `return: ${ret.replace(/&quot;/g, '"').slice(0, 300)}`;
+        return `${r.status}: ${xml.slice(0, 200)}`;
+      } catch (e) {
+        return e instanceof Error ? e.message : "erro";
+      }
+    };
+
+    sondaVariantes = {
+      chaveExtraida: chaveExtraida.slice(0, 30) + "…",
+      v1_SimulacaoFrete_chave: await chama("SimulacaoFrete", chaveExtraida, false),
+      v2_SimulacaoFreteJSON2_chave: await chama("SimulacaoFreteJSON2", chaveExtraida, true),
+      v3_SimulacaoFrete_returnCompleto: await chama("SimulacaoFrete", retornoLimpo, false),
+    };
+  }
+
+  return Response.json({ versao: "v4-variantes", ok: true, config: configVisivel, loginTeste, cotacaoTeste, sondaEmpresa, sondaVariantes });
 }
