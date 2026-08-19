@@ -194,12 +194,13 @@ export async function GET(req: Request) {
   }
 
   // SONDA DE EMITENTE: a API responde "CNPJ do emitente não cadastrado" para
-  // bases erradas — então testamos as filiais da Multitrans (raiz 01.201.578 +
-  // MultiSCV) até uma ser aceita. Dígitos verificadores são calculados.
-  //   &emit=1 ativa; para no 1º CNPJ aceito.
+  // bases erradas — testamos candidatos até um ser aceito. RESPEITA o rate
+  // limit da Multi (3 req/s): ~450ms entre chamadas e retry em 429.
+  //   &emit=1 ativa; para no 1º CNPJ aceito de verdade.
   let sondaEmitente: Record<string, unknown> | null = null;
   if (u.searchParams.get("emit") === "1" && loginTeste.ok) {
     const token = (loginTeste as { token: string }).token;
+    const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const dvCnpj = (base12: string): string => {
       const calc = (nums: string, pesos: number[]) => {
         const soma = nums.split("").reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
@@ -210,25 +211,15 @@ export async function GET(req: Request) {
       const d2 = calc(base12 + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
       return `${base12}${d1}${d2}`;
     };
-    // CNPJs do próprio cliente PRIMEIRO (a conta na Multi pode estar em outro
-    // CNPJ do grupo — ex.: Ecopro): 54.369.810/0001-49 e 51.579.683/0001-14.
-    const candidatos: string[] = ["54369810000149", "51579683000114"];
-    for (let filial = 1; filial <= 35; filial++) {
-      candidatos.push(dvCnpj(`01201578${String(filial).padStart(4, "0")}`)); // Multitrans
-    }
-    for (let filial = 1; filial <= 12; filial++) {
-      candidatos.push(dvCnpj(`04169737${String(filial).padStart(4, "0")}`)); // MultiSCV
-    }
+
     const [io, id] = await Promise.all([
       fetch(`https://viacep.com.br/ws/${c.cepOrigem}/json/`).then((r) => r.json()).catch(() => null),
       fetch(`https://viacep.com.br/ws/${cep}/json/`).then((r) => r.json()).catch(() => null),
     ]);
-    const resultados: Record<string, string> = {};
-    let aceito: string | null = null;
-    // Matriz emitente x cliente com os CNPJs do usuário (4 combinações) primeiro.
-    const meus = ["54369810000149", "51579683000114"];
-    for (const emit of meus) {
-      for (const cli of meus) {
+
+    // Testa uma combinação com retry em 429 (respeitando o limite de 3 req/s).
+    const testa = async (emit: string, cli: string): Promise<string> => {
+      for (let tent = 0; tent < 3; tent++) {
         try {
           const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
             method: "POST",
@@ -242,34 +233,46 @@ export async function GET(req: Request) {
           const t = await r.text();
           let msg = t.slice(0, 150);
           try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; } catch { /* cru */ }
-          resultados[`emit=${emit} cli=${cli}`] = `${r.status}: ${msg}`;
-          if (r.ok) { aceito = `emit=${emit} cli=${cli}`; }
+          if (r.status === 429 || /limite de requisi/i.test(msg)) { await pausa(1500); continue; } // rate limit → tenta de novo
+          return `${r.status}: ${msg}`;
         } catch (e) {
-          resultados[`emit=${emit} cli=${cli}`] = e instanceof Error ? e.message : "erro";
+          return e instanceof Error ? e.message : "erro";
         }
+      }
+      return "429: rate limit persistente";
+    };
+    const aceitou = (resp: string) =>
+      !resp.startsWith("429") && !/emitente n\u00e3o cadastrado|emitente não cadastrado/i.test(resp);
+
+    const resultados: Record<string, string> = {};
+    let aceito: string | null = null;
+
+    // 1) CNPJs do próprio grupo em matriz emitente × cliente (Ecopro e NRX).
+    const meus = ["54369810000149", "51579683000114"];
+    for (const emit of meus) {
+      for (const cli of meus) {
         if (aceito) break;
+        const resp = await testa(emit, cli);
+        resultados[`emit=${emit} cli=${cli}`] = resp;
+        if (aceitou(resp)) aceito = `emit=${emit} cli=${cli}`;
+        await pausa(450);
       }
       if (aceito) break;
     }
-    for (const cnpj of candidatos) {
-      if (aceito) break;
-      try {
-        const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            nDocEmit: cnpj, nDocCli: c.cnpjRemetente, nDocRem: c.cnpjRemetente,
-            cOrigCalc: Number(io?.ibge ?? 0), cDestCalc: Number(id?.ibge ?? 0), CEP: cep,
-            pBru: peso, qVol: 1, vNF: valor,
-          }),
-        });
-        const t = await r.text();
-        let msg = t.slice(0, 120);
-        try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; } catch { /* cru */ }
-        resultados[cnpj] = `${r.status}: ${msg}`;
-        if (!/emitente n\u00e3o cadastrado|emitente não cadastrado/i.test(msg)) { aceito = cnpj; break; }
-      } catch (e) {
-        resultados[cnpj] = e instanceof Error ? e.message : "erro";
+
+    // 2) Varredura das filiais Multitrans/MultiSCV como emitente.
+    if (!aceito) {
+      const candidatos: string[] = [];
+      for (let filial = 1; filial <= 35; filial++) candidatos.push(dvCnpj(`01201578${String(filial).padStart(4, "0")}`));
+      for (let filial = 1; filial <= 12; filial++) candidatos.push(dvCnpj(`04169737${String(filial).padStart(4, "0")}`));
+      // continua de onde parou: &pulafiliais=N pula as N primeiras (execuções longas)
+      const pular = Number(u.searchParams.get("pulafiliais") || 0);
+      for (const cnpj of candidatos.slice(pular)) {
+        if (aceito) break;
+        const resp = await testa(cnpj, c.cnpjRemetente);
+        resultados[cnpj] = resp;
+        if (aceitou(resp)) aceito = cnpj;
+        await pausa(450);
       }
     }
     sondaEmitente = { cnpjAceito: aceito, testados: Object.keys(resultados).length, resultados };
