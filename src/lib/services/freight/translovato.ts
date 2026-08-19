@@ -75,16 +75,18 @@ const soapAction = (op: string) => `${SOAP_NS}#${op}`;
 async function postSoap(
   body: string,
   action: string,
-): Promise<{ ok: true; xml: string } | { ok: false; error: string; status?: number }> {
+  cookie?: string,
+): Promise<{ ok: true; xml: string; cookie: string | null } | { ok: false; error: string; status?: number }> {
   try {
-    const res = await fetch(WS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: action },
-      body,
-    });
+    const headers: Record<string, string> = { "Content-Type": "text/xml; charset=utf-8", SOAPAction: action };
+    if (cookie) headers.Cookie = cookie;
+    const res = await fetch(WS_URL, { method: "POST", headers, body });
     const xml = await res.text();
+    // Serviços Delphi costumam amarrar a sessão num cookie — repassamos adiante.
+    const setCookie = res.headers.get("set-cookie");
+    const cookiePar = setCookie ? setCookie.split(";")[0] : null;
     if (!res.ok) return { ok: false, error: `Translovato ${res.status}: ${xml.slice(0, 200)}`, status: res.status };
-    return { ok: true, xml };
+    return { ok: true, xml, cookie: cookiePar };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (Translovato)" };
   }
@@ -92,7 +94,7 @@ async function postSoap(
 
 /** Passo 1: solicita a chave de acesso (válida por 5 min). Exportado para
  *  diagnóstico — permite validar CNPJ/usuário/senha sem precisar do CdEmpresa. */
-export async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | { ok: false; error: string }> {
+export async function geraChaveAcesso(): Promise<{ ok: true; chave: string; cookie: string | null } | { ok: false; error: string }> {
   const c = getTranslovatoConfig();
   const senhaB64 = Buffer.from(c.senha, "utf-8").toString("base64");
   const envelope =
@@ -127,7 +129,7 @@ export async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | {
   }
   if (!chave) chave = (r.xml.match(/"chave"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? null;
   if (!chave) return { ok: false, error: `Não foi possível ler a chave de acesso. Retorno: ${r.xml.slice(0, 250)}` };
-  return { ok: true, chave };
+  return { ok: true, chave, cookie: r.cookie };
 }
 
 export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcome> {
@@ -149,18 +151,18 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
   );
   const peso = Math.max(params.peso || 0, 0);
 
-  // Passo 1: chave.
-  const chaveR = await geraChaveAcesso();
+  // Passo 1: chave (com o cookie de sessão que o servidor devolver).
+  let chaveR = await geraChaveAcesso();
   if (!chaveR.ok) return { ok: false, error: chaveR.error };
 
   // Passo 2: cotação.
-  const envelope =
+  const montaEnvelope = (chave: string) =
     `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete">` +
     `<soapenv:Header/><soapenv:Body>` +
     `<urn:SimulacaoFrete soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
     `<CNPJ xsi:type="xsd:string">${xmlEscape(c.cnpj)}</CNPJ>` +
     `<Usuario xsi:type="xsd:string">${xmlEscape(c.usuario)}</Usuario>` +
-    `<ChaveAcesso xsi:type="xsd:string">${xmlEscape(chaveR.chave)}</ChaveAcesso>` +
+    `<ChaveAcesso xsi:type="xsd:string">${xmlEscape(chave)}</ChaveAcesso>` +
     `<CdEmpresa xsi:type="xsd:int">${c.cdEmpresa}</CdEmpresa>` +
     `<CdRemetente xsi:type="xsd:string">${xmlEscape(cnpjRemetente)}</CdRemetente>` +
     `<CdDestinatario xsi:type="xsd:string">${xmlEscape(cnpjDestinatario)}</CdDestinatario>` +
@@ -178,8 +180,17 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
     `<QtPares xsi:type="xsd:double">0</QtPares>` +
     `</urn:SimulacaoFrete></soapenv:Body></soapenv:Envelope>`;
 
-  const r = await postSoap(envelope, soapAction("SimulacaoFrete"));
+  let r = await postSoap(montaEnvelope(chaveR.chave), soapAction("SimulacaoFrete"), chaveR.cookie ?? undefined);
   if (!r.ok) return { ok: false, error: r.error, status: r.status };
+  // "Chave de Acesso Inválida": regenera a chave e tenta UMA vez mais, na
+  // mesma sessão (cookie novo).
+  if (/chave de acesso inv/i.test(r.xml)) {
+    chaveR = await geraChaveAcesso();
+    if (chaveR.ok) {
+      const r2 = await postSoap(montaEnvelope(chaveR.chave), soapAction("SimulacaoFrete"), chaveR.cookie ?? undefined);
+      if (r2.ok) r = r2;
+    }
+  }
 
   // Erro de negócio: pelo WSDL, TErro = { Codigo, Descricao, Complemento }.
   const erroDesc = xmlValor(r.xml, "Descricao");
