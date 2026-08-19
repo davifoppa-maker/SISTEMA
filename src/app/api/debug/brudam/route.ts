@@ -159,14 +159,28 @@ export async function GET(req: Request) {
           [...texto.matchAll(/"(\/(?:[a-zA-Z0-9_\-{}]+\/)*[a-zA-Z0-9_\-{}]+)"\s*:\s*\{/g)].map((m) => m[1]),
         )];
         const relevantesRegex = porRegex.filter((x) => /cota|frete|simul|calc|track|rastre|ocorren|coleta|minuta|cte|preco|tabela/i.test(x));
+        // Fatia da spec com a DEFINIÇÃO do endpoint de cotação (parâmetros do corpo).
+        const alvo = u.searchParams.get("path") || "/frete/cotacao/calcula";
+        let definicaoEndpoint: string | null = null;
+        let definicaoSchema: string | null = null;
+        const idx = texto.indexOf(`"${alvo}"`);
+        if (idx >= 0) {
+          definicaoEndpoint = texto.slice(idx, idx + 3500);
+          const ref = definicaoEndpoint.match(/#\/definitions\/([A-Za-z0-9_]+)/);
+          if (ref) {
+            const idxDef = texto.indexOf(`"${ref[1]}"`, texto.indexOf('"definitions"'));
+            if (idxDef >= 0) definicaoSchema = texto.slice(idxDef, idxDef + 3500);
+          }
+        }
         swaggerPhp = {
           status: r.status,
           contentType: r.headers.get("content-type"),
-          chavesDeTopo: chaves,
-          pathsAchados: pathsAchados?.slice(0, 60) ?? null,
-          pathsPorRegex: porRegex.slice(0, 100),
           relevantes: relevantesRegex,
-          inicioDoConteudo: porRegex.length > 0 ? null : texto.slice(0, 1500),
+          endpointAlvo: alvo,
+          definicaoEndpoint,
+          definicaoSchema,
+          pathsPorRegex: definicaoEndpoint ? null : porRegex.slice(0, 100),
+          inicioDoConteudo: null,
         };
       } catch (e) {
         swaggerPhp = { erro: e instanceof Error ? e.message : "erro" };

@@ -118,9 +118,8 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
     // existe). Um path com resposta útil interrompe a busca. BRUDAM_COTACAO_PATH
     // sobrepõe tudo quando soubermos o caminho certo.
     const override = process.env.BRUDAM_COTACAO_PATH;
-    const candidatos = override
-      ? [override]
-      : ["/cotacao", "/cotacoes", "/frete/cotacao", "/fretes/cotacao", "/frete/simulacao", "/simulacao", "/simulador", "/cotacao/simular", "/frete/simular"];
+    // Endpoint confirmado na spec oficial (swagger.php da Multi): POST /frete/cotacao/calcula
+    const candidatos = override ? [override] : ["/frete/cotacao/calcula"];
 
     let res: Response | null = null;
     let usouPath = "";
