@@ -56,15 +56,19 @@ const lenoir: FreightProvider = {
 
 const multitrans: FreightProvider = {
   id: "multitrans",
-  label: "Multitrans",
+  label: "Multitrans (legado)",
   isConfigured: isMultitransConfigured,
+  // Integração antiga por api.multitrans.com.br (nunca respondeu — 'fetch failed').
+  // A Multitrans real usa a plataforma Brudam (provider 'brudam' abaixo). Fica
+  // fora da cotacao automatica para nao duplicar/poluir a tela.
+  quotable: false,
   quote: quoteMultitrans,
   track: (nf) => trackMultitrans(nf),
 };
 
 const brudam: FreightProvider = {
   id: "brudam",
-  label: "Brudam (Multi)",
+  label: "Multitrans",
   isConfigured: isBrudamConfigured,
   quote: quoteBrudam,
   track: (nf) => trackBrudam(nf),
