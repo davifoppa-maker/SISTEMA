@@ -153,12 +153,20 @@ export async function GET(req: Request) {
           };
           pathsAchados = buscaPaths(j, 0);
         } catch { /* não é JSON */ }
+        // JSON.parse falha em algum caractere do PHP — extrai os paths por REGEX
+        // direto do texto (chaves que começam com "/" seguidas de "{").
+        const porRegex = [...new Set(
+          [...texto.matchAll(/"(\/(?:[a-zA-Z0-9_\-{}]+\/)*[a-zA-Z0-9_\-{}]+)"\s*:\s*\{/g)].map((m) => m[1]),
+        )];
+        const relevantesRegex = porRegex.filter((x) => /cota|frete|simul|calc|track|rastre|ocorren|coleta|minuta|cte|preco|tabela/i.test(x));
         swaggerPhp = {
           status: r.status,
           contentType: r.headers.get("content-type"),
           chavesDeTopo: chaves,
           pathsAchados: pathsAchados?.slice(0, 60) ?? null,
-          inicioDoConteudo: texto.slice(0, 1500),
+          pathsPorRegex: porRegex.slice(0, 100),
+          relevantes: relevantesRegex,
+          inicioDoConteudo: porRegex.length > 0 ? null : texto.slice(0, 1500),
         };
       } catch (e) {
         swaggerPhp = { erro: e instanceof Error ? e.message : "erro" };
