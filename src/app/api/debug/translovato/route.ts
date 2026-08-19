@@ -1,4 +1,4 @@
-import { getTranslovatoConfig, isTranslovatoConfigured, quoteTranslovato } from "@/lib/services/freight/translovato";
+import { getTranslovatoConfig, isTranslovatoConfigured, quoteTranslovato, geraChaveAcesso } from "@/lib/services/freight/translovato";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -30,14 +30,21 @@ export async function GET(req: Request) {
   const valor = Number(u.searchParams.get("valor") || 500);
   const peso = Number(u.searchParams.get("peso") || 5);
 
-  const cotacao = await quoteTranslovato({
-    cnpjDestinatario: "",
-    cepDestino: cep,
-    vlrMercadoria: valor,
-    peso,
-    volumes: 1,
-    cubagem: [{ altura: 0.3, largura: 0.3, comprimento: 0.3, volumes: 1 }],
-  });
+  // Testa SÓ o login (geração da chave) — só precisa de CNPJ/usuário/senha, então
+  // valida as credenciais mesmo sem CdEmpresa/CdNatureza.
+  const loginTeste = await geraChaveAcesso();
 
-  return Response.json({ ok: true, config: configVisivel, cotacaoTeste: cotacao });
+  // Cotação completa só roda se estiver 100% configurada (precisa do CdEmpresa).
+  const cotacaoTeste = isTranslovatoConfigured()
+    ? await quoteTranslovato({
+        cnpjDestinatario: "",
+        cepDestino: cep,
+        vlrMercadoria: valor,
+        peso,
+        volumes: 1,
+        cubagem: [{ altura: 0.3, largura: 0.3, comprimento: 0.3, volumes: 1 }],
+      })
+    : { ok: false, error: "Faltam TRANSLOVATO_CD_EMPRESA / _CD_NATUREZA (peça ao comercial). Login testado acima." };
+
+  return Response.json({ ok: true, config: configVisivel, loginTeste, cotacaoTeste });
 }

@@ -87,8 +87,9 @@ async function postSoap(
   }
 }
 
-/** Passo 1: solicita a chave de acesso (válida por 5 min). */
-async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | { ok: false; error: string }> {
+/** Passo 1: solicita a chave de acesso (válida por 5 min). Exportado para
+ *  diagnóstico — permite validar CNPJ/usuário/senha sem precisar do CdEmpresa. */
+export async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | { ok: false; error: string }> {
   const c = getTranslovatoConfig();
   const senhaB64 = Buffer.from(c.senha, "utf-8").toString("base64");
   const envelope =
