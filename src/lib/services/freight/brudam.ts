@@ -32,9 +32,10 @@ export function getBrudamConfig() {
     // CNPJ do EMITENTE: base da Multitrans que atende a conta — informado pela
     // própria transportadora: 18.963.112/0001-03.
     cnpjEmitente: onlyDigits(process.env.BRUDAM_CNPJ_EMITENTE || "18963112000103"),
-    // Código(s) de serviço para o cálculo (obrigatório quando o cliente não tem
-    // serviço padrão vinculado). Vários separados por vírgula.
-    cServ: process.env.BRUDAM_CSERV || "",
+    // Código de serviço e tabela informados pela Multitrans para a conta:
+    // cServ=012, cTab=019 (sobrepor com BRUDAM_CSERV/BRUDAM_CTAB se mudarem).
+    cServ: process.env.BRUDAM_CSERV || "012",
+    cTab: process.env.BRUDAM_CTAB || "019",
     apiBaseUrl: API_BASE,
   };
 }
@@ -142,6 +143,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   };
   if (cnpjDestinatario) body.nDocDest = cnpjDestinatario;
   if (c.cServ) body.cServ = c.cServ;
+  if (c.cTab) body.cTab = c.cTab;
 
   try {
     const path = process.env.BRUDAM_COTACAO_PATH || "/frete/cotacao/calcula";
