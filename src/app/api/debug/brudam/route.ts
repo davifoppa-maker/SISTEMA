@@ -43,5 +43,32 @@ export async function GET(req: Request) {
     ? { ok: true, token: "(recebido)" }
     : loginTeste;
 
-  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste });
+  // SONDA os caminhos candidatos de cotação (o /cotacoes deu 404). 404 = não
+  // existe; 400/401/422 = existe mas faltou dado/permissão (é o que buscamos).
+  let sondagem: Record<string, unknown> | null = null;
+  if (loginTeste.ok && u.searchParams.get("probe") !== "0") {
+    const token = (loginTeste as { token: string }).token;
+    const candidatos = [
+      "/cotacao", "/cotacoes", "/frete/cotacao", "/fretes/cotacao",
+      "/frete/simulacao", "/simulacao", "/simulador", "/cotacao/simular",
+      "/frete/simular", "/fretes/simular", "/coletas/cotacao", "/ctes/cotacao",
+    ];
+    const bodyTeste = JSON.stringify({ cep_origem: c.cepOrigem, cep_destino: cep, peso, valor_mercadoria: valor, volumes: 1 });
+    const results: Record<string, number | string> = {};
+    await Promise.all(candidatos.map(async (path) => {
+      try {
+        const r = await fetch(`${c.apiBaseUrl}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: bodyTeste,
+        });
+        results[path] = r.status; // 404 = não existe; outro = candidato
+      } catch (e) {
+        results[path] = e instanceof Error ? e.message : "erro";
+      }
+    }));
+    sondagem = results;
+  }
+
+  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondagemCaminhos: sondagem });
 }
