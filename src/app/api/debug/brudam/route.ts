@@ -161,19 +161,26 @@ export async function GET(req: Request) {
           [...texto.matchAll(/"(\/(?:[a-zA-Z0-9_\-{}]+\/)*[a-zA-Z0-9_\-{}]+)"\s*:\s*\{/g)].map((m) => m[1]),
         )];
         const relevantesRegex = porRegex.filter((x) => /cota|frete|simul|calc|track|rastre|ocorren|coleta|minuta|cte|preco|tabela/i.test(x));
-        // Fatia da spec com a DEFINIÇÃO do endpoint de cotação (parâmetros do corpo).
-        const alvo = u.searchParams.get("path") || "/frete/cotacao/calcula";
-        let definicaoEndpoint: string | null = null;
-        let definicaoSchema: string | null = null;
-        const idx = texto.indexOf(`"${alvo}"`);
-        if (idx >= 0) {
-          definicaoEndpoint = texto.slice(idx, idx + 3500);
-          const ref = definicaoEndpoint.match(/#\/definitions\/([A-Za-z0-9_]+)/);
-          if (ref) {
-            const idxDef = texto.indexOf(`"${ref[1]}"`, texto.indexOf('"definitions"'));
-            if (idxDef >= 0) definicaoSchema = texto.slice(idxDef, idxDef + 3500);
+        // Fatia da spec com a DEFINIÇÃO dos endpoints pedidos (vários, por vírgula).
+        const alvos = (u.searchParams.get("path") || "/frete/cotacao/calcula").split(",").map((x) => x.trim()).filter(Boolean);
+        const definicoes: Record<string, { endpoint: string | null; schema: string | null }> = {};
+        for (const alvo of alvos) {
+          let definicaoEndpoint: string | null = null;
+          let definicaoSchema: string | null = null;
+          const idx = texto.indexOf(`"${alvo}"`);
+          if (idx >= 0) {
+            definicaoEndpoint = texto.slice(idx, idx + 3000);
+            const ref = definicaoEndpoint.match(/#\/definitions\/([A-Za-z0-9_]+)/);
+            if (ref) {
+              const idxDef = texto.indexOf(`"${ref[1]}"`, texto.indexOf('"definitions"'));
+              if (idxDef >= 0) definicaoSchema = texto.slice(idxDef, idxDef + 3000);
+            }
           }
+          definicoes[alvo] = { endpoint: definicaoEndpoint, schema: definicaoSchema };
         }
+        const alvo = alvos[0];
+        const definicaoEndpoint = definicoes[alvo]?.endpoint ?? null;
+        const definicaoSchema = definicoes[alvo]?.schema ?? null;
         swaggerPhp = {
           status: r.status,
           contentType: r.headers.get("content-type"),
@@ -181,6 +188,7 @@ export async function GET(req: Request) {
           endpointAlvo: alvo,
           definicaoEndpoint,
           definicaoSchema,
+          definicoes: alvos.length > 1 ? definicoes : undefined,
           pathsPorRegex: definicaoEndpoint ? null : porRegex.slice(0, 100),
           inicioDoConteudo: null,
         };
@@ -333,5 +341,36 @@ export async function GET(req: Request) {
     sondaServico = { servicoAceito: aceito, emitenteUsado: emit, clienteUsado: cli, resultados };
   }
 
-  return Response.json({ versao: "v18-cli-semcserv", ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
+  // SONDA DE RECURSOS (&rec=1): GETs read-only em endpoints que podem LISTAR
+  // os serviços/tabelas da conta (a saída para o cServ sem depender do comercial).
+  let sondaRecursos: Record<string, unknown> | null = null;
+  if (u.searchParams.get("rec") === "1" && loginTeste.ok) {
+    const token = (loginTeste as { token: string }).token;
+    const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const alvosGet = [
+      "/cadastro/empresas",
+      "/prazos/entrega",
+      "/cadastro/trechos/1",
+      "/cadastro/trechos/2",
+      "/cadastro/trechos/3",
+      "/operacional/custos",
+      "/comercial/emissao/cotacao", // GET aqui deve dar 405, mas confirma que existe
+    ];
+    const resultados: Record<string, string> = {};
+    for (const path of alvosGet) {
+      try {
+        const r = await fetch(`${c.apiBaseUrl}${path}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        const t = await r.text();
+        resultados[path] = `${r.status}: ${t.slice(0, 400)}`;
+      } catch (e) {
+        resultados[path] = e instanceof Error ? e.message : "erro";
+      }
+      await pausa(450);
+    }
+    sondaRecursos = resultados;
+  }
+
+  return Response.json({ versao: "v19-recursos", ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, sondaRecursos, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
 }
