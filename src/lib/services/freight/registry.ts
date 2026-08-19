@@ -73,6 +73,10 @@ const bbm: FreightProvider = {
   id: "bbm",
   label: "BBM / Translovato",
   isConfigured: isBbmConfigured,
+  // A API da BBM (app.bbmlogistica.com.br/api) NÃO tem endpoint de cotação —
+  // só ocorrências, comprovantes, notfis e webhooks. Fica fora da cotação
+  // automática; permanece registrada para rastreio/ocorrências.
+  quotable: false,
   quote: quoteBbm,
   track: (nf) => trackBbm(nf),
 };
@@ -160,5 +164,7 @@ export function providerIdForCarrierName(name?: string | null): string | null {
 
 /** Opções leves (id/label/configurada) para popular seletores na UI. */
 export function providerOptions(): { id: string; label: string; configured: boolean }[] {
-  return listProviders().map((p) => ({ id: p.id, label: p.label, configured: p.isConfigured() }));
+  return listProviders()
+    .filter((p) => p.quotable !== false) // esconde quem não cota (ex.: BBM/Translovato)
+    .map((p) => ({ id: p.id, label: p.label, configured: p.isConfigured() }));
 }

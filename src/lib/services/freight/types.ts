@@ -92,6 +92,9 @@ export interface FreightProvider {
   label: string;
   /** Há credenciais configuradas para esta transportadora? */
   isConfigured(): boolean;
+  /** Esta transportadora oferece COTAÇÃO via API? (default: true). A BBM/
+   *  Translovato, por exemplo, só tem API de rastreio/ocorrências — não cota. */
+  quotable?: boolean;
   /** Cota o frete. */
   quote(params: QuoteParams): Promise<QuoteOutcome>;
   /** Rastreia pela nota fiscal. */

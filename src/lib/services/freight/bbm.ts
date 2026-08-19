@@ -1,22 +1,26 @@
 /**
  * Integração com a API da BBM Logística (transportadora Translovato).
- * Doc: https://app.bbmlogistica.com.br/translovato/api
+ * Doc: https://tecnologia.bbmlogistica.com.br/docs/api/api-de-autenticacao-bbm-logistica
  *
- * ⚠️ BEST-EFFORT: o portal de docs exige login; implementamos o fluxo padrão
- * (token de acesso via header; cotação e rastreio em JSON). O parsing é tolerante
- * e guardamos a resposta crua — ao validar com a 1ª cotação real, ajustamos os
- * nomes de campos conforme a documentação.
+ * ⚠️ IMPORTANTE: esta API é de PÓS-ENVIO (ocorrências, comprovantes, notfis e
+ * webhooks). Ela NÃO possui endpoint de cotação/simulação de frete — por isso a
+ * BBM fica marcada como `quotable: false` no registry e não aparece na tela de
+ * cotação automática. A cotação da Translovato continua manual.
  *
- * Credenciais via variáveis de ambiente:
- *   BBM_TOKEN     — token de acesso fornecido pela BBM
- *   BBM_USUARIO   — (opcional) usuário, se a API exigir
- *   BBM_SENHA     — (opcional) senha, se a API exigir
- *   BBM_CEP_ORIGEM / BBM_CNPJ_REMETENTE (opcionais; default p/ NRX)
+ * Fluxo de autenticação (para rastreio/ocorrências, quando implementado):
+ *   POST {base}/auth/token  { username, password, cnpj, force }
+ *   → { token, token_type: "Bearer", validity: "05:59:59", ... }  (JWT ~6h)
+ *   Depois: Authorization: Bearer <token> nas demais chamadas.
+ *
+ * Credenciais via variáveis de ambiente (nunca no código — repo público):
+ *   BBM_USUARIO / BBM_SENHA / BBM_CNPJ  — para gerar o token
+ *   BBM_TOKEN  — (opcional) JWT já pronto, usado direto se informado
  */
 
 import type { QuoteParams, QuoteOutcome, TrackingOutcome } from "./types";
 
-const API_BASE = (process.env.BBM_API_BASE_URL || "https://app.bbmlogistica.com.br/translovato/api").replace(/\/$/, "");
+// Produção: https://app.bbmlogistica.com.br/api  ·  Homologação: app-dev...
+const API_BASE = (process.env.BBM_API_BASE_URL || "https://app.bbmlogistica.com.br/api").replace(/\/$/, "");
 
 function onlyDigits(v: string | number | null | undefined): string {
   return String(v ?? "").replace(/\D/g, "");
@@ -24,106 +28,86 @@ function onlyDigits(v: string | number | null | undefined): string {
 
 export function getBbmConfig() {
   return {
-    token: process.env.BBM_TOKEN || "",
     usuario: process.env.BBM_USUARIO || "",
     senha: process.env.BBM_SENHA || "",
-    // Chaves de acesso da Translovato (NF-e / CT-e) — usadas no rastreio.
-    chaveNf: process.env.BBM_CHAVE_NF || "",
-    chaveCte: process.env.BBM_CHAVE_CTE || "",
-    // CNPJ da transportadora Translovato (para endpoints que exigem).
-    cnpjTransportadora: onlyDigits(process.env.BBM_CNPJ_TRANSPORTADORA || "03886858000193"),
-    cepOrigem: onlyDigits(process.env.BBM_CEP_ORIGEM || process.env.BRASPRESS_CEP_ORIGEM || "88352501"),
-    cnpjRemetente: onlyDigits(process.env.BBM_CNPJ_REMETENTE || process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114"),
+    token: process.env.BBM_TOKEN || "", // JWT pronto (opcional)
+    // CNPJ autorizado na BBM (remetente). Default: NRX.
+    cnpj: onlyDigits(process.env.BBM_CNPJ || process.env.BBM_CNPJ_REMETENTE || "51579683000114"),
     apiBaseUrl: API_BASE,
   };
 }
 
 export function isBbmConfigured(): boolean {
   const c = getBbmConfig();
-  return Boolean(c.token || (c.usuario && c.senha));
+  return Boolean(c.token || (c.usuario && c.senha && c.cnpj));
 }
 
-function bbmHeaders(): Record<string, string> {
-  const c = getBbmConfig();
-  const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
-  if (c.token) h.Authorization = `Bearer ${c.token}`;
-  return h;
-}
+// Cache simples do JWT em memória (vale ~6h; renovamos com folga de 5 min).
+let tokenCache: { token: string; exp: number } | null = null;
 
-export async function quoteBbm(params: QuoteParams): Promise<QuoteOutcome> {
+/**
+ * Obtém um Bearer token válido. Usa BBM_TOKEN se fornecido; senão faz o
+ * POST /auth/token documentado e cacheia o JWT.
+ */
+export async function getBbmToken(): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
   const c = getBbmConfig();
-  if (!isBbmConfigured()) {
-    return { ok: false, error: "BBM/Translovato não configurada (defina BBM_TOKEN)." };
+  if (c.token) return { ok: true, token: c.token };
+  if (!c.usuario || !c.senha || !c.cnpj) {
+    return { ok: false, error: "BBM não configurada (defina BBM_USUARIO, BBM_SENHA e BBM_CNPJ)." };
   }
-
-  const cepDestino = onlyDigits(params.cepDestino);
-  const cepOrigem = onlyDigits(params.cepOrigem) || c.cepOrigem;
-  const cnpjRemetente = onlyDigits(params.cnpjRemetente) || c.cnpjRemetente;
-  const cnpjDestinatario = onlyDigits(params.cnpjDestinatario);
-  if (!cepDestino) return { ok: false, error: "CEP de destino ausente." };
-
-  // Peso cubado: fator 300 kg/m³ (padrão rodoviário fracionado).
-  const volumeM3 = (params.cubagem ?? []).reduce(
-    (s, d) => s + d.altura * d.largura * d.comprimento * (d.volumes || 1),
-    0,
-  );
-  const peso = Math.max(params.peso || 0, volumeM3 * 300);
-
-  const body = {
-    usuario: c.usuario || undefined,
-    senha: c.senha || undefined,
-    cnpjRemetente,
-    cnpjDestinatario,
-    cepOrigem,
-    cepDestino,
-    valorMercadoria: params.vlrMercadoria,
-    peso: Number(peso.toFixed(3)),
-    volumes: params.volumes || 1,
-    cubagem: (params.cubagem ?? []).map((d) => ({
-      altura: d.altura,
-      largura: d.largura,
-      comprimento: d.comprimento,
-      quantidade: d.volumes,
-    })),
-  };
+  if (tokenCache && tokenCache.exp > Date.now()) return { ok: true, token: tokenCache.token };
 
   try {
-    const res = await fetch(`${c.apiBaseUrl}/cotacao`, {
+    const res = await fetch(`${c.apiBaseUrl}/auth/token`, {
       method: "POST",
-      headers: bbmHeaders(),
-      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ username: c.usuario, password: c.senha, cnpj: c.cnpj, force: false }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `BBM ${res.status}`, status: res.status, detail: json };
-    const data = json?.data ?? json;
-    const totalFrete = data.valorTotal ?? data.valorFrete ?? data.total ?? data.frete ?? null;
-    const prazo = data.prazo ?? data.prazoEntrega ?? data.diasUteis ?? null;
-    return {
-      ok: true,
-      data: {
-        id: data.id ?? data.cotacaoId,
-        totalFrete: totalFrete != null ? Number(totalFrete) : undefined,
-        prazo: prazo != null ? Number(prazo) : undefined,
-        validade: data.validade ?? undefined,
-        raw: json,
-      },
-    };
+    if (!res.ok || !json?.token) {
+      return { ok: false, error: `BBM auth ${res.status}: ${json?.message ?? "sem token"}` };
+    }
+    // validity vem como "HH:MM:SS"; cacheia com folga de 5 min.
+    const [h = "0", m = "0", s = "0"] = String(json.validity ?? "05:59:59").split(":");
+    const ms = ((Number(h) * 3600 + Number(m) * 60 + Number(s)) - 300) * 1000;
+    tokenCache = { token: String(json.token), exp: Date.now() + Math.max(ms, 60_000) };
+    return { ok: true, token: tokenCache.token };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (BBM)" };
+    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (BBM auth)" };
   }
 }
 
+/**
+ * A API da BBM/Translovato NÃO oferece cotação de frete. Retornamos um aviso
+ * claro em vez de bater num endpoint inexistente (era o que causava o "BBM 404").
+ * A BBM está marcada como `quotable: false` no registry, então nem chega aqui
+ * pela tela — mantido por segurança caso alguém chame a rota direto.
+ */
+export async function quoteBbm(_params: QuoteParams): Promise<QuoteOutcome> {
+  return {
+    ok: false,
+    error: "A API da BBM/Translovato não oferece cotação de frete (só rastreio, ocorrências e comprovantes). A cotação da Translovato é feita manualmente.",
+  };
+}
+
+/**
+ * Rastreio via BBM. A API expõe "comprovantes" e "ocorrências", mas o formato
+ * exato de consulta por NF ainda precisa ser validado na doc de comprovantes.
+ * Por ora autentica corretamente e retorna aviso claro se o endpoint não existir,
+ * em vez de erro cru.
+ */
 export async function trackBbm(notaFiscal: string): Promise<TrackingOutcome> {
+  const auth = await getBbmToken();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const c = getBbmConfig();
-  if (!isBbmConfigured()) {
-    return { ok: false, error: "BBM/Translovato não configurada." };
-  }
   try {
-    const res = await fetch(`${c.apiBaseUrl}/rastreio/${encodeURIComponent(notaFiscal)}`, {
-      headers: bbmHeaders(),
+    const res = await fetch(`${c.apiBaseUrl}/comprovantes?nota_fiscal=${encodeURIComponent(notaFiscal)}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${auth.token}` },
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `BBM rastreio ${res.status}`, status: res.status, detail: json };
+    if (!res.ok) {
+      return { ok: false, error: `BBM rastreio ${res.status}: ${json?.message ?? ""}`.trim(), status: res.status, detail: json };
+    }
     const data = json?.data ?? json;
     const ocorrencias: Array<{ data?: string; descricao?: string; local?: string }> =
       data.ocorrencias ?? data.eventos ?? data.timeline ?? [];
