@@ -46,5 +46,72 @@ export async function GET(req: Request) {
       })
     : { ok: false, error: "Faltam TRANSLOVATO_CD_EMPRESA / _CD_NATUREZA (peça ao comercial). Login testado acima." };
 
-  return Response.json({ ok: true, config: configVisivel, loginTeste, cotacaoTeste });
+  // SONDA DE CdEmpresa (&emp=1): o "código da empresa que atende" é um inteiro
+  // pequeno (ex.: 24 no exemplo da doc). Geramos a chave uma vez (vale 5 min) e
+  // testamos 1..60 com CdNatureza=0 — o <Erro> do SOAP diz se a empresa é
+  // inválida ou se o problema passou a ser outro (ou até retorna o <Frete>!).
+  let sondaEmpresa: Record<string, unknown> | null = null;
+  if (u.searchParams.get("emp") === "1") {
+    const { getTranslovatoConfig: cfg } = await import("@/lib/services/freight/translovato");
+    const conf = cfg();
+    const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const chaveR = await geraChaveAcesso();
+    if (!chaveR.ok) {
+      sondaEmpresa = { erro: `Sem chave de acesso: ${chaveR.error}` };
+    } else {
+      const xmlEsc = (v: string | number) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const natureza = Number(u.searchParams.get("natureza") || 0);
+      const de = Number(u.searchParams.get("de") || 1);
+      const ate = Number(u.searchParams.get("ate") || 40);
+      const resultados: Record<string, string> = {};
+      let aceito: string | null = null;
+      for (let emp = de; emp <= ate; emp++) {
+        const envelope =
+          `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete">` +
+          `<soapenv:Header/><soapenv:Body>` +
+          `<urn:SimulacaoFrete soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
+          `<CNPJ xsi:type="xsd:string">${xmlEsc(conf.cnpj)}</CNPJ>` +
+          `<Usuario xsi:type="xsd:string">${xmlEsc(conf.usuario)}</Usuario>` +
+          `<ChaveAcesso xsi:type="xsd:string">${xmlEsc(chaveR.chave)}</ChaveAcesso>` +
+          `<CdEmpresa xsi:type="xsd:int">${emp}</CdEmpresa>` +
+          `<CdRemetente xsi:type="xsd:string">${xmlEsc(conf.cnpjRemetente)}</CdRemetente>` +
+          `<CdDestinatario xsi:type="xsd:string"></CdDestinatario>` +
+          `<NrCepColeta xsi:type="xsd:int">${Number(conf.cepOrigem)}</NrCepColeta>` +
+          `<NrCepCalcAte xsi:type="xsd:int">${Number(cep)}</NrCepCalcAte>` +
+          `<InTipoFrete xsi:type="xsd:int">1</InTipoFrete>` +
+          `<InICMS xsi:type="xsd:int">0</InICMS>` +
+          `<CdNatureza xsi:type="xsd:int">${natureza}</CdNatureza>` +
+          `<CdTransporte xsi:type="xsd:int">1</CdTransporte>` +
+          `<CdTipoVeiculo xsi:type="xsd:int">0</CdTipoVeiculo>` +
+          `<VlMercadoria xsi:type="xsd:double">${valor}</VlMercadoria>` +
+          `<QtPeso xsi:type="xsd:double">${peso}</QtPeso>` +
+          `<QtVolumes xsi:type="xsd:double">1</QtVolumes>` +
+          `<QtMetrosCubicos xsi:type="xsd:double">0.027</QtMetrosCubicos>` +
+          `<QtPares xsi:type="xsd:double">0</QtPares>` +
+          `</urn:SimulacaoFrete></soapenv:Body></soapenv:Envelope>`;
+        try {
+          const r = await fetch(conf.wsUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete#SimulacaoFrete" },
+            body: envelope,
+          });
+          const xml = await r.text();
+          const frete = (xml.match(/<Frete[^>]*xsd:double[^>]*>([^<]+)<\/Frete>/i) ?? [])[1];
+          const erroDesc = (xml.match(/<Descricao[^>]*>([^<]+)<\/Descricao>/i) ?? [])[1];
+          if (frete && Number(frete) > 0) {
+            resultados[String(emp)] = `FRETE R$ ${frete}`;
+            aceito = String(emp);
+            break;
+          }
+          resultados[String(emp)] = erroDesc ? `erro: ${erroDesc.slice(0, 120)}` : `${r.status}: ${xml.slice(0, 100)}`;
+        } catch (e) {
+          resultados[String(emp)] = e instanceof Error ? e.message : "erro";
+        }
+        await pausa(300);
+      }
+      sondaEmpresa = { cdEmpresaAceito: aceito, naturezaUsada: natureza, resultados };
+    }
+  }
+
+  return Response.json({ versao: "v2-sonda-empresa", ok: true, config: configVisivel, loginTeste, cotacaoTeste, sondaEmpresa });
 }

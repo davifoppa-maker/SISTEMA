@@ -50,6 +50,10 @@ const lenoir: FreightProvider = {
   id: "lenoir",
   label: "Lenoir",
   isConfigured: isLenoirConfigured,
+  // PENDENTE a pedido do usuário: a cotação usa uma tabela local de preços que
+  // ainda não foi validada com a transportadora. Reativar (quotable: true)
+  // quando os valores forem confirmados.
+  quotable: false,
   quote: quoteLenoir,
   track: trackLenoir,
 };
