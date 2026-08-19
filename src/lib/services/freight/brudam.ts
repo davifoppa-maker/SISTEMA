@@ -147,11 +147,21 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
 
   try {
     const path = process.env.BRUDAM_COTACAO_PATH || "/frete/cotacao/calcula";
-    const res = await fetch(`${c.apiBaseUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
-      body: JSON.stringify(body),
-    });
+    const dispara = (corpo: Record<string, unknown>) =>
+      fetch(`${c.apiBaseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
+        body: JSON.stringify(corpo),
+      });
+    let res = await dispara(body);
+    // Validado em produção: SEM cTab a API escolhe a tabela do cliente sozinha
+    // (retornou 114). Se o cTab informado falhar, tenta de novo sem ele.
+    if (!res.ok && body.cTab) {
+      const semTab = { ...body };
+      delete (semTab as Record<string, unknown>).cTab;
+      const retry = await dispara(semTab);
+      if (retry.ok) res = retry;
+    }
     const texto = await res.text();
     let json: any = null;
     try { json = JSON.parse(texto); } catch { /* mantém texto cru para o erro */ }
@@ -195,7 +205,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
       if (soma > 0) total = Number(soma.toFixed(2));
     }
     let prazo: number | null = null;
-    for (const k of ["prazo", "qPrazo", "dPrazo", "prazoEntrega", "prazo_entrega", "diasUteis"]) {
+    for (const k of ["nDias", "prazo", "qPrazo", "dPrazo", "prazoEntrega", "prazo_entrega", "diasUteis"]) {
       const v = (item as any)[k];
       const n = typeof v === "number" ? v : Number(v);
       if (Number.isFinite(n) && n > 0) { prazo = n; break; }
