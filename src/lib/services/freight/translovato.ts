@@ -104,15 +104,26 @@ export async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | {
   const r = await postSoap(envelope, soapAction("geraChaveAcessoJSON"));
   if (!r.ok) return { ok: false, error: r.error };
 
-  // O retorno documentado é imagem; parseamos de forma tolerante: procuramos o
-  // valor de <return>, <Chave>, <ChaveAcesso> ou o primeiro campo string longo.
-  const chave =
-    xmlValor(r.xml, "return") ||
-    xmlValor(r.xml, "ChaveAcesso") ||
-    xmlValor(r.xml, "Chave") ||
-    (r.xml.match(/>([A-Za-z0-9+/=_-]{16,})</) ?? [])[1] ||
-    null;
-  if (!chave) return { ok: false, error: `Não foi possível ler a chave de acesso. Retorno: ${r.xml.slice(0, 200)}` };
+  // O <return> vem como uma STRING que contém um JSON:
+  //   {"dadosAcesso":{"chave":"<CHAVE>","dataAcesso":"..."}}
+  // Extraímos o <return> e depois o campo "chave" de dentro do JSON.
+  const ret = xmlValor(r.xml, "return");
+  let chave: string | null = null;
+  if (ret) {
+    // Desescapa entidades XML que possam ter sobrado (&quot; etc.).
+    const jsonStr = ret
+      .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    try {
+      const obj = JSON.parse(jsonStr);
+      chave = obj?.dadosAcesso?.chave ?? obj?.chave ?? null;
+    } catch {
+      // Fallback: pega o valor de "chave":"..." por regex.
+      chave = (jsonStr.match(/"chave"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? null;
+    }
+  }
+  if (!chave) chave = (r.xml.match(/"chave"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? null;
+  if (!chave) return { ok: false, error: `Não foi possível ler a chave de acesso. Retorno: ${r.xml.slice(0, 250)}` };
   return { ok: true, chave };
 }
 
