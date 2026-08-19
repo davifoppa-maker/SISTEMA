@@ -38,17 +38,40 @@ export function isBrudamConfigured(): boolean {
   return Boolean(c.token || (c.usuario && c.senha));
 }
 
+// Cache do token JWT em memória (renovamos ao expirar/uso).
+let brudamTokenCache: { token: string; exp: number } | null = null;
+
 /**
- * Headers de autenticação da Multi (Brudam): a API lê `usuario` e `senha`
- * diretamente dos HEADERS de cada requisição (não há etapa de login/token).
+ * Login da Multi (Brudam): POST /acesso/auth/login { usuario, senha } → token.
+ * Doc: https://multi.brudam.com.br/docs/#/Login/post_acesso_auth_login
+ * Se BRUDAM_TOKEN estiver definido, usa direto (sem login).
  */
-function brudamHeaders(): Record<string, string> {
+export async function getBrudamToken(): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
   const c = getBrudamConfig();
-  const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
-  if (c.usuario) h.usuario = c.usuario;
-  if (c.senha) h.senha = c.senha;
-  if (c.token) h.token = c.token;
-  return h;
+  if (c.token) return { ok: true, token: c.token };
+  if (!c.usuario || !c.senha) return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO e BRUDAM_SENHA)." };
+  if (brudamTokenCache && brudamTokenCache.exp > Date.now()) return { ok: true, token: brudamTokenCache.token };
+
+  try {
+    const res = await fetch(`${c.apiBaseUrl}/acesso/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ usuario: c.usuario, senha: c.senha }),
+    });
+    const json = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) {
+      const msg = (json as any)?.message ?? (json as any)?.error ?? JSON.stringify(json).slice(0, 200);
+      return { ok: false, error: `Brudam login ${res.status}: ${msg}` };
+    }
+    const d = (json as any)?.data ?? json;
+    const token = d?.token ?? d?.access_token ?? d?.accessToken ?? (json as any)?.token;
+    if (!token) return { ok: false, error: `Login sem token. Retorno: ${JSON.stringify(json).slice(0, 200)}` };
+    // Token da Multi costuma durar ~1h; cacheia por 50 min por segurança.
+    brudamTokenCache = { token: String(token), exp: Date.now() + 50 * 60 * 1000 };
+    return { ok: true, token: brudamTokenCache.token };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (Brudam login)" };
+  }
 }
 
 export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
@@ -70,6 +93,9 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   );
   const peso = Math.max(params.peso || 0, volumeM3 * 300);
 
+  const auth = await getBrudamToken();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
   const body = {
     cnpj_remetente: cnpjRemetente,
     cnpj_destinatario: cnpjDestinatario,
@@ -89,7 +115,7 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   try {
     const res = await fetch(`${c.apiBaseUrl}/cotacoes`, {
       method: "POST",
-      headers: brudamHeaders(),
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
@@ -117,9 +143,11 @@ export async function trackBrudam(notaFiscal: string): Promise<TrackingOutcome> 
   if (!isBrudamConfigured()) {
     return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
   }
+  const auth = await getBrudamToken();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const res = await fetch(`${c.apiBaseUrl}/rastreios/${encodeURIComponent(notaFiscal)}`, {
-      headers: brudamHeaders(),
+      headers: { Accept: "application/json", Authorization: `Bearer ${auth.token}` },
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: `Brudam rastreio ${res.status}`, status: res.status, detail: json };
