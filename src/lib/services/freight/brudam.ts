@@ -202,41 +202,62 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
 }
 
 export async function trackBrudam(notaFiscal: string): Promise<TrackingOutcome> {
+  // API oficial de RASTREAMENTO da Brudam (coleção Postman da Multitrans):
+  //   GET {tracking}/tracking/remetente/{cnpjCliente}/{documentos}?token=TOKEN
+  //   GET {tracking}/tracking/documentos/{documentos}?token=TOKEN   (fallback)
+  // O token é o ESTÁTICO fornecido pela transportadora (BRUDAM_TOKEN) — não o
+  // JWT do login. Consulta por CNPJ é limitada a 30 dias da emissão da minuta.
   const c = getBrudamConfig();
-  if (!isBrudamConfigured()) {
-    return { ok: false, error: "Brudam não configurada (defina BRUDAM_USUARIO/BRUDAM_SENHA)." };
+  const base = (process.env.BRUDAM_TRACKING_URL || "http://rodo.ws.brudam.com.br").replace(/\/$/, "");
+  if (!c.token) {
+    return { ok: false, error: "Rastreio Multi não configurado (defina BRUDAM_TOKEN — token de rastreamento fornecido pela transportadora)." };
   }
-  const auth = await getBrudamToken();
-  if (!auth.ok) return { ok: false, error: auth.error };
-  try {
-    const res = await fetch(`${c.apiBaseUrl}/rastreios/${encodeURIComponent(notaFiscal)}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${auth.token}` },
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `Brudam rastreio ${res.status}`, status: res.status, detail: json };
-    const data = json?.data ?? json;
-    const ocorrencias: Array<{ data?: string; descricao?: string; local?: string }> =
-      data.ocorrencias ?? data.eventos ?? data.timeline ?? [];
-    return {
-      ok: true,
-      data: {
-        shipments: [
-          {
-            status: data.status ?? data.situacao,
-            numero: data.numero ?? notaFiscal,
-            origem: data.origem,
-            destino: data.destino,
-            previsaoEntrega: data.previsaoEntrega ?? data.previsao_entrega ?? data.prazo,
-            dataEntrega: data.dataEntrega ?? data.data_entrega,
-            ultimaOcorrencia: ocorrencias[0]?.descricao,
-            entregue: String(data.status ?? "").toLowerCase().includes("entregue"),
-            timeline: ocorrencias.map((o) => ({ data: o.data, descricao: o.descricao, local: o.local })),
-          },
-        ],
-        raw: json,
-      },
-    };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (Brudam rastreio)" };
+  const nf = encodeURIComponent(notaFiscal.trim());
+  const urls = [
+    `${base}/tracking/remetente/${c.cnpjRemetente}/${nf}?token=${encodeURIComponent(c.token)}`,
+    `${base}/tracking/documentos/${nf}?token=${encodeURIComponent(c.token)}`,
+  ];
+  let ultimoErro = "";
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const texto = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(texto); } catch { /* cru */ }
+      if (!res.ok) { ultimoErro = `Multi rastreio ${res.status}: ${texto.slice(0, 200)}`; continue; }
+      // Formato de resposta não documentado na coleção — parse tolerante.
+      const lista: any[] = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : json ? [json] : [];
+      if (lista.length === 0) { ultimoErro = "Sem dados de rastreio para este documento."; continue; }
+      const d = lista[0];
+      const ocorrencias: Array<{ data?: string; descricao?: string; local?: string }> =
+        d.ocorrencias ?? d.eventos ?? d.tracking ?? d.historico ?? [];
+      return {
+        ok: true,
+        data: {
+          shipments: [
+            {
+              status: d.status ?? d.situacao ?? d.ultimaOcorrencia?.descricao,
+              numero: d.numero ?? d.nf ?? notaFiscal,
+              origem: d.origem,
+              destino: d.destino,
+              previsaoEntrega: d.previsaoEntrega ?? d.previsao_entrega ?? d.prazo,
+              dataEntrega: d.dataEntrega ?? d.data_entrega,
+              ultimaOcorrencia: ocorrencias[0]?.descricao ?? d.ultimaOcorrencia?.descricao,
+              entregue: /entreg/i.test(String(d.status ?? d.situacao ?? "")),
+              timeline: (Array.isArray(ocorrencias) ? ocorrencias : []).map((o: any) => ({
+                data: o.data ?? o.data_hora ?? o.dataOcorrencia,
+                descricao: o.descricao ?? o.ocorrencia,
+                local: o.local ?? o.cidade,
+              })),
+            },
+          ],
+          raw: json ?? texto.slice(0, 500),
+        },
+      };
+    } catch (err) {
+      ultimoErro = err instanceof Error ? err.message : "Erro de rede (Multi rastreio)";
+    }
   }
+  return { ok: false, error: ultimoErro || "Rastreio Multi indisponível." };
 }
+
