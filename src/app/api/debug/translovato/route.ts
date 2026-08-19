@@ -200,5 +200,95 @@ export async function GET(req: Request) {
     };
   }
 
-  return Response.json({ versao: "v4-variantes", ok: true, config: configVisivel, loginTeste, cotacaoTeste, sondaEmpresa, sondaVariantes });
+  // SONDA DE CREDENCIAIS (&cred=1): a chave gerada é SEMPRE a mesma desde as
+  // 15:50 e é recusada em toda cotação — suspeita de credencial que "gera mas
+  // não valida" ou chave cacheada. Testa variações de formato (CNPJ/usuário
+  // formatados vs dígitos, senha com/sem base64) e verifica se alguma produz
+  // uma CHAVE DIFERENTE + cotação aceita.
+  let sondaCredenciais: Record<string, unknown> | null = null;
+  if (u.searchParams.get("cred") === "1") {
+    const { getTranslovatoConfig: cfg3 } = await import("@/lib/services/freight/translovato");
+    const conf = cfg3();
+    const xmlEsc = (v: string | number) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const ns = "urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete";
+    const fmt = (d: string) => `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12,14)}`;
+    const cnpjFmt = fmt(conf.cnpj);
+    const b64 = (x: string) => Buffer.from(x, "utf-8").toString("base64");
+
+    const variantes = [
+      { rotulo: "digitos+b64 (atual)", cnpj: conf.cnpj, usuario: conf.usuario, senha: b64(conf.senha) },
+      { rotulo: "usuario formatado", cnpj: conf.cnpj, usuario: cnpjFmt, senha: b64(conf.senha) },
+      { rotulo: "cnpj+usuario formatados", cnpj: cnpjFmt, usuario: cnpjFmt, senha: b64(conf.senha) },
+      { rotulo: "senha SEM base64", cnpj: conf.cnpj, usuario: conf.usuario, senha: conf.senha },
+      { rotulo: "cnpj formatado, usuario digitos", cnpj: cnpjFmt, usuario: conf.usuario, senha: b64(conf.senha) },
+    ];
+
+    const resultados: Record<string, unknown> = {};
+    for (const v of variantes) {
+      try {
+        const envChave =
+          `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="${ns}">` +
+          `<soapenv:Header/><soapenv:Body><urn:geraChaveAcessoJSON soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
+          `<CNPJ xsi:type="xsd:string">${xmlEsc(v.cnpj)}</CNPJ>` +
+          `<Usuario xsi:type="xsd:string">${xmlEsc(v.usuario)}</Usuario>` +
+          `<Senha xsi:type="xsd:string">${xmlEsc(v.senha)}</Senha>` +
+          `</urn:geraChaveAcessoJSON></soapenv:Body></soapenv:Envelope>`;
+        const rc = await fetch(conf.wsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `${ns}#geraChaveAcessoJSON` },
+          body: envChave,
+        });
+        const xml = await rc.text();
+        const ret = ((xml.match(/<return[^>]*>([\s\S]*?)<\/return>/i) ?? [])[1] ?? "").replace(/&quot;/g, '"');
+        const chave = (ret.match(/"chave"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? null;
+        const dataAcesso = (ret.match(/"dataAcesso"\s*:\s*"([^"]+)"/i) ?? [])[1] ?? null;
+        if (!chave) {
+          resultados[v.rotulo] = { erro: `sem chave: ${ret.slice(0, 150) || xml.slice(0, 150)}` };
+          continue;
+        }
+        // Usa a chave imediatamente numa cotação (empresa do config).
+        const envCot =
+          `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="${ns}">` +
+          `<soapenv:Header/><soapenv:Body><urn:SimulacaoFrete soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
+          `<CNPJ xsi:type="xsd:string">${xmlEsc(v.cnpj)}</CNPJ>` +
+          `<Usuario xsi:type="xsd:string">${xmlEsc(v.usuario)}</Usuario>` +
+          `<ChaveAcesso xsi:type="xsd:string">${xmlEsc(chave)}</ChaveAcesso>` +
+          `<CdEmpresa xsi:type="xsd:int">${conf.cdEmpresa}</CdEmpresa>` +
+          `<CdRemetente xsi:type="xsd:string">${xmlEsc(conf.cnpjRemetente)}</CdRemetente>` +
+          `<CdDestinatario xsi:type="xsd:string"></CdDestinatario>` +
+          `<NrCepColeta xsi:type="xsd:int">${Number(conf.cepOrigem)}</NrCepColeta>` +
+          `<NrCepCalcAte xsi:type="xsd:int">${Number(cep)}</NrCepCalcAte>` +
+          `<InTipoFrete xsi:type="xsd:int">1</InTipoFrete>` +
+          `<InICMS xsi:type="xsd:int">0</InICMS>` +
+          `<CdNatureza xsi:type="xsd:int">${conf.cdNatureza}</CdNatureza>` +
+          `<CdTransporte xsi:type="xsd:int">1</CdTransporte>` +
+          `<CdTipoVeiculo xsi:type="xsd:int">0</CdTipoVeiculo>` +
+          `<VlMercadoria xsi:type="xsd:double">${valor}</VlMercadoria>` +
+          `<QtPeso xsi:type="xsd:double">${peso}</QtPeso>` +
+          `<QtVolumes xsi:type="xsd:double">1</QtVolumes>` +
+          `<QtMetrosCubicos xsi:type="xsd:double">0.027</QtMetrosCubicos>` +
+          `<QtPares xsi:type="xsd:double">0</QtPares>` +
+          `</urn:SimulacaoFrete></soapenv:Body></soapenv:Envelope>`;
+        const r2 = await fetch(conf.wsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: `${ns}#SimulacaoFrete` },
+          body: envCot,
+        });
+        const xml2 = await r2.text();
+        const frete = (xml2.match(/<Frete[^>]*xsd:double[^>]*>([^<]+)<\/Frete>/i) ?? [])[1];
+        const desc = (xml2.match(/<Descricao[^>]*>([^<]+)<\/Descricao>/i) ?? [])[1];
+        resultados[v.rotulo] = {
+          chaveInicio: chave.slice(0, 16),
+          dataAcesso,
+          cotacao: frete ? `FRETE R$ ${frete}` : (desc ?? xml2.slice(0, 120)),
+        };
+      } catch (e) {
+        resultados[v.rotulo] = { erro: e instanceof Error ? e.message : "erro" };
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    sondaCredenciais = resultados;
+  }
+
+  return Response.json({ versao: "v5-credenciais", ok: true, config: configVisivel, loginTeste, cotacaoTeste, sondaEmpresa, sondaVariantes, sondaCredenciais });
 }
