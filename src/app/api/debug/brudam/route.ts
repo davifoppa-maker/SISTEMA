@@ -44,58 +44,76 @@ export async function GET(req: Request) {
     : loginTeste;
 
   // DESCOBERTA REAL: a doc (multi.brudam.com.br/docs/#/) é um Swagger — baixa a
-  // especificação JSON e lista os endpoints verdadeiros. Nada de chutar path.
+  // especificação JSON e lista os endpoints verdadeiros. Os candidatos deram 403
+  // (existem, mas exigem auth) → agora busca AUTENTICADO com o token do login, e
+  // vasculha o HTML + JS da página de docs atrás da referência exata da spec.
   let especificacao: Record<string, unknown> | null = null;
   if (u.searchParams.get("spec") !== "0") {
     const host = c.apiBaseUrl.replace(/\/api\/v\d+$/, ""); // https://multi.brudam.com.br
-    const candidatosSpec = [
-      `${host}/docs/swagger.json`,
-      `${host}/docs/openapi.json`,
-      `${host}/docs/api-docs.json`,
-      `${host}/docs/api-docs`,
-      `${host}/swagger.json`,
-      `${host}/openapi.json`,
-      `${host}/api/v1/docs.json`,
-      `${host}/api/docs.json`,
-    ];
+    const token = loginTeste.ok ? (loginTeste as { token: string }).token : null;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const tentativasSpec: Record<string, number | string> = {};
     let spec: any = null;
     let specUrl = "";
-    for (const url of candidatosSpec) {
+
+    const tentaSpec = async (url: string) => {
+      if (spec) return;
       try {
-        const r = await fetch(url, { headers: { Accept: "application/json" } });
+        const r = await fetch(url, { headers: { Accept: "application/json", ...authHeaders } });
         tentativasSpec[url] = r.status;
-        if (!r.ok) continue;
+        if (!r.ok) return;
         const j = await r.json().catch(() => null);
-        if (j && (j.paths || j.swagger || j.openapi)) { spec = j; specUrl = url; break; }
+        if (j && (j.paths || j.swagger || j.openapi)) { spec = j; specUrl = url; }
       } catch (e) {
         tentativasSpec[url] = e instanceof Error ? e.message : "erro";
       }
-    }
-    // Plano B: o HTML da página /docs referencia o arquivo da spec — acha e baixa.
+    };
+
+    // 1) Candidatos diretos — agora com o Bearer token (antes davam 403 sem auth).
+    for (const url of [
+      `${host}/docs/swagger.json`, `${host}/docs/openapi.json`, `${host}/docs/api-docs.json`,
+      `${host}/swagger.json`, `${host}/openapi.json`, `${host}/api/v1/docs.json`, `${host}/api/docs.json`,
+      `${host}/docs/data/swagger.json`, `${host}/docs/v1.json`,
+    ]) await tentaSpec(url);
+
+    // 2) HTML da página de docs: referências .json/.yaml, config url:, e arquivos JS.
+    const refsAchadas: string[] = [];
     if (!spec) {
       try {
-        const r = await fetch(`${host}/docs/`, { headers: { Accept: "text/html" } });
+        const r = await fetch(`${host}/docs/`, { headers: { Accept: "text/html", ...authHeaders } });
         const html = await r.text();
         tentativasSpec[`${host}/docs/ (html)`] = r.status;
-        const refs = [...html.matchAll(/["'\(]((?:https?:\/\/|\/)[^"'\)\s]*?(?:swagger|openapi|api-docs|docs)[^"'\)\s]*?\.(?:json|yaml))["'\)]/gi)]
-          .map((m) => m[1]);
-        for (const ref of [...new Set(refs)].slice(0, 5)) {
-          const url = ref.startsWith("http") ? ref : `${host}${ref}`;
+        const abs = (ref: string) =>
+          ref.startsWith("http") ? ref : ref.startsWith("/") ? `${host}${ref}` : `${host}/docs/${ref}`;
+        const doHtml = [
+          ...[...html.matchAll(/["'\(]([^"'\)\s]+\.(?:json|ya?ml))["'\)]/gi)].map((m) => m[1]),
+          ...[...html.matchAll(/url['"]?\s*[:=]\s*["']([^"']+)["']/gi)].map((m) => m[1]),
+        ];
+        refsAchadas.push(...doHtml);
+        // JS da página (o Swagger UI costuma configurar a spec num init.js).
+        const jsSrcs = [...html.matchAll(/src=["']([^"']+\.js[^"']*)["']/gi)].map((m) => m[1]).slice(0, 6);
+        for (const src of jsSrcs) {
+          if (spec) break;
           try {
-            const r2 = await fetch(url, { headers: { Accept: "application/json" } });
-            tentativasSpec[url] = r2.status;
-            if (!r2.ok) continue;
-            const j = await r2.json().catch(() => null);
-            if (j && (j.paths || j.swagger || j.openapi)) { spec = j; specUrl = url; break; }
-          } catch (e) {
-            tentativasSpec[url] = e instanceof Error ? e.message : "erro";
-          }
+            const rj = await fetch(abs(src), { headers: authHeaders });
+            if (!rj.ok) continue;
+            const js = await rj.text();
+            refsAchadas.push(
+              ...[...js.matchAll(/["'\(]([^"'\)\s]+\.(?:json|ya?ml))["'\)]/gi)].map((m) => m[1]),
+              ...[...js.matchAll(/url['"]?\s*[:=]\s*["']([^"']+)["']/gi)].map((m) => m[1]),
+            );
+          } catch { /* segue */ }
         }
+        const unicas = [...new Set(refsAchadas)]
+          .filter((x) => !/^https?:\/\/(?!multi\.brudam)/.test(x)) // só do próprio host
+          .filter((x) => !/\.(js|css|png|svg|ico)(\?|$)/i.test(x))
+          .slice(0, 12);
+        for (const ref of unicas) await tentaSpec(abs(ref));
       } catch (e) {
         tentativasSpec["html"] = e instanceof Error ? e.message : "erro";
       }
     }
+
     if (spec?.paths) {
       const todos = Object.keys(spec.paths);
       const relevantes: Record<string, string[]> = {};
@@ -109,11 +127,14 @@ export async function GET(req: Request) {
         basePath: spec.basePath ?? spec.servers?.[0]?.url ?? null,
         totalEndpoints: todos.length,
         endpointsRelevantes: relevantes,
-        // primeiros 80 paths para visão geral caso o filtro não pegue o certo
         todosOsPaths: todos.slice(0, 80),
       };
     } else {
-      especificacao = { erro: "Spec não encontrada", tentativas: tentativasSpec };
+      especificacao = {
+        erro: "Spec não encontrada",
+        tentativas: tentativasSpec,
+        referenciasNoHtmlJs: [...new Set(refsAchadas)].slice(0, 30),
+      };
     }
   }
 
