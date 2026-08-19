@@ -43,7 +43,10 @@ export function getTranslovatoConfig() {
     cnpj: onlyDigits(process.env.TRANSLOVATO_CNPJ || ""),
     usuario: process.env.TRANSLOVATO_USUARIO || "",
     senha: process.env.TRANSLOVATO_SENHA || "",
-    cdEmpresa: Number(process.env.TRANSLOVATO_CD_EMPRESA || 0),
+    // CdEmpresa 6 = filial da Translovato que atende a conta (informado pela
+    // transportadora). CdNatureza 0 usa o padrão do cadastro; sobrepor via env
+    // se eles exigirem um código específico.
+    cdEmpresa: Number(process.env.TRANSLOVATO_CD_EMPRESA || 6),
     cdNatureza: Number(process.env.TRANSLOVATO_CD_NATUREZA || 0),
     cepOrigem: onlyDigits(process.env.TRANSLOVATO_CEP_ORIGEM || "88352501"),
     cnpjRemetente: onlyDigits(process.env.TRANSLOVATO_CNPJ_REMETENTE || "51579683000114"),
