@@ -294,30 +294,43 @@ export async function GET(req: Request) {
     ]);
     const extra = (u.searchParams.get("codigos") || "").split(",").map((x) => x.trim()).filter(Boolean);
     const codigos = extra.length > 0 ? extra : ["001", "01", "1", "002", "02", "2", "003", "3", "100", "NORMAL", "FRACIONADO", "EXPRESSO", "RODOVIARIO", "CONVENCIONAL", "PADRAO"];
-    const resultados: Record<string, string> = {};
-    let aceito: string | null = null;
-    for (const cod of codigos) {
+    // &cli= troca o CNPJ do cliente (ex.: Ecopro 54369810000149) — a conta na
+    // Multi pode estar em outro CNPJ do grupo.
+    const cli = onlyD(u.searchParams.get("cli")) || c.cnpjRemetente;
+    const chama = async (cServ: string | null): Promise<string> => {
       try {
+        const corpo: Record<string, unknown> = {
+          nDocEmit: emit, nDocCli: cli, nDocRem: cli,
+          cOrigCalc: Number(io2?.ibge ?? 0), cDestCalc: Number(id2?.ibge ?? 0), CEP: cep,
+          pBru: peso, qVol: 1, vNF: valor,
+        };
+        if (cServ) corpo.cServ = cServ;
         const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            nDocEmit: emit, nDocCli: c.cnpjRemetente, nDocRem: c.cnpjRemetente,
-            cOrigCalc: Number(io2?.ibge ?? 0), cDestCalc: Number(id2?.ibge ?? 0), CEP: cep,
-            pBru: peso, qVol: 1, vNF: valor, cServ: cod,
-          }),
+          body: JSON.stringify(corpo),
         });
         const t = await r.text();
         let msg = t.slice(0, 200);
         try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; if (r.ok) msg = t.slice(0, 400); } catch { /* cru */ }
-        resultados[cod] = `${r.status}: ${msg}`;
-        if (r.ok) { aceito = cod; break; }
+        return `${r.status}: ${msg}`;
       } catch (e) {
-        resultados[cod] = e instanceof Error ? e.message : "erro";
+        return e instanceof Error ? e.message : "erro";
       }
+    };
+    const resultados: Record<string, string> = {};
+    let aceito: string | null = null;
+    // Primeiro SEM cServ (se o cliente tiver serviço padrão vinculado, já resolve).
+    resultados["(sem cServ)"] = await chama(null);
+    if (resultados["(sem cServ)"].startsWith("200")) aceito = "(padrão do cliente)";
+    await pausa(450);
+    for (const cod of codigos) {
+      if (aceito) break;
+      resultados[cod] = await chama(cod);
+      if (resultados[cod].startsWith("200")) aceito = cod;
       await pausa(450);
     }
-    sondaServico = { servicoAceito: aceito, emitenteUsado: emit, resultados };
+    sondaServico = { servicoAceito: aceito, emitenteUsado: emit, clienteUsado: cli, resultados };
   }
 
   return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
