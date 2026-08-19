@@ -210,7 +210,9 @@ export async function GET(req: Request) {
       const d2 = calc(base12 + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
       return `${base12}${d1}${d2}`;
     };
-    const candidatos: string[] = [];
+    // CNPJs do próprio cliente PRIMEIRO (a conta na Multi pode estar em outro
+    // CNPJ do grupo — ex.: Ecopro): 54.369.810/0001-49 e 51.579.683/0001-14.
+    const candidatos: string[] = ["54369810000149", "51579683000114"];
     for (let filial = 1; filial <= 35; filial++) {
       candidatos.push(dvCnpj(`01201578${String(filial).padStart(4, "0")}`)); // Multitrans
     }
@@ -223,7 +225,34 @@ export async function GET(req: Request) {
     ]);
     const resultados: Record<string, string> = {};
     let aceito: string | null = null;
+    // Matriz emitente x cliente com os CNPJs do usuário (4 combinações) primeiro.
+    const meus = ["54369810000149", "51579683000114"];
+    for (const emit of meus) {
+      for (const cli of meus) {
+        try {
+          const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              nDocEmit: emit, nDocCli: cli, nDocRem: cli,
+              cOrigCalc: Number(io?.ibge ?? 0), cDestCalc: Number(id?.ibge ?? 0), CEP: cep,
+              pBru: peso, qVol: 1, vNF: valor,
+            }),
+          });
+          const t = await r.text();
+          let msg = t.slice(0, 150);
+          try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; } catch { /* cru */ }
+          resultados[`emit=${emit} cli=${cli}`] = `${r.status}: ${msg}`;
+          if (r.ok) { aceito = `emit=${emit} cli=${cli}`; }
+        } catch (e) {
+          resultados[`emit=${emit} cli=${cli}`] = e instanceof Error ? e.message : "erro";
+        }
+        if (aceito) break;
+      }
+      if (aceito) break;
+    }
     for (const cnpj of candidatos) {
+      if (aceito) break;
       try {
         const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
           method: "POST",
