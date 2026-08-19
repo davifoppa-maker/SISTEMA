@@ -29,10 +29,9 @@ export function getBrudamConfig() {
     token: process.env.BRUDAM_TOKEN || "",
     cepOrigem: onlyDigits(process.env.BRUDAM_CEP_ORIGEM || process.env.BRASPRESS_CEP_ORIGEM || "88352501"),
     cnpjRemetente: onlyDigits(process.env.BRUDAM_CNPJ_REMETENTE || process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114"),
-    // CNPJ do EMITENTE: base da Multitrans que atende a conta — descoberto por
-    // sondagem na API (04.169.737/0001-93, matriz MultiSCV): foi o único aceito
-    // ("informar código de serviço" em vez de "emitente não cadastrado").
-    cnpjEmitente: onlyDigits(process.env.BRUDAM_CNPJ_EMITENTE || "04169737000193"),
+    // CNPJ do EMITENTE: base da Multitrans que atende a conta — informado pela
+    // própria transportadora: 18.963.112/0001-03.
+    cnpjEmitente: onlyDigits(process.env.BRUDAM_CNPJ_EMITENTE || "18963112000103"),
     // Código(s) de serviço para o cálculo (obrigatório quando o cliente não tem
     // serviço padrão vinculado). Vários separados por vírgula.
     cServ: process.env.BRUDAM_CSERV || "",
