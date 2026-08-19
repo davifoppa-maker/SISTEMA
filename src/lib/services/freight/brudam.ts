@@ -113,13 +113,32 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   };
 
   try {
-    const res = await fetch(`${c.apiBaseUrl}/cotacoes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
-      body: JSON.stringify(body),
-    });
+    // Auto-descoberta do endpoint de cotação: o path exato não está na doc que
+    // temos; tentamos os candidatos e usamos o 1º que NÃO for 404 (404 = não
+    // existe). Um path com resposta útil interrompe a busca. BRUDAM_COTACAO_PATH
+    // sobrepõe tudo quando soubermos o caminho certo.
+    const override = process.env.BRUDAM_COTACAO_PATH;
+    const candidatos = override
+      ? [override]
+      : ["/cotacao", "/cotacoes", "/frete/cotacao", "/fretes/cotacao", "/frete/simulacao", "/simulacao", "/simulador", "/cotacao/simular", "/frete/simular"];
+
+    let res: Response | null = null;
+    let usouPath = "";
+    const tentativas: Record<string, number> = {};
+    for (const path of candidatos) {
+      const r = await fetch(`${c.apiBaseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
+        body: JSON.stringify(body),
+      });
+      tentativas[path] = r.status;
+      if (r.status !== 404) { res = r; usouPath = path; break; } // achou um endpoint que existe
+    }
+    if (!res) {
+      return { ok: false, error: `Nenhum endpoint de cotação encontrado (todos 404). Tentativas: ${JSON.stringify(tentativas)}` };
+    }
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `Brudam ${res.status}`, status: res.status, detail: json };
+    if (!res.ok) return { ok: false, error: `Brudam ${res.status} em ${usouPath}`, status: res.status, detail: json };
     const data = json?.data ?? json;
     const totalFrete = data.valorTotal ?? data.valor_frete ?? data.total ?? data.frete ?? null;
     const prazo = data.prazo ?? data.prazoEntrega ?? data.prazo_entrega ?? data.diasUteis ?? null;
