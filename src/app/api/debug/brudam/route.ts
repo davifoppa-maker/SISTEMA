@@ -130,10 +130,43 @@ export async function GET(req: Request) {
         todosOsPaths: todos.slice(0, 80),
       };
     } else {
+      // /docs/swagger.php respondeu 200 mas não foi reconhecido como spec —
+      // captura o conteúdo cru para ver o formato (JSON? YAML? outra estrutura?).
+      let swaggerPhp: Record<string, unknown> | null = null;
+      try {
+        const r = await fetch(`${host}/docs/swagger.php`, { headers: { Accept: "application/json", ...authHeaders } });
+        const texto = await r.text();
+        // Se for JSON válido, lista as chaves de topo e procura paths em qualquer nível.
+        let chaves: string[] | null = null;
+        let pathsAchados: string[] | null = null;
+        try {
+          const j = JSON.parse(texto);
+          chaves = Object.keys(j).slice(0, 20);
+          const buscaPaths = (o: any, prof: number): string[] | null => {
+            if (!o || typeof o !== "object" || prof > 3) return null;
+            if (o.paths && typeof o.paths === "object") return Object.keys(o.paths);
+            for (const v of Object.values(o)) {
+              const r2 = buscaPaths(v, prof + 1);
+              if (r2) return r2;
+            }
+            return null;
+          };
+          pathsAchados = buscaPaths(j, 0);
+        } catch { /* não é JSON */ }
+        swaggerPhp = {
+          status: r.status,
+          contentType: r.headers.get("content-type"),
+          chavesDeTopo: chaves,
+          pathsAchados: pathsAchados?.slice(0, 60) ?? null,
+          inicioDoConteudo: texto.slice(0, 1500),
+        };
+      } catch (e) {
+        swaggerPhp = { erro: e instanceof Error ? e.message : "erro" };
+      }
       especificacao = {
-        erro: "Spec não encontrada",
+        erro: "Spec não encontrada nos formatos conhecidos",
+        swaggerPhp,
         tentativas: tentativasSpec,
-        referenciasNoHtmlJs: [...new Set(refsAchadas)].slice(0, 30),
       };
     }
   }
