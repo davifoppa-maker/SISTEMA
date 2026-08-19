@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CAIXAS } from "@/lib/services/freight/cubagem";
 
 /** Uma linha de cubagem (valores como texto, para edição). Dimensões em metros. */
 export interface CubagemRow {
@@ -55,6 +56,25 @@ export function cubagemToText(rows: CubagemRow[]): string {
   return parts.join(", ");
 }
 
+// Opções do seletor: caixas padrão da expedição com as medidas no rótulo.
+const OPCOES_CAIXA = CAIXAS.map((c) => ({
+  nome: c.nome,
+  label: `${c.nome} — ${c.comprimentoCm}×${c.larguraCm}×${c.alturaCm} cm`,
+  // metros (o formulário trabalha em m)
+  altura: String(c.alturaCm / 100),
+  largura: String(c.larguraCm / 100),
+  comprimento: String(c.comprimentoCm / 100),
+}));
+
+// Descobre qual caixa padrão corresponde às medidas da linha (para o seletor
+// mostrar a caixa escolhida; medidas fora do catálogo = "manual").
+function caixaDaLinha(row: CubagemRow): string {
+  const hit = OPCOES_CAIXA.find(
+    (o) => toNum(o.altura) === toNum(row.altura) && toNum(o.largura) === toNum(row.largura) && toNum(o.comprimento) === toNum(row.comprimento),
+  );
+  return hit?.nome ?? "";
+}
+
 /** Editor controlado de volumes/dimensões: N linhas (altura×largura×comprimento + qtd). */
 export function CubagemEditor({
   rows,
@@ -79,7 +99,22 @@ export function CubagemEditor({
         Cada linha é um conjunto de caixas com a mesma medida (em metros). Use linhas diferentes para dimensões diferentes.
       </p>
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-5">
+        <div key={i} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-6">
+          <Field label="Caixa">
+            <select
+              value={caixaDaLinha(row)}
+              onChange={(e) => {
+                const o = OPCOES_CAIXA.find((x) => x.nome === e.target.value);
+                if (o) updateRow(i, { altura: o.altura, largura: o.largura, comprimento: o.comprimento });
+              }}
+              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-2 text-sm text-white"
+            >
+              <option value="">Medida manual</option>
+              {OPCOES_CAIXA.map((o) => (
+                <option key={o.nome} value={o.nome}>{o.label}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="Altura (m)">
             <Input value={row.altura} onChange={(e) => updateRow(i, { altura: e.target.value })} inputMode="decimal" placeholder="0,40" />
           </Field>
