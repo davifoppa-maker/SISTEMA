@@ -128,25 +128,27 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   if (!ibgeOrig.ok) return { ok: false, error: `Origem: ${ibgeOrig.error}` };
   if (!ibgeDest.ok) return { ok: false, error: `Destino: ${ibgeDest.error}` };
 
-  // Corpo OFICIAL (schema CalculoFrete do swagger da Multi):
-  //   nDocEmit/nDocCli (CNPJs), cOrigCalc/cDestCalc (IBGE), pBru, qVol, vNF.
+  // Corpo MÍNIMO — idêntico ao validado em produção (retornou R$ 88,81):
+  // nDocEmit/nDocCli/nDocRem, cOrigCalc/cDestCalc (IBGE), CEP, pBru, qVol, vNF, cServ.
   const pesoCubado = volumeM3 * 300;
-  const body: Record<string, unknown> = {
+  const pBru = Math.max(Number((params.peso || peso).toFixed(3)), 0.1); // nunca 0
+  const bodyMinimo: Record<string, unknown> = {
     nDocEmit: c.cnpjEmitente,
     nDocCli: cnpjRemetente,
     nDocRem: cnpjRemetente,
     cOrigCalc: Number(ibgeOrig.ibge),
     cDestCalc: Number(ibgeDest.ibge),
     CEP: cepDestino,
-    pBru: Number((params.peso || peso).toFixed(3)),
-    pCub: Number(pesoCubado.toFixed(3)),
+    pBru,
     qVol: params.volumes || 1,
     vNF: params.vlrMercadoria || 0,
   };
-  // Só envia o documento do destinatário se for CPF/CNPJ válido em tamanho —
-  // valor malformado derruba a requisição inteira ("Erro nos dados enviados").
+  if (c.cServ) bodyMinimo.cServ = c.cServ;
+  // Corpo COMPLETO = mínimo + extras (pCub, destinatário, cTab). Se os extras
+  // derrubarem a chamada, refazemos com o mínimo (auto-degradação).
+  const body: Record<string, unknown> = { ...bodyMinimo };
+  if (pesoCubado > 0) body.pCub = Number(pesoCubado.toFixed(3));
   if (cnpjDestinatario.length === 11 || cnpjDestinatario.length === 14) body.nDocDest = cnpjDestinatario;
-  if (c.cServ) body.cServ = c.cServ;
   if (c.cTab) body.cTab = c.cTab;
 
   try {
@@ -158,12 +160,10 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
         body: JSON.stringify(corpo),
       });
     let res = await dispara(body);
-    // Validado em produção: SEM cTab a API escolhe a tabela do cliente sozinha
-    // (retornou 114). Se o cTab informado falhar, tenta de novo sem ele.
-    if (!res.ok && body.cTab) {
-      const semTab = { ...body };
-      delete (semTab as Record<string, unknown>).cTab;
-      const retry = await dispara(semTab);
+    // Auto-degradação: se o corpo completo falhar, refaz com o corpo MÍNIMO
+    // comprovado em produção (sem pCub/nDocDest/cTab).
+    if (!res.ok && JSON.stringify(body) !== JSON.stringify(bodyMinimo)) {
+      const retry = await dispara(bodyMinimo);
       if (retry.ok) res = retry;
     }
     const texto = await res.text();
