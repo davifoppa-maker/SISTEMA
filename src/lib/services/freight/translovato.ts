@@ -156,7 +156,7 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
   if (!chaveR.ok) return { ok: false, error: chaveR.error };
 
   // Passo 2: cotação.
-  const montaEnvelope = (chave: string) =
+  const montaEnvelope = (chave: string) =>
     `<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete">` +
     `<soapenv:Header/><soapenv:Body>` +
     `<urn:SimulacaoFrete soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">` +
