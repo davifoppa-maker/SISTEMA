@@ -333,5 +333,5 @@ export async function GET(req: Request) {
     sondaServico = { servicoAceito: aceito, emitenteUsado: emit, clienteUsado: cli, resultados };
   }
 
-  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
+  return Response.json({ versao: "v18-cli-semcserv", ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
 }
