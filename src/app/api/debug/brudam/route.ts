@@ -1,7 +1,7 @@
 import { getBrudamConfig, getBrudamToken, quoteBrudam } from "@/lib/services/freight/brudam";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Diagnóstico Brudam/Multi (roda em PRODUÇÃO — o dev bloqueia o domínio).
 //   GET /api/debug/brudam?k=exxdebug   (opcional: &cep=...&valor=...&peso=...)
@@ -193,5 +193,58 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, especificacao });
+  // SONDA DE EMITENTE: a API responde "CNPJ do emitente não cadastrado" para
+  // bases erradas — então testamos as filiais da Multitrans (raiz 01.201.578 +
+  // MultiSCV) até uma ser aceita. Dígitos verificadores são calculados.
+  //   &emit=1 ativa; para no 1º CNPJ aceito.
+  let sondaEmitente: Record<string, unknown> | null = null;
+  if (u.searchParams.get("emit") === "1" && loginTeste.ok) {
+    const token = (loginTeste as { token: string }).token;
+    const dvCnpj = (base12: string): string => {
+      const calc = (nums: string, pesos: number[]) => {
+        const soma = nums.split("").reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
+        const r = soma % 11;
+        return r < 2 ? 0 : 11 - r;
+      };
+      const d1 = calc(base12, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+      const d2 = calc(base12 + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+      return `${base12}${d1}${d2}`;
+    };
+    const candidatos: string[] = [];
+    for (let filial = 1; filial <= 35; filial++) {
+      candidatos.push(dvCnpj(`01201578${String(filial).padStart(4, "0")}`)); // Multitrans
+    }
+    for (let filial = 1; filial <= 12; filial++) {
+      candidatos.push(dvCnpj(`04169737${String(filial).padStart(4, "0")}`)); // MultiSCV
+    }
+    const [io, id] = await Promise.all([
+      fetch(`https://viacep.com.br/ws/${c.cepOrigem}/json/`).then((r) => r.json()).catch(() => null),
+      fetch(`https://viacep.com.br/ws/${cep}/json/`).then((r) => r.json()).catch(() => null),
+    ]);
+    const resultados: Record<string, string> = {};
+    let aceito: string | null = null;
+    for (const cnpj of candidatos) {
+      try {
+        const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            nDocEmit: cnpj, nDocCli: c.cnpjRemetente, nDocRem: c.cnpjRemetente,
+            cOrigCalc: Number(io?.ibge ?? 0), cDestCalc: Number(id?.ibge ?? 0), CEP: cep,
+            pBru: peso, qVol: 1, vNF: valor,
+          }),
+        });
+        const t = await r.text();
+        let msg = t.slice(0, 120);
+        try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; } catch { /* cru */ }
+        resultados[cnpj] = `${r.status}: ${msg}`;
+        if (!/emitente n\u00e3o cadastrado|emitente não cadastrado/i.test(msg)) { aceito = cnpj; break; }
+      } catch (e) {
+        resultados[cnpj] = e instanceof Error ? e.message : "erro";
+      }
+    }
+    sondaEmitente = { cnpjAceito: aceito, testados: Object.keys(resultados).length, resultados };
+  }
+
+  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
 }
