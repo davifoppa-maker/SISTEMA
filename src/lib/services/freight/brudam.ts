@@ -171,21 +171,19 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
     try { json = JSON.parse(texto); } catch { /* mantém texto cru para o erro */ }
     if (!res.ok) {
       const msgApi = json?.data?.message ?? json?.message ?? texto.slice(0, 300);
-      // Situação conhecida: a conta ainda não tem serviço/tabela vinculado no
-      // sistema da Multitrans — pendência do lado da transportadora.
-      if (/c\u00f3digo de servi\u00e7o|código de serviço|nenhum servi\u00e7o|nenhum serviço/i.test(String(msgApi))) {
-        return {
-          ok: false,
-          error: "Multitrans: aguardando a transportadora vincular o serviço/tabela de frete da conta (código de serviço). Já solicitado ao comercial.",
-          status: res.status,
-          detail: json,
-        };
+      // Quando a mensagem é genérica ("Erro nos dados enviados"), anexa o corpo
+      // do `data` cru — é onde a Multi detalha o campo problemático.
+      let extra = "";
+      if (json?.data && !json?.data?.message) {
+        extra = ` · detalhe: ${JSON.stringify(json.data).slice(0, 220)}`;
+      } else if (!json) {
+        extra = ` · resposta: ${texto.slice(0, 220)}`;
       }
       return {
         ok: false,
-        error: `Brudam ${res.status}: ${msgApi}`,
+        error: `Multi ${res.status}: ${msgApi}${extra}`,
         status: res.status,
-        detail: json ?? { corpoEnviado: body, respostaCrua: texto.slice(0, 500) },
+        detail: { resposta: json ?? texto.slice(0, 500), corpoEnviado: body },
       };
     }
     // Resposta oficial: { status, message, data: [ { cTab, cServ, vColeta, vEntrega,
