@@ -32,10 +32,12 @@ export function getBrudamConfig() {
     // CNPJ do EMITENTE: base da Multitrans que atende a conta — informado pela
     // própria transportadora: 18.963.112/0001-03.
     cnpjEmitente: onlyDigits(process.env.BRUDAM_CNPJ_EMITENTE || "18963112000103"),
-    // Código de serviço e tabela informados pela Multitrans para a conta:
-    // cServ=012, cTab=019 (sobrepor com BRUDAM_CSERV/BRUDAM_CTAB se mudarem).
+    // Código de serviço informado pela Multitrans: cServ=012. O cTab NÃO é
+    // enviado por padrão — validado em produção que sem ele a API seleciona a
+    // tabela do cliente sozinha (retornou 114); o "019" informado não bate com
+    // esse campo. BRUDAM_CTAB força um valor se um dia precisar.
     cServ: process.env.BRUDAM_CSERV || "012",
-    cTab: process.env.BRUDAM_CTAB || "019",
+    cTab: process.env.BRUDAM_CTAB || "",
     apiBaseUrl: API_BASE,
   };
 }
@@ -141,7 +143,9 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
     qVol: params.volumes || 1,
     vNF: params.vlrMercadoria || 0,
   };
-  if (cnpjDestinatario) body.nDocDest = cnpjDestinatario;
+  // Só envia o documento do destinatário se for CPF/CNPJ válido em tamanho —
+  // valor malformado derruba a requisição inteira ("Erro nos dados enviados").
+  if (cnpjDestinatario.length === 11 || cnpjDestinatario.length === 14) body.nDocDest = cnpjDestinatario;
   if (c.cServ) body.cServ = c.cServ;
   if (c.cTab) body.cTab = c.cTab;
 
