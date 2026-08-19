@@ -5,6 +5,8 @@ export const maxDuration = 60;
 
 // Diagnóstico Brudam/Multi (roda em PRODUÇÃO — o dev bloqueia o domínio).
 //   GET /api/debug/brudam?k=exxdebug   (opcional: &cep=...&valor=...&peso=...)
+const onlyD = (v: string | null | undefined) => String(v ?? "").replace(/\D/g, "");
+
 export async function GET(req: Request) {
   const u = new URL(req.url);
   if (u.searchParams.get("k") !== "exxdebug") {
@@ -278,5 +280,45 @@ export async function GET(req: Request) {
     sondaEmitente = { cnpjAceito: aceito, testados: Object.keys(resultados).length, resultados };
   }
 
-  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
+  // SONDA DE CÓDIGO DE SERVIÇO (&serv=1): com o emitente certo (04169737000193),
+  // o erro atual é "informe pelo menos um código de serviço" — testamos códigos
+  // comuns até um ser aceito. O certo pode ser confirmado com a Multitrans.
+  let sondaServico: Record<string, unknown> | null = null;
+  if (u.searchParams.get("serv") === "1" && loginTeste.ok) {
+    const token = (loginTeste as { token: string }).token;
+    const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const emit = onlyD(u.searchParams.get("emitente") || process.env.BRUDAM_CNPJ_EMITENTE || "04169737000193");
+    const [io2, id2] = await Promise.all([
+      fetch(`https://viacep.com.br/ws/${c.cepOrigem}/json/`).then((r) => r.json()).catch(() => null),
+      fetch(`https://viacep.com.br/ws/${cep}/json/`).then((r) => r.json()).catch(() => null),
+    ]);
+    const extra = (u.searchParams.get("codigos") || "").split(",").map((x) => x.trim()).filter(Boolean);
+    const codigos = extra.length > 0 ? extra : ["001", "01", "1", "002", "02", "2", "003", "3", "100", "NORMAL", "FRACIONADO", "EXPRESSO", "RODOVIARIO", "CONVENCIONAL", "PADRAO"];
+    const resultados: Record<string, string> = {};
+    let aceito: string | null = null;
+    for (const cod of codigos) {
+      try {
+        const r = await fetch(`${c.apiBaseUrl}/frete/cotacao/calcula`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            nDocEmit: emit, nDocCli: c.cnpjRemetente, nDocRem: c.cnpjRemetente,
+            cOrigCalc: Number(io2?.ibge ?? 0), cDestCalc: Number(id2?.ibge ?? 0), CEP: cep,
+            pBru: peso, qVol: 1, vNF: valor, cServ: cod,
+          }),
+        });
+        const t = await r.text();
+        let msg = t.slice(0, 200);
+        try { const j = JSON.parse(t); msg = j?.data?.message ?? j?.message ?? msg; if (r.ok) msg = t.slice(0, 400); } catch { /* cru */ }
+        resultados[cod] = `${r.status}: ${msg}`;
+        if (r.ok) { aceito = cod; break; }
+      } catch (e) {
+        resultados[cod] = e instanceof Error ? e.message : "erro";
+      }
+      await pausa(450);
+    }
+    sondaServico = { servicoAceito: aceito, emitenteUsado: emit, resultados };
+  }
+
+  return Response.json({ ok: true, config: configVisivel, loginTeste: loginResumo, cotacaoTeste, sondaEmitente, sondaServico, especificacao: u.searchParams.get("emit") === "1" ? null : especificacao });
 }
