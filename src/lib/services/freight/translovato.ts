@@ -181,14 +181,20 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
   const r = await postSoap(envelope, soapAction("SimulacaoFrete"));
   if (!r.ok) return { ok: false, error: r.error, status: r.status };
 
-  // Erro de negócio vem em <Erro ...>...</Erro> (array vazio quando ok).
-  const erroMsg = xmlValor(r.xml, "Mensagem") || xmlValor(r.xml, "DsErro");
+  // Erro de negócio: pelo WSDL, TErro = { Codigo, Descricao, Complemento }.
+  const erroDesc = xmlValor(r.xml, "Descricao");
+  const erroComp = xmlValor(r.xml, "Complemento");
+  const erroMsg = erroDesc ? `Translovato: ${erroDesc}${erroComp ? ` — ${erroComp}` : ""}` : null;
   // O valor total do frete é a tag <Frete xsi:type="xsd:double">254.52</Frete>
   // (existe também <Frete href="#2"/>, que xmlValor ignora por não ter conteúdo).
   const freteStr = xmlValor(r.xml, "Frete") || xmlValor(r.xml, "ValorLiquido");
   const total = freteStr ? Number(freteStr) : null;
   if (total == null || !Number.isFinite(total) || total <= 0) {
-    return { ok: false, error: erroMsg || `Sem valor de frete no retorno. ${r.xml.slice(0, 200)}` };
+    // Sem descrição de erro: mostra o MIOLO do envelope (pula o cabeçalho XML,
+    // que só ocupava espaço e escondia o conteúdo útil).
+    const idxBody = r.xml.search(/<SOAP-ENV:Body|<soap:Body|<soapenv:Body/i);
+    const miolo = idxBody >= 0 ? r.xml.slice(idxBody, idxBody + 400) : r.xml.slice(0, 400);
+    return { ok: false, error: erroMsg || `Sem valor de frete no retorno. ${miolo}` };
   }
 
   return {
