@@ -155,9 +155,20 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
     let json: any = null;
     try { json = JSON.parse(texto); } catch { /* mantém texto cru para o erro */ }
     if (!res.ok) {
+      const msgApi = json?.data?.message ?? json?.message ?? texto.slice(0, 300);
+      // Situação conhecida: a conta ainda não tem serviço/tabela vinculado no
+      // sistema da Multitrans — pendência do lado da transportadora.
+      if (/c\u00f3digo de servi\u00e7o|código de serviço|nenhum servi\u00e7o|nenhum serviço/i.test(String(msgApi))) {
+        return {
+          ok: false,
+          error: "Multitrans: aguardando a transportadora vincular o serviço/tabela de frete da conta (código de serviço). Já solicitado ao comercial.",
+          status: res.status,
+          detail: json,
+        };
+      }
       return {
         ok: false,
-        error: `Brudam ${res.status}: ${json?.message ?? texto.slice(0, 300)}`,
+        error: `Brudam ${res.status}: ${msgApi}`,
         status: res.status,
         detail: json ?? { corpoEnviado: body, respostaCrua: texto.slice(0, 500) },
       };
