@@ -16,6 +16,7 @@ import { isLenoirConfigured, quoteLenoir, trackLenoir } from "@/lib/services/fre
 import { isMultitransConfigured, quoteMultitrans, trackMultitrans } from "@/lib/services/freight/multitrans";
 import { isBrudamConfigured, quoteBrudam, trackBrudam } from "@/lib/services/freight/brudam";
 import { isBbmConfigured, quoteBbm, trackBbm } from "@/lib/services/freight/bbm";
+import { isTranslovatoConfigured, quoteTranslovato, trackTranslovato } from "@/lib/services/freight/translovato";
 import { isCorreiosConfigured, quoteCorreios, trackCorreios } from "@/lib/services/freight/correios";
 import { isRodonavesConfigured, quoteRodonaves, trackRodonaves } from "@/lib/services/freight/rodonaves";
 import { isEsmConfigured, quoteEsm, trackEsm } from "@/lib/services/freight/esm";
@@ -81,6 +82,15 @@ const bbm: FreightProvider = {
   track: (nf) => trackBbm(nf),
 };
 
+const translovato: FreightProvider = {
+  id: "translovato",
+  label: "Translovato",
+  isConfigured: isTranslovatoConfigured,
+  // Web Service SOAP de cotação (separado da API REST da BBM, que só rastreia).
+  quote: quoteTranslovato,
+  track: (nf) => trackTranslovato(nf),
+};
+
 const correios: FreightProvider = {
   id: "correios",
   label: "Correios",
@@ -121,6 +131,7 @@ const PROVIDERS: Record<string, FreightProvider> = {
   [multitrans.id]: multitrans,
   [brudam.id]: brudam,
   [bbm.id]: bbm,
+  [translovato.id]: translovato,
   [correios.id]: correios,
   [rodonaves.id]: rodonaves,
   [esm.id]: esm,
