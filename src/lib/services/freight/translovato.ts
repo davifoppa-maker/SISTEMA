@@ -64,11 +64,19 @@ function xmlValor(xml: string, tag: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-async function postSoap(body: string): Promise<{ ok: true; xml: string } | { ok: false; error: string; status?: number }> {
+// SOAPAction exato por operação (WSDL: style="rpc"). Sem isso o serviço Delphi
+// costuma recusar a chamada.
+const SOAP_NS = "urn:uWSSimulacaoFreteIntf-IWSSimulacaoFrete";
+const soapAction = (op: string) => `${SOAP_NS}#${op}`;
+
+async function postSoap(
+  body: string,
+  action: string,
+): Promise<{ ok: true; xml: string } | { ok: false; error: string; status?: number }> {
   try {
     const res = await fetch(WS_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "" },
+      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: action },
       body,
     });
     const xml = await res.text();
@@ -92,7 +100,7 @@ async function geraChaveAcesso(): Promise<{ ok: true; chave: string } | { ok: fa
     `<Senha xsi:type="xsd:string">${xmlEscape(senhaB64)}</Senha>` +
     `</urn:geraChaveAcessoJSON></soapenv:Body></soapenv:Envelope>`;
 
-  const r = await postSoap(envelope);
+  const r = await postSoap(envelope, soapAction("geraChaveAcessoJSON"));
   if (!r.ok) return { ok: false, error: r.error };
 
   // O retorno documentado é imagem; parseamos de forma tolerante: procuramos o
@@ -155,7 +163,7 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
     `<QtPares xsi:type="xsd:double">0</QtPares>` +
     `</urn:SimulacaoFrete></soapenv:Body></soapenv:Envelope>`;
 
-  const r = await postSoap(envelope);
+  const r = await postSoap(envelope, soapAction("SimulacaoFrete"));
   if (!r.ok) return { ok: false, error: r.error, status: r.status };
 
   // Erro de negócio vem em <Erro ...>...</Erro> (array vazio quando ok).
