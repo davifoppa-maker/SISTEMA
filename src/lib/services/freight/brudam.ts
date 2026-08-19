@@ -29,8 +29,30 @@ export function getBrudamConfig() {
     token: process.env.BRUDAM_TOKEN || "",
     cepOrigem: onlyDigits(process.env.BRUDAM_CEP_ORIGEM || process.env.BRASPRESS_CEP_ORIGEM || "88352501"),
     cnpjRemetente: onlyDigits(process.env.BRUDAM_CNPJ_REMETENTE || process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114"),
+    // CNPJ do EMITENTE (base da transportadora que calcula). A doc pede, mas na
+    // prática costuma aceitar o CNPJ do cliente; sobreponha com BRUDAM_CNPJ_EMITENTE
+    // se a Multitrans informar o CNPJ da base deles.
+    cnpjEmitente: onlyDigits(process.env.BRUDAM_CNPJ_EMITENTE || process.env.BRUDAM_CNPJ_REMETENTE || process.env.BRASPRESS_CNPJ_REMETENTE || "51579683000114"),
     apiBaseUrl: API_BASE,
   };
+}
+
+// CEP → código IBGE da cidade (a cotação da Multi usa IBGE, não CEP).
+// ViaCEP é público e estável; cache em memória por CEP.
+const ibgeCache = new Map<string, string>();
+async function cepParaIbge(cep: string): Promise<{ ok: true; ibge: string } | { ok: false; error: string }> {
+  const c8 = onlyDigits(cep).padStart(8, "0");
+  const hit = ibgeCache.get(c8);
+  if (hit) return { ok: true, ibge: hit };
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${c8}/json/`, { headers: { Accept: "application/json" } });
+    const j = await r.json().catch(() => null) as { ibge?: string; erro?: boolean } | null;
+    if (!r.ok || !j || j.erro || !j.ibge) return { ok: false, error: `CEP ${c8} não encontrado (ViaCEP).` };
+    ibgeCache.set(c8, j.ibge);
+    return { ok: true, ibge: j.ibge };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erro ao consultar ViaCEP." };
+  }
 }
 
 export function isBrudamConfigured(): boolean {
@@ -96,58 +118,81 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
   const auth = await getBrudamToken();
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  const body = {
-    cnpj_remetente: cnpjRemetente,
-    cnpj_destinatario: cnpjDestinatario,
-    cep_origem: cepOrigem,
-    cep_destino: cepDestino,
-    valor_mercadoria: params.vlrMercadoria,
-    peso: Number(peso.toFixed(3)),
-    volumes: params.volumes || 1,
-    cubagem: (params.cubagem ?? []).map((d) => ({
-      altura: d.altura,
-      largura: d.largura,
-      comprimento: d.comprimento,
-      quantidade: d.volumes,
-    })),
+  // A cotação da Multi usa código IBGE das cidades (não CEP) — converte via ViaCEP.
+  const [ibgeOrig, ibgeDest] = await Promise.all([cepParaIbge(cepOrigem), cepParaIbge(cepDestino)]);
+  if (!ibgeOrig.ok) return { ok: false, error: `Origem: ${ibgeOrig.error}` };
+  if (!ibgeDest.ok) return { ok: false, error: `Destino: ${ibgeDest.error}` };
+
+  // Corpo OFICIAL (schema CalculoFrete do swagger da Multi):
+  //   nDocEmit/nDocCli (CNPJs), cOrigCalc/cDestCalc (IBGE), pBru, qVol, vNF.
+  const pesoCubado = volumeM3 * 300;
+  const body: Record<string, unknown> = {
+    nDocEmit: c.cnpjEmitente,
+    nDocCli: cnpjRemetente,
+    nDocRem: cnpjRemetente,
+    cOrigCalc: Number(ibgeOrig.ibge),
+    cDestCalc: Number(ibgeDest.ibge),
+    CEP: cepDestino,
+    pBru: Number((params.peso || peso).toFixed(3)),
+    pCub: Number(pesoCubado.toFixed(3)),
+    qVol: params.volumes || 1,
+    vNF: params.vlrMercadoria || 0,
   };
+  if (cnpjDestinatario) body.nDocDest = cnpjDestinatario;
 
   try {
-    // Auto-descoberta do endpoint de cotação: o path exato não está na doc que
-    // temos; tentamos os candidatos e usamos o 1º que NÃO for 404 (404 = não
-    // existe). Um path com resposta útil interrompe a busca. BRUDAM_COTACAO_PATH
-    // sobrepõe tudo quando soubermos o caminho certo.
-    const override = process.env.BRUDAM_COTACAO_PATH;
-    // Endpoint confirmado na spec oficial (swagger.php da Multi): POST /frete/cotacao/calcula
-    const candidatos = override ? [override] : ["/frete/cotacao/calcula"];
-
-    let res: Response | null = null;
-    let usouPath = "";
-    const tentativas: Record<string, number> = {};
-    for (const path of candidatos) {
-      const r = await fetch(`${c.apiBaseUrl}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
-        body: JSON.stringify(body),
-      });
-      tentativas[path] = r.status;
-      if (r.status !== 404) { res = r; usouPath = path; break; } // achou um endpoint que existe
+    const path = process.env.BRUDAM_COTACAO_PATH || "/frete/cotacao/calcula";
+    const res = await fetch(`${c.apiBaseUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${auth.token}` },
+      body: JSON.stringify(body),
+    });
+    const texto = await res.text();
+    let json: any = null;
+    try { json = JSON.parse(texto); } catch { /* mantém texto cru para o erro */ }
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Brudam ${res.status}: ${json?.message ?? texto.slice(0, 300)}`,
+        status: res.status,
+        detail: json ?? { corpoEnviado: body, respostaCrua: texto.slice(0, 500) },
+      };
     }
-    if (!res) {
-      return { ok: false, error: `Nenhum endpoint de cotação encontrado (todos 404). Tentativas: ${JSON.stringify(tentativas)}` };
+    // Resposta oficial: { status, message, data: [ { cTab, cServ, vColeta, vEntrega,
+    // vNF, vPeso, vPedagio, vTAD, vAdv, vGris, ... } ] } — soma/total e prazo podem
+    // variar de nome; parse tolerante com fallback: soma dos componentes v*.
+    const item = Array.isArray(json?.data) ? json.data[0] : (json?.data ?? json);
+    if (!item || typeof item !== "object") {
+      return { ok: false, error: `Resposta sem dados de frete: ${texto.slice(0, 300)}` };
     }
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `Brudam ${res.status} em ${usouPath}`, status: res.status, detail: json };
-    const data = json?.data ?? json;
-    const totalFrete = data.valorTotal ?? data.valor_frete ?? data.total ?? data.frete ?? null;
-    const prazo = data.prazo ?? data.prazoEntrega ?? data.prazo_entrega ?? data.diasUteis ?? null;
+    let total: number | null = null;
+    for (const k of ["vTotal", "vFrete", "total", "valorTotal", "valor_frete", "vTotalFrete"]) {
+      const v = (item as any)[k];
+      if (typeof v === "number" && v > 0) { total = v; break; }
+    }
+    if (total == null) {
+      // Soma dos componentes v* numéricos (vColeta, vEntrega, vPeso, vNF, vGris...).
+      let soma = 0;
+      for (const [k, v] of Object.entries(item)) {
+        if (/^v[A-Z]/.test(k) && typeof v === "number" && Number.isFinite(v)) soma += v;
+      }
+      if (soma > 0) total = Number(soma.toFixed(2));
+    }
+    let prazo: number | null = null;
+    for (const k of ["prazo", "qPrazo", "dPrazo", "prazoEntrega", "prazo_entrega", "diasUteis"]) {
+      const v = (item as any)[k];
+      const n = typeof v === "number" ? v : Number(v);
+      if (Number.isFinite(n) && n > 0) { prazo = n; break; }
+    }
+    if (total == null || total <= 0) {
+      return { ok: false, error: `Sem valor de frete no retorno. ${JSON.stringify(item).slice(0, 300)}` };
+    }
     return {
       ok: true,
       data: {
-        id: data.id ?? data.cotacaoId ?? data.cotacao_id,
-        totalFrete: totalFrete != null ? Number(totalFrete) : undefined,
-        prazo: prazo != null ? Number(prazo) : undefined,
-        validade: data.validade ?? undefined,
+        id: (item as any).cTab ?? (item as any).id,
+        totalFrete: total,
+        prazo: prazo ?? undefined,
         raw: json,
       },
     };
