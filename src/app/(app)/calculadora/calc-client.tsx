@@ -78,6 +78,24 @@ export function CalculadoraClient() {
     } catch { /* */ }
   }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota]);
 
+  // Lista TODOS os produtos com engenharia (cache 30 min no servidor).
+  async function listarTodos() {
+    setBuscandoSabores(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/engenharia?todas=1");
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar.");
+      const achados = j.data.sabores ?? [];
+      setSabores(achados);
+      if (achados.length === 0) setErro("Nenhum produto com engenharia encontrado no Olist.");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao listar.");
+    } finally {
+      setBuscandoSabores(false);
+    }
+  }
+
   // Busca por nome/SKU/sabor: SKU exato carrega direto; senão lista os
   // produtos COM engenharia que casam com o termo, para clicar.
   async function buscar() {
@@ -257,7 +275,10 @@ export function CalculadoraClient() {
             <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
               {buscandoSabores ? "Buscando…" : "Buscar"}
             </Button>
-            <span className="ml-auto text-[10px] text-slate-600">v13</span>
+            <Button size="sm" variant="secondary" onClick={listarTodos} disabled={buscandoSabores}>
+              📋 Todos com engenharia
+            </Button>
+            <span className="ml-auto text-[10px] text-slate-600">v14</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}

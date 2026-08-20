@@ -66,7 +66,57 @@ export async function GET(req: Request) {
     if (falhas429 === 0) listaCache.set(chaveCache, { dados, exp: Date.now() + 10 * 60 * 1000 });
     return ok({ versaoLista: "v3-paralela", ...dados });
   }
-  if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
+  // Modo TODAS (?todas=1): lista TODOS os produtos com engenharia no Olist.
+  // Varredura com verificação de BOM em lotes paralelos; cache de 30 min.
+  if (u.searchParams.get("todas") === "1") {
+    const chave = `todas:${empresa}`;
+    const hit = listaCache.get(chave);
+    if (hit && hit.exp > Date.now()) return ok({ versaoLista: "todas-cache", ...hit.dados });
+
+    // Candidatos: tenta filtrar fabricados direto (tipo=F); se a API ignorar,
+    // cai para a pesquisa ampla por "nyer".
+    const pegaCandidatos = async (): Promise<any[]> => {
+      for (const q of ["tipo=F&limit=100", "pesquisa=nyer&limit=100"]) {
+        const r = await tinyFetch(`${c.apiBaseUrl}/produtos?${q}`, {}, empresa).catch(() => null);
+        const j = r ? await r.json().catch(() => null) as any : null;
+        const itens = (j?.itens ?? j?.data ?? []) as any[];
+        if (Array.isArray(itens) && itens.length > 0) return itens;
+      }
+      return [];
+    };
+    const candidatos = (await pegaCandidatos())
+      .map((i) => ({ id: i.id, sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
+      .filter((i) => i.id && i.sku)
+      .slice(0, 80);
+
+    const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    const verifica = async (cand: { id: string }) => {
+      for (let tent = 0; tent < 2; tent++) {
+        try {
+          const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${cand.id}`, {}, empresa);
+          if (rd.status === 429) { await pausaMs(900); continue; }
+          const jd = await rd.json().catch(() => null) as any;
+          const raw = jd?.data ?? jd ?? {};
+          const bomL: any[] = raw?.producao?.produtos ?? [];
+          return Array.isArray(bomL) && bomL.length > 0;
+        } catch { /* retry */ }
+      }
+      return false;
+    };
+    const produtos: { sku: string; descricao: string }[] = [];
+    for (let i = 0; i < candidatos.length; i += 5) {
+      const lote = candidatos.slice(i, i + 5);
+      const oks = await Promise.all(lote.map(verifica));
+      lote.forEach((cand, idx) => { if (oks[idx]) produtos.push({ sku: String(cand.sku), descricao: cand.descricao }); });
+      await pausaMs(300);
+    }
+    produtos.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
+    const dados = { candidatosVerificados: candidatos.length, sabores: produtos };
+    listaCache.set(chave, { dados, exp: Date.now() + 30 * 60 * 1000 });
+    return ok({ versaoLista: "todas-v1", ...dados });
+  }
+
+  if (!sku && !busca) return fail("Informe ?sku=, ?busca=, ?lista= ou ?todas=1", 400);
 
   // Acha o produto.
   let produtoId: string | null = null;
