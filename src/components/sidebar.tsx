@@ -54,13 +54,13 @@ const nav = [
     icon: ScanLine,
     children: [
       { href: "/dashboard", label: "Dashboard" },
-      { href: "/checkout", label: "Checkout expedição" },
-      { href: "/batches", label: "Lotes de coleta" },
+      { href: "/quotes", label: "Cotações" },
       { href: "/estoque", label: "Estoque" },
       { href: "/producao/necessidades", label: "Necessidades de produção" },
-      { href: "/caixas", label: "Guia de caixas" },
+      { href: "/checkout", label: "Checkout expedição" },
+      { href: "/batches", label: "Lotes de coleta" },
       { href: "/occurrences", label: "Ocorrências" },
-      { href: "/quotes", label: "Cotação manual" },
+      { href: "/caixas", label: "Guia de caixas" },
     ],
   },
   {
