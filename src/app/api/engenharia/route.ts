@@ -16,19 +16,30 @@ export async function GET(req: Request) {
   const lista = u.searchParams.get("lista") || "";
   const c = getTinyConfig(empresa);
 
-  // Modo LISTA: devolve os produtos/sabores que casam com o termo (para o
-  // seletor de sabor da calculadora).
+  // Modo LISTA: devolve APENAS os sabores que TÊM ENGENHARIA cadastrada —
+  // confere produto a produto no Olist (a busca traz kits/potes/acessórios que
+  // não interessam; a única prova real de "sabor com engenharia" é o BOM).
   if (lista) {
-    const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=50`, {}, empresa).catch(() => null);
+    const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=30`, {}, empresa).catch(() => null);
     const j = r ? await r.json().catch(() => null) as any : null;
-    const itens = (j?.itens ?? j?.data ?? []) as any[];
-    // Só os FABRICADOS (tipo "F") — são os que têm engenharia; corta kits,
-    // revenda e acessórios que poluíam o seletor de sabores.
-    const sabores = itens
-      .filter((i) => String(i.tipo ?? i.tipoProduto ?? "") === "F")
-      .map((i) => ({ sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
-      .filter((i) => i.sku)
-      .sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
+    const itens = ((j?.itens ?? j?.data ?? []) as any[])
+      .map((i) => ({ id: i.id, sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
+      .filter((i) => i.id && i.sku)
+      .slice(0, 15); // limite: 1 consulta de detalhe por candidato
+    const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    const sabores: { sku: string; descricao: string }[] = [];
+    for (const i of itens) {
+      try {
+        const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${i.id}`, {}, empresa);
+        const jd = await rd.json().catch(() => null) as any;
+        const bomLista: any[] = jd?.data?.producao?.produtos ?? [];
+        if (Array.isArray(bomLista) && bomLista.length > 0) {
+          sabores.push({ sku: String(i.sku), descricao: i.descricao });
+        }
+      } catch { /* segue */ }
+      await pausaMs(100);
+    }
+    sabores.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
     return ok({ sabores });
   }
   if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
