@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ok, fail, parseBody } from "@/lib/api";
 import { getProvider } from "@/lib/services/freight/registry";
+import { ufDoCep, msgNaoAtende } from "@/lib/services/freight/regiao";
 
 export const maxDuration = 10;
 
@@ -31,6 +32,15 @@ export async function POST(req: Request, { params }: { params: { provider: strin
 
   const parsed = await parseBody(req, schema);
   if (!parsed.ok) return parsed.response;
+
+  // Pré-checagem de cobertura por UF (levantamento validado): destino fora da
+  // área da transportadora responde na hora, sem gastar chamada de API.
+  if (provider.ufsAtendidas) {
+    const uf = ufDoCep(parsed.data.cepDestino);
+    if (uf && !provider.ufsAtendidas.includes(uf)) {
+      return fail(msgNaoAtende(provider.label), 400);
+    }
+  }
 
   const outcome = await provider.quote(parsed.data);
   if (!outcome.ok) {

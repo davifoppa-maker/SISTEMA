@@ -73,6 +73,8 @@ const multitrans: FreightProvider = {
 const brudam: FreightProvider = {
   id: "brudam",
   label: "Multitrans",
+  // Cobertura validada (ago/2026): Sul + SP/MG/MS/GO/DF (parte via redespacho).
+  ufsAtendidas: ["SC", "PR", "RS", "SP", "MG", "MS", "GO", "DF"],
   isConfigured: isBrudamConfigured,
   quote: quoteBrudam,
   track: (nf) => trackBrudam(nf),
