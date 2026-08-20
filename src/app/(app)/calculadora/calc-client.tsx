@@ -90,8 +90,17 @@ export function CalculadoraClient() {
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha na busca.");
       const achados = j.data.sabores ?? [];
       setSabores(achados);
-      if (achados.length === 0) setErro(`Nenhum produto com engenharia encontrado para "${termo}".`);
-      else setErro(null);
+      if (achados.length === 0) {
+        const cand = j.data.candidatos ?? 0;
+        const rate = j.data.falhas429 ?? 0;
+        setErro(
+          cand === 0
+            ? `Nada no Olist para "${termo}" — confira o nome.`
+            : rate > 0
+              ? `A API do Olist limitou a verificação (${rate}x). Clica em Buscar de novo.`
+              : `Encontrei ${cand} produto(s) para "${termo}", mas nenhum com engenharia cadastrada no Olist.`,
+        );
+      } else setErro(null);
     } catch (e) {
       setSabores([]);
       setErro(e instanceof Error ? e.message : "Erro na busca.");

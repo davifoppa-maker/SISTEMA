@@ -16,32 +16,43 @@ export async function GET(req: Request) {
   const lista = u.searchParams.get("lista") || "";
   const c = getTinyConfig(empresa);
 
-  // Modo LISTA: devolve APENAS os sabores que TÊM ENGENHARIA cadastrada —
-  // confere produto a produto no Olist (a busca traz kits/potes/acessórios que
-  // não interessam; a única prova real de "sabor com engenharia" é o BOM).
+  // Modo LISTA: sabores/produtos COM engenharia. Verifica o BOM de cada
+  // candidato em LOTES PARALELOS pequenos (rápido), com retry em 429 — antes a
+  // checagem sequencial estourava o rate limit e devolvia lista vazia.
   if (lista) {
-    const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=30`, {}, empresa).catch(() => null);
+    const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=50`, {}, empresa).catch(() => null);
     const j = r ? await r.json().catch(() => null) as any : null;
-    const itens = ((j?.itens ?? j?.data ?? []) as any[])
+    const candidatos = ((j?.itens ?? j?.data ?? []) as any[])
       .map((i) => ({ id: i.id, sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
       .filter((i) => i.id && i.sku)
-      .slice(0, 15); // limite: 1 consulta de detalhe por candidato
+      .slice(0, 30);
+
     const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    let falhas429 = 0;
+
+    const verifica = async (cand: { id: string; sku: string; descricao: string }) => {
+      for (let tent = 0; tent < 2; tent++) {
+        try {
+          const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${cand.id}`, {}, empresa);
+          if (rd.status === 429) { falhas429++; await pausaMs(900); continue; }
+          const jd = await rd.json().catch(() => null) as any;
+          const raw = jd?.data ?? jd ?? {};
+          const bomLista: any[] = raw?.producao?.produtos ?? [];
+          return Array.isArray(bomLista) && bomLista.length > 0;
+        } catch { /* tenta de novo */ }
+      }
+      return false;
+    };
+
     const sabores: { sku: string; descricao: string }[] = [];
-    for (const i of itens) {
-      try {
-        const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${i.id}`, {}, empresa);
-        const jd = await rd.json().catch(() => null) as any;
-        const raw = jd?.data ?? jd ?? {};
-        const bomLista: any[] = raw?.producao?.produtos ?? [];
-        if (Array.isArray(bomLista) && bomLista.length > 0) {
-          sabores.push({ sku: String(i.sku), descricao: i.descricao });
-        }
-      } catch { /* segue */ }
-      await pausaMs(250); // ritmo seguro p/ o rate limit do Tiny
+    for (let i = 0; i < candidatos.length; i += 5) {
+      const lote = candidatos.slice(i, i + 5);
+      const oks = await Promise.all(lote.map(verifica));
+      lote.forEach((cand, idx) => { if (oks[idx]) sabores.push({ sku: String(cand.sku), descricao: cand.descricao }); });
+      await pausaMs(300);
     }
     sabores.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
-    return ok({ versaoLista: "v2", sabores });
+    return ok({ versaoLista: "v3-paralela", candidatos: candidatos.length, falhas429, sabores });
   }
   if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
 
