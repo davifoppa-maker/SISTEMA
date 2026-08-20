@@ -160,8 +160,15 @@ export function CalculadoraClient() {
   }
 
   // Consumo por unidade recalculado com o rendimento EDITÁVEL do lote.
+  // EXCEÇÃO: itens de EMBALAGEM (rótulo/sleeve/pouch/colher/tampa...) que o
+  // Olist cadastra JÁ POR UNIDADE (qtd pequena, ex.: 1 rótulo) não são diluídos
+  // — senão 1 rótulo virava 1/270 (R$ 0,01 em vez de R$ 3,00).
+  const EMBALAGEM_RE = /r[oó]tulo|sleeve|pouch|tampa|colher|dosador|selo|lacre|caixa|sachê|sache/i;
   const porUnidade = (i: Insumo): number => {
     const un = Math.max(num(unidadesLote), 1);
+    const ehEmbalagem = EMBALAGEM_RE.test(i.descricao) || /^(EMB|RTL)/i.test(i.sku ?? "");
+    // Embalagem com quantidade MENOR que meia batida = cadastrada por unidade.
+    if (ehEmbalagem && i.qtdLote > 0 && i.qtdLote < un / 2) return i.qtdLote;
     return i.qtdLote / un;
   };
 
