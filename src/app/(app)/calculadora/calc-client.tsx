@@ -8,8 +8,19 @@ import { Button } from "@/components/ui/button";
 interface Insumo { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number; custoOlist: number | null }
 interface Engenharia { produto: { sku?: string; descricao?: string }; unidadesLote: number; insumos: Insumo[] }
 
-const FAMILIAS = [
-  { rotulo: "Hydro", termo: "hydro protein" },
+// Sabores FIXOS (SKU confirmado → carrega direto, sem busca). Milk/Beef ainda
+// usam busca dinâmica no Olist — fixar quando os SKUs forem confirmados.
+const FAMILIAS: { rotulo: string; termo?: string; sabores?: { sku: string; descricao: string }[] }[] = [
+  {
+    rotulo: "Hydro",
+    sabores: [
+      { sku: "NYER260432", descricao: "Chocolate" },
+      { sku: "NYER260430", descricao: "Chocolate Maltado" },
+      { sku: "NYER260433", descricao: "Milkshake de Morango" },
+      { sku: "NYER260434", descricao: "Morango" },
+      { sku: "NYER260431", descricao: "Original" },
+    ],
+  },
   { rotulo: "Milk", termo: "milk" },
   { rotulo: "Beef", termo: "beef" },
 ];
@@ -78,12 +89,17 @@ export function CalculadoraClient() {
   }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota]);
 
   // Lista os SABORES da família (cada sabor tem engenharia própria).
-  async function listarSabores(f: { rotulo: string; termo: string }) {
-    setBuscandoSabores(true);
+  async function listarSabores(f: { rotulo: string; termo?: string; sabores?: { sku: string; descricao: string }[] }) {
     setFamiliaAtiva(f.rotulo);
     setErro(null);
+    // Sabores fixos (SKUs confirmados): mostra na hora, sem consulta.
+    if (f.sabores) {
+      setSabores(f.sabores);
+      return;
+    }
+    setBuscandoSabores(true);
     try {
-      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(f.termo)}`);
+      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(f.termo ?? f.rotulo)}`);
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar sabores.");
       setSabores(j.data.sabores ?? []);
