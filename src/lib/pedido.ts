@@ -20,6 +20,14 @@ export function clienteIgnorado(nome: string | null | undefined): boolean {
 // a margem pra -278% etc.). Comparação por "contém".
 const CLIENTES_FORA_DA_MARGEM = ["exx nutrition"];
 
+// Vendedores cujos pedidos FICAM FORA da base de margem do Dashboard Comercial
+// (faturamento conta normal; margem não é calculada — custo/condição distorcidos).
+const VENDEDORES_FORA_MARGEM = ["luiz eduardo galdino"];
+export function vendedorForaDaMargem(nome: string | null | undefined): boolean {
+  const n = normNome(nome);
+  return !!n && VENDEDORES_FORA_MARGEM.some((v) => n.includes(v));
+}
+
 export function clienteForaDaMargem(nome: string | null | undefined): boolean {
   const n = normNome(nome);
   if (!n) return false;

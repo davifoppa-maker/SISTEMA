@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { fetchAllRows } from "@/lib/db/fetch-all";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer, vendedorOculto } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, margemFixaPct } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, vendedorForaDaMargem, margemFixaPct } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -152,7 +152,7 @@ export default async function ComercialPage({
     const semItens = its.length === 0;
 
     const semDadoDeCusto = pctFixa == null && (ehBonificado || semCustoCadastrado || semItens);
-    const foraMargem = clienteForaDaMargem(v.customerName) || semDadoDeCusto;
+    const foraMargem = clienteForaDaMargem(v.customerName) || vendedorForaDaMargem(sel) || semDadoDeCusto;
     if (semDadoDeCusto) {
       fatSemMargem += receita;
       pedidosSemMargem += 1;
