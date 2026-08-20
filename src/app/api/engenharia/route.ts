@@ -2,6 +2,10 @@ import { ok, fail } from "@/lib/api";
 import { getTinyConfig, tinyFetch } from "@/lib/services/tiny-api";
 
 export const dynamic = "force-dynamic";
+
+// Cache em memória das buscas por termo (10 min): busca repetida fica
+// instantânea e poupa o rate limit do Tiny.
+const listaCache = new Map<string, { dados: Record<string, unknown>; exp: number }>();
 export const maxDuration = 60;
 
 // Engenharia (BOM) de um produto FABRICADO via API do Olist, já convertida para
@@ -20,6 +24,11 @@ export async function GET(req: Request) {
   // candidato em LOTES PARALELOS pequenos (rápido), com retry em 429 — antes a
   // checagem sequencial estourava o rate limit e devolvia lista vazia.
   if (lista) {
+    const chaveCache = `${empresa}:${lista.toLowerCase().trim()}`;
+    const hitCache = listaCache.get(chaveCache);
+    if (hitCache && hitCache.exp > Date.now()) {
+      return ok({ versaoLista: "v3-cache", ...hitCache.dados });
+    }
     const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=50`, {}, empresa).catch(() => null);
     const j = r ? await r.json().catch(() => null) as any : null;
     const candidatos = ((j?.itens ?? j?.data ?? []) as any[])
@@ -52,7 +61,10 @@ export async function GET(req: Request) {
       await pausaMs(300);
     }
     sabores.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
-    return ok({ versaoLista: "v3-paralela", candidatos: candidatos.length, falhas429, sabores });
+    const dados = { candidatos: candidatos.length, falhas429, sabores };
+    // Só cacheia resultados sem rate limit (senão congela uma lista incompleta).
+    if (falhas429 === 0) listaCache.set(chaveCache, { dados, exp: Date.now() + 10 * 60 * 1000 });
+    return ok({ versaoLista: "v3-paralela", ...dados });
   }
   if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
 
