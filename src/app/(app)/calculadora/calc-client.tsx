@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 interface Insumo { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number; custoOlist: number | null }
 interface Engenharia { produto: { sku?: string; descricao?: string }; unidadesLote: number; insumos: Insumo[] }
 
-const PRODUTOS_SUGERIDOS = [
-  { rotulo: "Hydro Protein 820g", sku: "NYER260430" },
-  { rotulo: "Milk", busca: "milk" },
-  { rotulo: "Beef", busca: "beef" },
+const FAMILIAS = [
+  { rotulo: "Hydro", termo: "hydro protein" },
+  { rotulo: "Milk", termo: "milk" },
+  { rotulo: "Beef", termo: "beef" },
 ];
 
 const LS_PRECOS = "nyer:precosInsumos";
@@ -22,6 +22,9 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 export function CalculadoraClient() {
   const [skuBusca, setSkuBusca] = useState("NYER260430");
+  const [sabores, setSabores] = useState<{ sku: string; descricao: string }[]>([]);
+  const [familiaAtiva, setFamiliaAtiva] = useState<string | null>(null);
+  const [buscandoSabores, setBuscandoSabores] = useState(false);
   const [eng, setEng] = useState<Engenharia | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -71,6 +74,25 @@ export function CalculadoraClient() {
       }));
     } catch { /* */ }
   }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao]);
+
+  // Lista os SABORES da família (cada sabor tem engenharia própria).
+  async function listarSabores(f: { rotulo: string; termo: string }) {
+    setBuscandoSabores(true);
+    setFamiliaAtiva(f.rotulo);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(f.termo)}`);
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar sabores.");
+      setSabores(j.data.sabores ?? []);
+      if ((j.data.sabores ?? []).length === 0) setErro(`Nenhum produto encontrado para "${f.rotulo}".`);
+    } catch (e) {
+      setSabores([]);
+      setErro(e instanceof Error ? e.message : "Erro ao listar sabores.");
+    } finally {
+      setBuscandoSabores(false);
+    }
+  }
 
   async function carregar(q: { sku?: string; busca?: string }) {
     setCarregando(true);
@@ -161,13 +183,29 @@ export function CalculadoraClient() {
       <Card>
         <CardContent className="space-y-3 pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            {PRODUTOS_SUGERIDOS.map((p) => (
-              <Button key={p.rotulo} size="sm" variant="secondary" onClick={() => carregar(p)}>{p.rotulo}</Button>
+            {FAMILIAS.map((f) => (
+              <Button key={f.rotulo} size="sm" variant={familiaAtiva === f.rotulo ? "default" : "secondary"} onClick={() => listarSabores(f)}>
+                {f.rotulo}
+              </Button>
             ))}
-            <Input value={skuBusca} onChange={(e) => setSkuBusca(e.target.value)} placeholder="SKU ou nome…" className="w-52" />
-            <Button size="sm" onClick={() => carregar(skuBusca.includes(" ") ? { busca: skuBusca } : { sku: skuBusca })} disabled={carregando}>
-              {carregando ? "Buscando… (~10s)" : "Carregar engenharia"}
+            {buscandoSabores ? <span className="text-xs text-slate-400">listando sabores…</span> : null}
+            {sabores.length > 0 ? (
+              <select
+                defaultValue=""
+                onChange={(e) => { if (e.target.value) carregar({ sku: e.target.value }); }}
+                className="h-9 max-w-[320px] rounded-lg border border-white/15 bg-white/5 px-2 text-sm text-white"
+              >
+                <option value="">— escolher o sabor —</option>
+                {sabores.map((sb) => (
+                  <option key={sb.sku} value={sb.sku}>{sb.descricao}</option>
+                ))}
+              </select>
+            ) : null}
+            <Input value={skuBusca} onChange={(e) => setSkuBusca(e.target.value)} placeholder="ou SKU/nome…" className="w-44" />
+            <Button size="sm" variant="ghost" onClick={() => carregar(skuBusca.includes(" ") ? { busca: skuBusca } : { sku: skuBusca })} disabled={carregando}>
+              Carregar
             </Button>
+            {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}
         </CardContent>

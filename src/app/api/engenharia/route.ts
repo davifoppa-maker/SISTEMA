@@ -13,8 +13,21 @@ export async function GET(req: Request) {
   const empresa = u.searchParams.get("empresa") || "nyer";
   const sku = u.searchParams.get("sku") || "";
   const busca = u.searchParams.get("busca") || "";
-  if (!sku && !busca) return fail("Informe ?sku= ou ?busca=", 400);
+  const lista = u.searchParams.get("lista") || "";
   const c = getTinyConfig(empresa);
+
+  // Modo LISTA: devolve os produtos/sabores que casam com o termo (para o
+  // seletor de sabor da calculadora).
+  if (lista) {
+    const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=50`, {}, empresa).catch(() => null);
+    const j = r ? await r.json().catch(() => null) as any : null;
+    const itens = (j?.itens ?? j?.data ?? []) as any[];
+    const sabores = itens
+      .map((i) => ({ sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
+      .filter((i) => i.sku);
+    return ok({ sabores });
+  }
+  if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
 
   // Acha o produto.
   let produtoId: string | null = null;
