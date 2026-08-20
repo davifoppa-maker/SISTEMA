@@ -257,6 +257,7 @@ export function CalculadoraClient() {
             <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
               {buscandoSabores ? "Buscando…" : "Buscar"}
             </Button>
+            <span className="ml-auto text-[10px] text-slate-600">v13</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}
