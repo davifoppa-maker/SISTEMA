@@ -55,6 +55,7 @@ const nav = [
     children: [
       { href: "/dashboard", label: "Dashboard" },
       { href: "/quotes", label: "Cotações" },
+      { href: "/quotes/personalizada", label: "Cotação personalizada" },
       { href: "/estoque", label: "Estoque" },
       { href: "/producao/necessidades", label: "Necessidades de produção" },
       { href: "/checkout", label: "Checkout expedição" },

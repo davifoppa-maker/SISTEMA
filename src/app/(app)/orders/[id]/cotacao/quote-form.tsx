@@ -91,6 +91,7 @@ export function QuoteForm({
   // CEP/peso do Tiny chegam em SEGUNDO PLANO (a página abre na hora e os campos
   // se preenchem sozinhos quando a resposta vier).
   useEffect(() => {
+    if (!orderId) return; // cotação avulsa (sem pedido) — nada a buscar no Tiny
     if (prefill.cepDestino && prefill.peso > 0) return; // já veio tudo
     let vivo = true;
     setBuscandoTiny(true);
