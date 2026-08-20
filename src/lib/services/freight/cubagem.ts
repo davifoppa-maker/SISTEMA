@@ -117,6 +117,21 @@ function masterBoxFor(d: Dim): { un: number; nome: string } | null {
   return null;
 }
 
+/**
+ * Caixa sugerida para UMA unidade do produto — usada no Guia de Caixas da
+ * expedição. Ordem: medida zerada = digital; medida que bate com caixa máster =
+ * essa caixa; senão, a MENOR caixa padrão em que o item cabe.
+ */
+export function caixaSugerida(m: { comprimentoCm: number; larguraCm: number; alturaCm: number }): { tipo: "master" | "padrao" | "digital" | "grande"; nome: string; medidas: string } {
+  const dim: Dim = { comprimentoCm: m.comprimentoCm, larguraCm: m.larguraCm, alturaCm: m.alturaCm };
+  if (volCm3(dim) <= 0) return { tipo: "digital", nome: "Digital (sem caixa)", medidas: "—" };
+  const master = masterBoxFor(dim);
+  if (master) return { tipo: "master", nome: master.nome, medidas: `${dim.comprimentoCm}×${dim.larguraCm}×${dim.alturaCm} cm` };
+  const fit = CAIXAS.find((c) => cabeDimensional(dim, c));
+  if (fit) return { tipo: "padrao", nome: fit.nome, medidas: `${fit.comprimentoCm}×${fit.larguraCm}×${fit.alturaCm} cm` };
+  return { tipo: "grande", nome: "Maior que a Caixa 5 — conferir", medidas: "—" };
+}
+
 /** Calcula a cubagem e o empacotamento dos itens de um pedido. */
 export function calcularCubagem(itens: ItemPedido[]): CubagemResultado {
   const detalheItens: DetalheItem[] = [];

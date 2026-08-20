@@ -33,6 +33,7 @@ export const EXPED_ALLOWED_PREFIXES = [
   "/batches",
   "/estoque",
   "/producao",
+  "/caixas",
   "/occurrences",
   "/quotes",
 ];

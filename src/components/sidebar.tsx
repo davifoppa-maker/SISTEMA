@@ -58,6 +58,7 @@ const nav = [
       { href: "/batches", label: "Lotes de coleta" },
       { href: "/estoque", label: "Estoque" },
       { href: "/producao/necessidades", label: "Necessidades de produção" },
+      { href: "/caixas", label: "Guia de caixas" },
       { href: "/occurrences", label: "Ocorrências" },
       { href: "/quotes", label: "Cotação manual" },
     ],
