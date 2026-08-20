@@ -22,9 +22,13 @@ export async function GET(req: Request) {
     const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(lista)}&limit=50`, {}, empresa).catch(() => null);
     const j = r ? await r.json().catch(() => null) as any : null;
     const itens = (j?.itens ?? j?.data ?? []) as any[];
+    // Só os FABRICADOS (tipo "F") — são os que têm engenharia; corta kits,
+    // revenda e acessórios que poluíam o seletor de sabores.
     const sabores = itens
+      .filter((i) => String(i.tipo ?? i.tipoProduto ?? "") === "F")
       .map((i) => ({ sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
-      .filter((i) => i.sku);
+      .filter((i) => i.sku)
+      .sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
     return ok({ sabores });
   }
   if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
