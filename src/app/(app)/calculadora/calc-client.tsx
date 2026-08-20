@@ -111,7 +111,37 @@ export function CalculadoraClient() {
     }
   }
 
-  async function carregar(q: { sku?: string; busca?: string }) {
+  // Busca por nome/SKU/sabor: SKU exato carrega direto; senão lista os
+  // produtos COM engenharia que casam com o termo, para clicar.
+  async function buscar() {
+    const termo = skuBusca.trim();
+    if (!termo) return;
+    setErro(null);
+    // Parece SKU (sem espaço, tem dígito)? Tenta carregar direto.
+    if (!termo.includes(" ") && /\d/.test(termo)) {
+      const okDireto = await carregar({ sku: termo });
+      if (okDireto) return;
+    }
+    // Busca por termo → lista clicável.
+    setBuscandoSabores(true);
+    setFamiliaAtiva(null);
+    try {
+      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(termo)}`);
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha na busca.");
+      const achados = j.data.sabores ?? [];
+      setSabores(achados);
+      if (achados.length === 0) setErro(`Nenhum produto com engenharia encontrado para "${termo}".`);
+      else setErro(null);
+    } catch (e) {
+      setSabores([]);
+      setErro(e instanceof Error ? e.message : "Erro na busca.");
+    } finally {
+      setBuscandoSabores(false);
+    }
+  }
+
+  async function carregar(q: { sku?: string; busca?: string }): Promise<boolean> {
     setCarregando(true);
     setErro(null);
     try {
@@ -130,9 +160,11 @@ export function CalculadoraClient() {
         }
         return novo;
       });
+      return true;
     } catch (e) {
       setEng(null);
       setErro(e instanceof Error ? e.message : "Erro ao buscar engenharia.");
+      return false;
     } finally {
       setCarregando(false);
     }
@@ -218,9 +250,15 @@ export function CalculadoraClient() {
                 ))}
               </select>
             ) : null}
-            <Input value={skuBusca} onChange={(e) => setSkuBusca(e.target.value)} placeholder="ou SKU/nome…" className="w-44" />
-            <Button size="sm" variant="ghost" onClick={() => carregar(skuBusca.includes(" ") ? { busca: skuBusca } : { sku: skuBusca })} disabled={carregando}>
-              Carregar
+            <Input
+              value={skuBusca}
+              onChange={(e) => setSkuBusca(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
+              placeholder="🔎 Pesquisar por nome, SKU ou sabor…"
+              className="w-72"
+            />
+            <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
+              {buscandoSabores ? "Buscando…" : "Buscar"}
             </Button>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
