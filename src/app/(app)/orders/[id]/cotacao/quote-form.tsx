@@ -249,19 +249,19 @@ export function QuoteForm({
                         isBest ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"
                       }`}
                     >
-                      <span className="flex items-center gap-1.5 font-semibold text-[#0f172a]">
+                      <span className="flex items-center gap-1.5 font-semibold text-white">
                         {r.label}
                         {isBest ? <span className="rounded bg-emerald-600 px-1.5 text-[10px] font-semibold text-white">MAIS BARATA</span> : null}
                       </span>
                       {r.ok ? (
                         <span className="text-right">
-                          <span className={`font-bold ${isBest ? "text-[#047857]" : "text-[#0f172a]"}`}>
+                          <span className={`font-bold ${isBest ? "text-emerald-400" : "text-white"}`}>
                             {r.totalFrete != null ? brl(r.totalFrete) : "—"}
                           </span>
-                          <span className="block text-[11px] font-medium text-[#475569]">{r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
+                          <span className="block text-[11px] font-medium text-slate-300">{r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
                         </span>
                       ) : (
-                        <span className="max-w-[55%] truncate text-right text-xs font-medium text-[#b45309]">{r.error}</span>
+                        <span className="max-w-[55%] truncate text-right text-xs font-medium text-amber-400">{r.error}</span>
                       )}
                     </div>
                   );

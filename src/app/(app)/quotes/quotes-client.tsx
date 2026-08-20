@@ -531,18 +531,18 @@ Observações: ${obs || "—"}`;
                         onChange={() => escolher(r)}
                         className="accent-brand-700"
                       />
-                      <span className="min-w-[88px] font-semibold text-[#0f172a]">{r.label}</span>
+                      <span className="min-w-[88px] font-semibold text-white">{r.label}</span>
                       {r.ok ? (
                         <>
-                          <span className="font-bold text-[#047857]">
+                          <span className="font-bold text-emerald-400">
                             {r.totalFrete != null ? brl(r.totalFrete) : "—"}
                           </span>
-                          <span className="font-medium text-[#475569]">· {r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
+                          <span className="font-medium text-slate-300">· {r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
                           {isCheapest ? <span className="rounded bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700">mais barato</span> : null}
                           {isFastest && !isCheapest ? <span className="rounded bg-sky-100 px-1.5 text-[10px] font-medium text-sky-700">mais rápido</span> : null}
                         </>
                       ) : (
-                        <span className="text-xs font-medium text-[#b45309]">{r.error}</span>
+                        <span className="text-xs font-medium text-amber-400">{r.error}</span>
                       )}
                     </label>
                   );
