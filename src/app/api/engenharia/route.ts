@@ -32,15 +32,16 @@ export async function GET(req: Request) {
       try {
         const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${i.id}`, {}, empresa);
         const jd = await rd.json().catch(() => null) as any;
-        const bomLista: any[] = jd?.data?.producao?.produtos ?? [];
+        const raw = jd?.data ?? jd ?? {};
+        const bomLista: any[] = raw?.producao?.produtos ?? [];
         if (Array.isArray(bomLista) && bomLista.length > 0) {
           sabores.push({ sku: String(i.sku), descricao: i.descricao });
         }
       } catch { /* segue */ }
-      await pausaMs(100);
+      await pausaMs(250); // ritmo seguro p/ o rate limit do Tiny
     }
     sabores.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
-    return ok({ sabores });
+    return ok({ versaoLista: "v2", sabores });
   }
   if (!sku && !busca) return fail("Informe ?sku=, ?busca= ou ?lista=", 400);
 
