@@ -171,6 +171,11 @@ export async function quoteBrudam(params: QuoteParams): Promise<QuoteOutcome> {
     try { json = JSON.parse(texto); } catch { /* mantém texto cru para o erro */ }
     if (!res.ok) {
       const msgApi = json?.data?.message ?? json?.message ?? texto.slice(0, 300);
+      // "Nenhum serviço encontrado" com o cServ correto configurado = a rota/
+      // região não é atendida pela Multitrans.
+      if (/nenhum servi\u00e7o encontrado|nenhum serviço encontrado/i.test(String(msgApi))) {
+        return { ok: false, error: "A Multitrans não atende esta região.", status: res.status, detail: json };
+      }
       // Quando a mensagem é genérica ("Erro nos dados enviados"), anexa o corpo
       // do `data` cru — é onde a Multi detalha o campo problemático.
       let extra = "";

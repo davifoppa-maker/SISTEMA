@@ -247,21 +247,21 @@ export function QuoteForm({
                       key={r.id}
                       className={`flex items-center justify-between gap-2 rounded-lg border p-2 ${
                         isBest ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"
-                      } ${!r.ok ? "opacity-70" : ""}`}
+                      }`}
                     >
-                      <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                      <span className="flex items-center gap-1.5 font-semibold text-[#0f172a]">
                         {r.label}
                         {isBest ? <span className="rounded bg-emerald-600 px-1.5 text-[10px] font-semibold text-white">MAIS BARATA</span> : null}
                       </span>
                       {r.ok ? (
                         <span className="text-right">
-                          <span className={`font-semibold ${isBest ? "text-emerald-700" : "text-slate-700"}`}>
+                          <span className={`font-bold ${isBest ? "text-[#047857]" : "text-[#0f172a]"}`}>
                             {r.totalFrete != null ? brl(r.totalFrete) : "—"}
                           </span>
-                          <span className="block text-[11px] text-slate-500">{r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
+                          <span className="block text-[11px] font-medium text-[#475569]">{r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
                         </span>
                       ) : (
-                        <span className="max-w-[55%] truncate text-right text-xs text-amber-700">{r.error}</span>
+                        <span className="max-w-[55%] truncate text-right text-xs font-medium text-[#b45309]">{r.error}</span>
                       )}
                     </div>
                   );

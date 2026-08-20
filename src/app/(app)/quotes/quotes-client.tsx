@@ -520,8 +520,8 @@ Observações: ${obs || "—"}`;
                     <label
                       key={r.id}
                       className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-sm ${
-                        selected === r.id ? "border-brand-600 bg-white" : "border-slate-200 bg-white/60"
-                      } ${!r.ok ? "opacity-70" : ""}`}
+                        selected === r.id ? "border-brand-600 bg-white" : "border-slate-300 bg-white"
+                      }`}
                     >
                       <input
                         type="radio"
@@ -531,18 +531,18 @@ Observações: ${obs || "—"}`;
                         onChange={() => escolher(r)}
                         className="accent-brand-700"
                       />
-                      <span className="min-w-[88px] font-medium text-slate-700">{r.label}</span>
+                      <span className="min-w-[88px] font-semibold text-[#0f172a]">{r.label}</span>
                       {r.ok ? (
                         <>
-                          <span className="font-semibold text-emerald-700">
+                          <span className="font-bold text-[#047857]">
                             {r.totalFrete != null ? brl(r.totalFrete) : "—"}
                           </span>
-                          <span className="text-slate-500">· {r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
+                          <span className="font-medium text-[#475569]">· {r.prazo != null ? `${r.prazo} dia(s)` : "prazo —"}</span>
                           {isCheapest ? <span className="rounded bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700">mais barato</span> : null}
                           {isFastest && !isCheapest ? <span className="rounded bg-sky-100 px-1.5 text-[10px] font-medium text-sky-700">mais rápido</span> : null}
                         </>
                       ) : (
-                        <span className="text-xs text-amber-700">{r.error}</span>
+                        <span className="text-xs font-medium text-[#b45309]">{r.error}</span>
                       )}
                     </label>
                   );
