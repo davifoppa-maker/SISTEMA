@@ -70,6 +70,7 @@ const nav = [
     children: [
       { href: "/orders/margem", label: "Margem de pedidos" },
       { href: "/financial/custos", label: "Custos do estoque" },
+      { href: "/calculadora", label: "Calculadora de custos" },
     ],
   },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
