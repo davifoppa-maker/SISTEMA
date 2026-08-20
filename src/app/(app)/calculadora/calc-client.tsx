@@ -8,21 +8,6 @@ import { Button } from "@/components/ui/button";
 interface Insumo { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number; custoOlist: number | null }
 interface Engenharia { produto: { sku?: string; descricao?: string }; unidadesLote: number; insumos: Insumo[] }
 
-// Sabores FIXOS (SKU confirmado → carrega direto, sem busca). Milk/Beef ainda
-// usam busca dinâmica no Olist — fixar quando os SKUs forem confirmados.
-const FAMILIAS: { rotulo: string; termo?: string; sabores?: { sku: string; descricao: string }[] }[] = [
-  {
-    rotulo: "Hydro",
-    sabores: [
-      { sku: "NYER260432", descricao: "Chocolate" },
-      { sku: "NYER260430", descricao: "Chocolate Maltado" },
-      { sku: "NYER260434", descricao: "Morango" },
-      { sku: "NYER260431", descricao: "Original" },
-    ],
-  },
-  { rotulo: "Milk", termo: "milk" },
-  { rotulo: "Beef", termo: "beef" },
-];
 
 const LS_PRECOS = "nyer:precosInsumos";
 const LS_SIMULADOR = "nyer:simuladorCustos2";
@@ -33,7 +18,6 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 export function CalculadoraClient() {
   const [skuBusca, setSkuBusca] = useState("NYER260430");
   const [sabores, setSabores] = useState<{ sku: string; descricao: string }[]>([]);
-  const [familiaAtiva, setFamiliaAtiva] = useState<string | null>(null);
   const [buscandoSabores, setBuscandoSabores] = useState(false);
   const [eng, setEng] = useState<Engenharia | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -87,30 +71,6 @@ export function CalculadoraClient() {
     } catch { /* */ }
   }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota]);
 
-  // Lista os SABORES da família (cada sabor tem engenharia própria).
-  async function listarSabores(f: { rotulo: string; termo?: string; sabores?: { sku: string; descricao: string }[] }) {
-    setFamiliaAtiva(f.rotulo);
-    setErro(null);
-    // Sabores fixos (SKUs confirmados): mostra na hora, sem consulta.
-    if (f.sabores) {
-      setSabores(f.sabores);
-      return;
-    }
-    setBuscandoSabores(true);
-    try {
-      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(f.termo ?? f.rotulo)}`);
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar sabores.");
-      setSabores(j.data.sabores ?? []);
-      if ((j.data.sabores ?? []).length === 0) setErro(`Nenhum produto encontrado para "${f.rotulo}".`);
-    } catch (e) {
-      setSabores([]);
-      setErro(e instanceof Error ? e.message : "Erro ao listar sabores.");
-    } finally {
-      setBuscandoSabores(false);
-    }
-  }
-
   // Busca por nome/SKU/sabor: SKU exato carrega direto; senão lista os
   // produtos COM engenharia que casam com o termo, para clicar.
   async function buscar() {
@@ -124,7 +84,6 @@ export function CalculadoraClient() {
     }
     // Busca por termo → lista clicável.
     setBuscandoSabores(true);
-    setFamiliaAtiva(null);
     try {
       const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(termo)}`);
       const j = await r.json();
@@ -232,11 +191,6 @@ export function CalculadoraClient() {
       <Card>
         <CardContent className="space-y-3 pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            {FAMILIAS.map((f) => (
-              <Button key={f.rotulo} size="sm" variant={familiaAtiva === f.rotulo ? "primary" : "secondary"} onClick={() => listarSabores(f)}>
-                {f.rotulo}
-              </Button>
-            ))}
             {buscandoSabores ? <span className="text-xs text-slate-400">listando sabores…</span> : null}
             {sabores.length > 0 ? (
               <select
@@ -254,7 +208,7 @@ export function CalculadoraClient() {
               value={skuBusca}
               onChange={(e) => setSkuBusca(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-              placeholder="🔎 Pesquisar por nome, SKU ou sabor…"
+              placeholder="🔎 Pesquisar produto com engenharia (nome, SKU ou sabor)…"
               className="w-72"
             />
             <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
