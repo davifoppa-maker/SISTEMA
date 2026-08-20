@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-interface Insumo { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number }
+interface Insumo { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number; custoOlist: number | null }
 interface Engenharia { produto: { sku?: string; descricao?: string }; unidadesLote: number; insumos: Insumo[] }
 
 const PRODUTOS_SUGERIDOS = [
@@ -14,8 +14,8 @@ const PRODUTOS_SUGERIDOS = [
   { rotulo: "Beef", busca: "beef" },
 ];
 
-const LS_PRECOS = "nyer:precosInsumos";      // { [skuInsumo]: precoUnit }
-const LS_SIMULADOR = "nyer:simuladorCustos"; // parâmetros do simulador
+const LS_PRECOS = "nyer:precosInsumos";
+const LS_SIMULADOR = "nyer:simuladorCustos2";
 
 const num = (s: string) => Number(String(s).replace(",", ".")) || 0;
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -26,40 +26,50 @@ export function CalculadoraClient() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Preços dos insumos (R$ pela unidade da engenharia: kg p/ pós, un p/ pouch).
+  // Preços dos insumos: o Olist preenche; edição manual sobrepõe (salva local).
   const [precos, setPrecos] = useState<Record<string, string>>({});
-  const [perdaPct, setPerdaPct] = useState("3");       // perda típica do lote
-  const [outrosUnit, setOutrosUnit] = useState("0");   // mão de obra/energia por unidade
+  const [perdaPct, setPerdaPct] = useState("3");
+  const [caixaUnit, setCaixaUnit] = useState("0,90"); // caixa por produto
+  const [fitaUnit, setFitaUnit] = useState("0,10");   // fita por produto
+  const [outrosUnit, setOutrosUnit] = useState("0");  // mão de obra/energia etc.
 
-  // Simulador de venda.
+  // Simulador — defaults da operação (tudo editável, flutua).
   const [precoVenda, setPrecoVenda] = useState("");
-  const [impostoPct, setImpostoPct] = useState("12");
-  const [cartaoPct, setCartaoPct] = useState("4");
-  const [comissaoPct, setComissaoPct] = useState("0");
-  const [fixoPct, setFixoPct] = useState("0");
-  const [fretePorUnid, setFretePorUnid] = useState("0");
+  const [impostoPct, setImpostoPct] = useState("21,5"); // débito na venda (crédito de compra ~20,5%)
+  const [fixoPct, setFixoPct] = useState("3,5");
+  const [temComissao, setTemComissao] = useState(true);
+  const [comissaoPct, setComissaoPct] = useState("5");
+  const [fretePct, setFretePct] = useState("5");        // % do faturamento (meia nota: 4%)
+  const [cartaoVistaPct, setCartaoVistaPct] = useState("1,61");
+  const [cartao4xPct, setCartao4xPct] = useState("4,03"); // 1,61%/mês × prazo médio 2,5 meses
   const [margemAlvo, setMargemAlvo] = useState("25");
 
-  // Carrega/salva estado no navegador (preços do mês + parâmetros).
   useEffect(() => {
     try {
       const p = JSON.parse(localStorage.getItem(LS_PRECOS) ?? "{}");
       if (p && typeof p === "object") setPrecos(p);
       const s = JSON.parse(localStorage.getItem(LS_SIMULADOR) ?? "{}");
-      if (s.impostoPct) setImpostoPct(s.impostoPct);
-      if (s.cartaoPct) setCartaoPct(s.cartaoPct);
-      if (s.comissaoPct) setComissaoPct(s.comissaoPct);
-      if (s.fixoPct) setFixoPct(s.fixoPct);
-      if (s.perdaPct) setPerdaPct(s.perdaPct);
-      if (s.margemAlvo) setMargemAlvo(s.margemAlvo);
+      for (const [k, setter] of Object.entries({
+        impostoPct: setImpostoPct, fixoPct: setFixoPct, comissaoPct: setComissaoPct,
+        fretePct: setFretePct, cartaoVistaPct: setCartaoVistaPct, cartao4xPct: setCartao4xPct,
+        perdaPct: setPerdaPct, margemAlvo: setMargemAlvo, caixaUnit: setCaixaUnit, fitaUnit: setFitaUnit,
+      } as Record<string, (v: string) => void>)) {
+        if (s[k]) setter(s[k]);
+      }
+      if (typeof s.temComissao === "boolean") setTemComissao(s.temComissao);
     } catch { /* primeira visita */ }
   }, []);
   useEffect(() => {
-    try { localStorage.setItem(LS_PRECOS, JSON.stringify(precos)); } catch { /* cheio */ }
+    try { localStorage.setItem(LS_PRECOS, JSON.stringify(precos)); } catch { /* */ }
   }, [precos]);
   useEffect(() => {
-    try { localStorage.setItem(LS_SIMULADOR, JSON.stringify({ impostoPct, cartaoPct, comissaoPct, fixoPct, perdaPct, margemAlvo })); } catch { /* */ }
-  }, [impostoPct, cartaoPct, comissaoPct, fixoPct, perdaPct, margemAlvo]);
+    try {
+      localStorage.setItem(LS_SIMULADOR, JSON.stringify({
+        impostoPct, fixoPct, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct,
+        perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao,
+      }));
+    } catch { /* */ }
+  }, [impostoPct, fixoPct, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao]);
 
   async function carregar(q: { sku?: string; busca?: string }) {
     setCarregando(true);
@@ -69,7 +79,17 @@ export function CalculadoraClient() {
       const r = await fetch(`/api/engenharia?${qs}`);
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao buscar engenharia.");
-      setEng(j.data);
+      const dados: Engenharia = j.data;
+      setEng(dados);
+      // Custos do Olist preenchem o que estiver vazio (manual tem prioridade).
+      setPrecos((prev) => {
+        const novo = { ...prev };
+        for (const i of dados.insumos) {
+          const k = i.sku ?? i.descricao;
+          if (!novo[k] && i.custoOlist != null) novo[k] = String(i.custoOlist).replace(".", ",");
+        }
+        return novo;
+      });
     } catch (e) {
       setEng(null);
       setErro(e instanceof Error ? e.message : "Erro ao buscar engenharia.");
@@ -78,7 +98,17 @@ export function CalculadoraClient() {
     }
   }
 
-  // Custo do produto: Σ (qtd/un × preço) × (1 + perda) + outros custos unitários.
+  function usarCustosOlist() {
+    if (!eng) return;
+    setPrecos((prev) => {
+      const novo = { ...prev };
+      for (const i of eng.insumos) {
+        if (i.custoOlist != null) novo[i.sku ?? i.descricao] = String(i.custoOlist).replace(".", ",");
+      }
+      return novo;
+    });
+  }
+
   const custo = useMemo(() => {
     if (!eng) return null;
     let materiais = 0;
@@ -89,80 +119,76 @@ export function CalculadoraClient() {
       materiais += i.qtdPorUnidade * p;
     }
     const comPerda = materiais * (1 + num(perdaPct) / 100);
-    const total = comPerda + num(outrosUnit);
-    return { materiais, comPerda, total, semPreco };
-  }, [eng, precos, perdaPct, outrosUnit]);
+    const embalagem = num(caixaUnit) + num(fitaUnit);
+    const total = comPerda + embalagem + num(outrosUnit);
+    return { materiais, comPerda, embalagem, total, semPreco };
+  }, [eng, precos, perdaPct, caixaUnit, fitaUnit, outrosUnit]);
 
-  // Simulador: vendendo a X → o que sai e o que sobra.
-  const sim = useMemo(() => {
+  // Simula um cenário (dada a taxa de cartão).
+  function simula(cartaoPct: number) {
     const preco = num(precoVenda);
     if (!preco || !custo) return null;
     const imposto = preco * (num(impostoPct) / 100);
-    const cartao = preco * (num(cartaoPct) / 100);
-    const comissao = preco * (num(comissaoPct) / 100);
+    const cartao = preco * (cartaoPct / 100);
+    const comissao = temComissao ? preco * (num(comissaoPct) / 100) : 0;
     const fixo = preco * (num(fixoPct) / 100);
-    const frete = num(fretePorUnid);
+    const frete = preco * (num(fretePct) / 100);
     const lucro = preco - imposto - cartao - comissao - fixo - frete - custo.total;
-    const margem = (lucro / preco) * 100;
-    return { preco, imposto, cartao, comissao, fixo, frete, lucro, margem };
-  }, [precoVenda, impostoPct, cartaoPct, comissaoPct, fixoPct, fretePorUnid, custo]);
+    return { imposto, cartao, comissao, fixo, frete, lucro, margem: (lucro / preco) * 100 };
+  }
+  const simVista = useMemo(() => simula(num(cartaoVistaPct)), [precoVenda, impostoPct, cartaoVistaPct, comissaoPct, temComissao, fixoPct, fretePct, custo]);
+  const sim4x = useMemo(() => simula(num(cartao4xPct)), [precoVenda, impostoPct, cartao4xPct, comissaoPct, temComissao, fixoPct, fretePct, custo]);
 
-  // Preço mínimo para a margem alvo: preço = (custo+frete) / (1 - %taxas - %alvo).
-  const precoAlvo = useMemo(() => {
+  // Preço mínimo p/ margem alvo (arredondado p/ cima em 0,10).
+  function alvo(cartaoPct: number): number | null {
     if (!custo) return null;
-    const taxas = (num(impostoPct) + num(cartaoPct) + num(comissaoPct) + num(fixoPct)) / 100;
-    const alvo = num(margemAlvo) / 100;
-    const denom = 1 - taxas - alvo;
+    const taxas = (num(impostoPct) + cartaoPct + (temComissao ? num(comissaoPct) : 0) + num(fixoPct) + num(fretePct)) / 100;
+    const denom = 1 - taxas - num(margemAlvo) / 100;
     if (denom <= 0) return null;
-    return (custo.total + num(fretePorUnid)) / denom;
-  }, [custo, impostoPct, cartaoPct, comissaoPct, fixoPct, fretePorUnid, margemAlvo]);
+    return Math.ceil((custo.total / denom) * 10) / 10;
+  }
+  const alvoVista = useMemo(() => alvo(num(cartaoVistaPct)), [custo, impostoPct, cartaoVistaPct, comissaoPct, temComissao, fixoPct, fretePct, margemAlvo]);
+  const alvo4x = useMemo(() => alvo(num(cartao4xPct)), [custo, impostoPct, cartao4xPct, comissaoPct, temComissao, fixoPct, fretePct, margemAlvo]);
 
   return (
     <div className="space-y-4">
-      {/* Seleção do produto */}
+      {/* Produto */}
       <Card>
         <CardContent className="space-y-3 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             {PRODUTOS_SUGERIDOS.map((p) => (
-              <Button key={p.rotulo} size="sm" variant="secondary" onClick={() => carregar(p)}>
-                {p.rotulo}
-              </Button>
+              <Button key={p.rotulo} size="sm" variant="secondary" onClick={() => carregar(p)}>{p.rotulo}</Button>
             ))}
-            <Input
-              value={skuBusca}
-              onChange={(e) => setSkuBusca(e.target.value)}
-              placeholder="SKU ou nome do produto…"
-              className="w-56"
-            />
+            <Input value={skuBusca} onChange={(e) => setSkuBusca(e.target.value)} placeholder="SKU ou nome…" className="w-52" />
             <Button size="sm" onClick={() => carregar(skuBusca.includes(" ") ? { busca: skuBusca } : { sku: skuBusca })} disabled={carregando}>
-              {carregando ? "Buscando…" : "Carregar engenharia"}
+              {carregando ? "Buscando… (~10s)" : "Carregar engenharia"}
             </Button>
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}
-          <p className="text-xs text-slate-500">
-            A engenharia vem do Olist em tempo real. Os preços dos insumos ficam salvos neste navegador — atualize-os mensalmente.
-          </p>
         </CardContent>
       </Card>
 
       {eng ? (
         <>
-          {/* Engenharia + preços dos insumos */}
+          {/* Insumos + custos */}
           <Card>
             <CardContent className="p-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 px-4 py-3">
                 <span className="text-sm font-bold text-white">🏭 {eng.produto.descricao}</span>
-                <span className="text-xs text-slate-400">Lote de {eng.unidadesLote} unidades · consumo por unidade abaixo</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">Lote de {eng.unidadesLote} un</span>
+                  <Button size="sm" variant="ghost" onClick={usarCustosOlist}>↻ Recarregar custos do Olist</Button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-left text-xs text-slate-400">
                       <th className="px-4 py-2">Insumo</th>
-                      <th className="px-4 py-2 text-right">Qtd/lote</th>
-                      <th className="px-4 py-2 text-right">Qtd/unidade</th>
-                      <th className="px-4 py-2 text-right">Preço do insumo (R$)</th>
-                      <th className="px-4 py-2 text-right">Custo/unidade</th>
+                      <th className="px-4 py-2 text-right">Qtd/un</th>
+                      <th className="px-4 py-2 text-right">Custo Olist</th>
+                      <th className="px-4 py-2 text-right">Preço usado (R$)</th>
+                      <th className="px-4 py-2 text-right">Custo/un</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -172,16 +198,10 @@ export function CalculadoraClient() {
                       return (
                         <tr key={key} className={p <= 0 ? "bg-amber-500/5" : ""}>
                           <td className="px-4 py-1.5 text-slate-100">{i.descricao} <span className="font-mono text-[10px] text-slate-500">{i.sku}</span></td>
-                          <td className="px-4 py-1.5 text-right text-slate-400">{i.qtdLote}</td>
                           <td className="px-4 py-1.5 text-right text-slate-300">{i.qtdPorUnidade}</td>
+                          <td className="px-4 py-1.5 text-right text-xs text-slate-400">{i.custoOlist != null ? brl(i.custoOlist) : "sem custo no Olist"}</td>
                           <td className="px-4 py-1.5 text-right">
-                            <Input
-                              value={precos[key] ?? ""}
-                              onChange={(e) => setPrecos((prev) => ({ ...prev, [key]: e.target.value }))}
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              className={`ml-auto w-24 text-right ${p <= 0 ? "border-amber-400" : ""}`}
-                            />
+                            <Input value={precos[key] ?? ""} onChange={(e) => setPrecos((prev) => ({ ...prev, [key]: e.target.value }))} inputMode="decimal" placeholder="0,00" className={`ml-auto w-24 text-right ${p <= 0 ? "border-amber-400" : ""}`} />
                           </td>
                           <td className="px-4 py-1.5 text-right font-medium text-slate-200">{p > 0 ? brl(i.qtdPorUnidade * p) : "—"}</td>
                         </tr>
@@ -194,15 +214,19 @@ export function CalculadoraClient() {
                 <label className="text-xs text-slate-400">Perda do lote (%)
                   <Input value={perdaPct} onChange={(e) => setPerdaPct(e.target.value)} inputMode="decimal" className="mt-1 w-20" />
                 </label>
-                <label className="text-xs text-slate-400">Outros custos/un (mão de obra, energia…)
-                  <Input value={outrosUnit} onChange={(e) => setOutrosUnit(e.target.value)} inputMode="decimal" className="mt-1 w-24" />
+                <label className="text-xs text-slate-400">Caixa (R$/un)
+                  <Input value={caixaUnit} onChange={(e) => setCaixaUnit(e.target.value)} inputMode="decimal" className="mt-1 w-20" />
+                </label>
+                <label className="text-xs text-slate-400">Fita (R$/un)
+                  <Input value={fitaUnit} onChange={(e) => setFitaUnit(e.target.value)} inputMode="decimal" className="mt-1 w-20" />
+                </label>
+                <label className="text-xs text-slate-400">Outros (R$/un)
+                  <Input value={outrosUnit} onChange={(e) => setOutrosUnit(e.target.value)} inputMode="decimal" className="mt-1 w-20" />
                 </label>
                 {custo ? (
                   <div className="ml-auto text-right">
-                    {custo.semPreco > 0 ? (
-                      <p className="text-xs text-amber-400">⚠ {custo.semPreco} insumo(s) sem preço — custo parcial</p>
-                    ) : null}
-                    <p className="text-xs text-slate-400">Materiais {brl(custo.materiais)} + perda = {brl(custo.comPerda)}</p>
+                    {custo.semPreco > 0 ? <p className="text-xs text-amber-400">⚠ {custo.semPreco} insumo(s) sem preço — custo parcial</p> : null}
+                    <p className="text-xs text-slate-400">Materiais {brl(custo.materiais)} + perda → {brl(custo.comPerda)} + embalagem {brl(custo.embalagem)}</p>
                     <p className="text-lg font-bold text-white">Custo por unidade: <span className="text-emerald-400">{brl(custo.total)}</span></p>
                   </div>
                 ) : null}
@@ -210,45 +234,66 @@ export function CalculadoraClient() {
             </CardContent>
           </Card>
 
-          {/* Simulador de venda */}
+          {/* Simulador */}
           <Card>
             <CardContent className="space-y-3 pt-4">
-              <p className="text-sm font-bold text-white">💰 Simulador: vendendo a…</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <p className="text-sm font-bold text-white">💰 Formação de preço</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
                 <label className="text-xs text-slate-400">Preço de venda (R$)
                   <Input value={precoVenda} onChange={(e) => setPrecoVenda(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1" />
                 </label>
-                <label className="text-xs text-slate-400">Imposto (%)
+                <label className="text-xs text-slate-400">Imposto venda (%)
                   <Input value={impostoPct} onChange={(e) => setImpostoPct(e.target.value)} inputMode="decimal" className="mt-1" />
-                </label>
-                <label className="text-xs text-slate-400">Cartão/gateway (%)
-                  <Input value={cartaoPct} onChange={(e) => setCartaoPct(e.target.value)} inputMode="decimal" className="mt-1" />
-                </label>
-                <label className="text-xs text-slate-400">Comissão (%)
-                  <Input value={comissaoPct} onChange={(e) => setComissaoPct(e.target.value)} inputMode="decimal" className="mt-1" />
+                  <span className="text-[10px] text-slate-500">crédito compra ~20,5%</span>
                 </label>
                 <label className="text-xs text-slate-400">Custo fixo (%)
                   <Input value={fixoPct} onChange={(e) => setFixoPct(e.target.value)} inputMode="decimal" className="mt-1" />
                 </label>
-                <label className="text-xs text-slate-400">Frete por unid. (R$)
-                  <Input value={fretePorUnid} onChange={(e) => setFretePorUnid(e.target.value)} inputMode="decimal" className="mt-1" />
+                <label className="text-xs text-slate-400">Frete (% fat.)
+                  <Input value={fretePct} onChange={(e) => setFretePct(e.target.value)} inputMode="decimal" className="mt-1" />
+                  <span className="flex gap-1 pt-1">
+                    <button type="button" className="rounded bg-white/10 px-1.5 text-[10px] text-slate-300" onClick={() => setFretePct("5")}>normal 5%</button>
+                    <button type="button" className="rounded bg-white/10 px-1.5 text-[10px] text-slate-300" onClick={() => setFretePct("4")}>meia nota 4%</button>
+                  </span>
+                </label>
+                <label className="text-xs text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={temComissao} onChange={(e) => setTemComissao(e.target.checked)} className="accent-violet-600" />
+                    Comissão (%)
+                  </span>
+                  <Input value={comissaoPct} onChange={(e) => setComissaoPct(e.target.value)} inputMode="decimal" disabled={!temComissao} className="mt-1" />
+                </label>
+                <label className="text-xs text-slate-400">Cartão à vista (%)
+                  <Input value={cartaoVistaPct} onChange={(e) => setCartaoVistaPct(e.target.value)} inputMode="decimal" className="mt-1" />
+                </label>
+                <label className="text-xs text-slate-400">Cartão até 4x (%)
+                  <Input value={cartao4xPct} onChange={(e) => setCartao4xPct(e.target.value)} inputMode="decimal" className="mt-1" />
+                  <span className="text-[10px] text-slate-500">1,61%/mês × prazo médio</span>
                 </label>
               </div>
 
-              {sim ? (
+              {simVista && sim4x && custo ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full max-w-xl text-sm">
+                  <table className="w-full max-w-2xl text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                        <th className="py-2"></th>
+                        <th className="py-2 text-right">💵 À vista</th>
+                        <th className="py-2 text-right">💳 Cartão até 4x</th>
+                      </tr>
+                    </thead>
                     <tbody className="divide-y divide-white/5">
-                      <tr><td className="py-1.5 text-slate-300">Preço de venda</td><td className="py-1.5 text-right font-medium text-white">{brl(sim.preco)}</td></tr>
-                      <tr><td className="py-1.5 text-slate-400">− Imposto ({impostoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(sim.imposto)}</td></tr>
-                      <tr><td className="py-1.5 text-slate-400">− Cartão ({cartaoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(sim.cartao)}</td></tr>
-                      {num(comissaoPct) > 0 ? <tr><td className="py-1.5 text-slate-400">− Comissão ({comissaoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(sim.comissao)}</td></tr> : null}
-                      {num(fixoPct) > 0 ? <tr><td className="py-1.5 text-slate-400">− Custo fixo ({fixoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(sim.fixo)}</td></tr> : null}
-                      {sim.frete > 0 ? <tr><td className="py-1.5 text-slate-400">− Frete</td><td className="py-1.5 text-right text-red-400">−{brl(sim.frete)}</td></tr> : null}
-                      <tr><td className="py-1.5 text-slate-400">− Custo do produto (engenharia)</td><td className="py-1.5 text-right text-red-400">−{brl(custo!.total)}</td></tr>
+                      <tr><td className="py-1.5 text-slate-300">Preço de venda</td><td className="py-1.5 text-right font-medium text-white">{brl(num(precoVenda))}</td><td className="py-1.5 text-right font-medium text-white">{brl(num(precoVenda))}</td></tr>
+                      <tr><td className="py-1.5 text-slate-400">− Imposto ({impostoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.imposto)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.imposto)}</td></tr>
+                      <tr><td className="py-1.5 text-slate-400">− Cartão</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.cartao)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.cartao)}</td></tr>
+                      {temComissao ? <tr><td className="py-1.5 text-slate-400">− Comissão ({comissaoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.comissao)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.comissao)}</td></tr> : null}
+                      <tr><td className="py-1.5 text-slate-400">− Custo fixo ({fixoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.fixo)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.fixo)}</td></tr>
+                      <tr><td className="py-1.5 text-slate-400">− Frete ({fretePct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.frete)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.frete)}</td></tr>
+                      <tr><td className="py-1.5 text-slate-400">− Custo do produto</td><td className="py-1.5 text-right text-red-400">−{brl(custo.total)}</td><td className="py-1.5 text-right text-red-400">−{brl(custo.total)}</td></tr>
                       <tr className="border-t border-white/20">
-                        <td className="py-2 font-bold text-white">Lucro por unidade</td>
-                        <td className={`py-2 text-right text-lg font-bold ${sim.lucro >= 0 ? "text-emerald-400" : "text-red-400"}`}>{brl(sim.lucro)} <span className="text-sm">({sim.margem.toFixed(1)}%)</span></td>
+                        <td className="py-2 font-bold text-white">Lucro / margem</td>
+                        <td className={`py-2 text-right font-bold ${simVista.lucro >= 0 ? "text-emerald-400" : "text-red-400"}`}>{brl(simVista.lucro)} ({simVista.margem.toFixed(1)}%)</td>
+                        <td className={`py-2 text-right font-bold ${sim4x.lucro >= 0 ? "text-emerald-400" : "text-red-400"}`}>{brl(sim4x.lucro)} ({sim4x.margem.toFixed(1)}%)</td>
                       </tr>
                     </tbody>
                   </table>
@@ -257,15 +302,15 @@ export function CalculadoraClient() {
                 <p className="text-xs text-slate-500">Preencha o preço de venda para simular.</p>
               )}
 
-              <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+              <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-3">
                 <label className="text-xs text-slate-400">Margem alvo (%)
                   <Input value={margemAlvo} onChange={(e) => setMargemAlvo(e.target.value)} inputMode="decimal" className="mt-1 w-20" />
                 </label>
-                {precoAlvo != null ? (
-                  <p className="text-sm text-slate-200">→ Preço mínimo para {margemAlvo}% de margem: <b className="text-emerald-400">{brl(precoAlvo)}</b></p>
-                ) : (
-                  <p className="text-xs text-amber-400">Taxas + margem alvo passam de 100% — impossível.</p>
-                )}
+                <div className="text-sm text-slate-200">
+                  {alvoVista != null ? <p>💵 À vista: preço mínimo <b className="text-emerald-400">{brl(alvoVista)}</b></p> : null}
+                  {alvo4x != null ? <p>💳 Até 4x: preço mínimo <b className="text-emerald-400">{brl(alvo4x)}</b></p> : null}
+                  {alvoVista == null && alvo4x == null ? <p className="text-xs text-amber-400">Taxas + margem alvo passam de 100%.</p> : null}
+                </div>
               </div>
             </CardContent>
           </Card>

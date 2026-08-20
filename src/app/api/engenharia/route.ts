@@ -2,7 +2,7 @@ import { ok, fail } from "@/lib/api";
 import { getTinyConfig, tinyFetch } from "@/lib/services/tiny-api";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Engenharia (BOM) de um produto FABRICADO via API do Olist, já convertida para
 // consumo POR UNIDADE. O lote é inferido pela quantidade da embalagem (pouch/
@@ -43,15 +43,32 @@ export async function GET(req: Request) {
   const qtds = bom.map((b) => Number(b.quantidade) || 0);
   const unidadesLote = Math.max(...qtds.filter((q) => Number.isInteger(q)), 1);
 
-  const insumos = bom.map((b) => {
+  // Busca o PREÇO DE CUSTO de cada insumo no cadastro do Olist (campo precos) —
+  // evita digitação manual; o usuário só sobrepõe quando quiser.
+  const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const insumos: { sku: string | null; descricao: string; qtdLote: number; qtdPorUnidade: number; custoOlist: number | null }[] = [];
+  for (const b of bom.slice(0, 30)) {
     const q = Number(b.quantidade) || 0;
-    return {
+    let custoOlist: number | null = null;
+    const insumoId = b.produto?.id;
+    if (insumoId) {
+      try {
+        const ri = await tinyFetch(`${c.apiBaseUrl}/produtos/${insumoId}`, {}, empresa);
+        const ji = await ri.json().catch(() => null) as any;
+        const precos = ji?.data?.precos ?? ji?.precos ?? {};
+        const cand = Number(precos.precoCusto ?? precos.preco_custo ?? precos.precoCustoMedio ?? precos.preco_custo_medio ?? 0);
+        if (Number.isFinite(cand) && cand > 0) custoOlist = cand;
+      } catch { /* segue sem custo */ }
+      await pausa(100);
+    }
+    insumos.push({
       sku: b.produto?.sku ?? null,
       descricao: b.produto?.descricao ?? "Insumo",
       qtdLote: q,
       qtdPorUnidade: Number((q / unidadesLote).toFixed(6)),
-    };
-  });
+      custoOlist,
+    });
+  }
 
   return ok({ produto: cab, unidadesLote, insumos });
 }
