@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { loadStoreFor } from "@/lib/db";
-import { fetchOrderWeight, isTinyConfigured } from "@/lib/services/tiny-api";
+import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { getBraspressConfig } from "@/lib/services/braspress";
 import { providerOptions } from "@/lib/services/freight/registry";
 import { calcularCubagem, cubagemParaLinhas } from "@/lib/services/freight/cubagem";
@@ -12,32 +11,28 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 10;
 
 export default async function CotacaoPage({ params }: { params: { id: string } }) {
-  const store = await loadStoreFor(["orders", "customers", "order_items"]);
-  const order = store.orders.find((o) => o.id === params.id);
+  // Consultas DIRECIONADAS (1 pedido) — antes carregava 3 tabelas inteiras.
+  const sb = getSupabaseAdmin();
+  const [{ data: order }, { data: orderItems }] = await Promise.all([
+    sb.from("orders").select("*").eq("id", params.id).maybeSingle(),
+    sb.from("order_items").select("sku, description, quantity").eq("order_id", params.id),
+  ]);
   if (!order) notFound();
-  const customer = store.customers.find((c) => c.id === order.customer_id);
+  const { data: customer } = order.customer_id
+    ? await sb.from("customers").select("name, document").eq("id", order.customer_id).maybeSingle()
+    : { data: null };
 
-  // Puxa peso, CEP de destino e volumes do Tiny (best-effort) para pré-preencher.
-  let peso: number | null = null;
-  let cepDestino: string | null = null;
-  let volumes: number | null = null;
-  if (order.tiny_id && isTinyConfigured()) {
-    try {
-      const w = await fetchOrderWeight(order.tiny_id, { companyId: (order as any).empresa ?? "nyer" });
-      peso = w.pesoBruto;
-      cepDestino = w.cepDestino;
-      volumes = w.volumes;
-    } catch {
-      // sem peso/CEP do Tiny — o usuário preenche manualmente
-    }
-  }
+  // Peso/CEP/volumes do Tiny NÃO bloqueiam mais a página — o QuoteForm busca em
+  // segundo plano (/api/orders/[id]/tiny-info) e preenche quando chegar.
+  const peso: number | null = null;
+  const cepDestino: string | null = null;
+  const volumes: number | null = null;
 
   const empresa = (order as any).empresa ?? "nyer";
   const cfg = getBraspressConfig(empresa);
 
   // Cubagem automática: itens do pedido → medidas por SKU → empacotamento nas caixas.
-  const itens = store.order_items
-    .filter((i) => i.order_id === order.id)
+  const itens = (orderItems ?? [])
     .map((i) => ({ sku: i.sku, descricao: i.description, quantidade: i.quantity }));
   const cubagem = calcularCubagem(itens);
   const totalCaixas = cubagem.caixas.reduce((s, c) => s + c.quantidade, 0);

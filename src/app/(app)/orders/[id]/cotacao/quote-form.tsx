@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -86,6 +86,27 @@ export function QuoteForm({
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<QuoteRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [buscandoTiny, setBuscandoTiny] = useState(false);
+
+  // CEP/peso do Tiny chegam em SEGUNDO PLANO (a página abre na hora e os campos
+  // se preenchem sozinhos quando a resposta vier).
+  useEffect(() => {
+    if (prefill.cepDestino && prefill.peso > 0) return; // já veio tudo
+    let vivo = true;
+    setBuscandoTiny(true);
+    fetch(`/api/orders/${orderId}/tiny-info`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!vivo || !j?.ok || !j.data) return;
+        const d = j.data as { cepDestino?: string | null; pesoBruto?: number | null; volumes?: number | null };
+        setCepDestino((prev) => prev || d.cepDestino || "");
+        setPeso((prev) => (prev && prev !== "0" ? prev : d.pesoBruto ? String(d.pesoBruto) : prev));
+      })
+      .catch(() => { /* usuário preenche manualmente */ })
+      .finally(() => { if (vivo) setBuscandoTiny(false); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const totalVolumes = sumVolumes(cubagem);
 
@@ -168,7 +189,7 @@ export function QuoteForm({
           <CardHeader><CardTitle>Destinatário (cliente do pedido)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="CNPJ/CPF destinatário"><Input value={cnpjDestinatario} onChange={(e) => setCnpjDestinatario(e.target.value)} /></Field>
-            <Field label="CEP destino"><Input value={cepDestino} onChange={(e) => setCepDestino(e.target.value)} /></Field>
+            <Field label={buscandoTiny && !cepDestino ? "CEP destino (buscando no Tiny…)" : "CEP destino"}><Input value={cepDestino} onChange={(e) => setCepDestino(e.target.value)} placeholder={buscandoTiny ? "buscando…" : ""} /></Field>
             <Field label="Valor da mercadoria (R$)"><Input value={vlrMercadoria} onChange={(e) => setVlrMercadoria(e.target.value)} inputMode="decimal" /></Field>
             <Field label="Peso total (kg)"><Input value={peso} onChange={(e) => setPeso(e.target.value)} inputMode="decimal" /></Field>
             <Field label="Modal">
