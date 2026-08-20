@@ -25,6 +25,11 @@ export function CalculadoraClient() {
 
   // Preços dos insumos: o Olist preenche; edição manual sobrepõe (salva local).
   const [precos, setPrecos] = useState<Record<string, string>>({});
+  // Rendimento do lote/batida (unidades). Inferido da engenharia; EDITÁVEL —
+  // engenharias sem a linha de embalagem (ex.: Beef) vêm por batida e o
+  // rendimento precisa ser informado. Salvo por produto.
+  const [unidadesLote, setUnidadesLote] = useState("1");
+  const [lotesSalvos, setLotesSalvos] = useState<Record<string, string>>({});
   const [perdaPct, setPerdaPct] = useState("3");
   const [caixaUnit, setCaixaUnit] = useState("0,90"); // caixa por produto
   const [fitaUnit, setFitaUnit] = useState("0,10");   // fita por produto
@@ -47,6 +52,8 @@ export function CalculadoraClient() {
     try {
       const p = JSON.parse(localStorage.getItem(LS_PRECOS) ?? "{}");
       if (p && typeof p === "object") setPrecos(p);
+      const lu = JSON.parse(localStorage.getItem("nyer:lotesProdutos") ?? "{}");
+      if (lu && typeof lu === "object") setLotesSalvos(lu);
       const s = JSON.parse(localStorage.getItem(LS_SIMULADOR) ?? "{}");
       for (const [k, setter] of Object.entries({
         impostoPct: setImpostoPct, creditoPct: setCreditoPct, fixoUnit: setFixoUnit, comissaoPct: setComissaoPct,
@@ -119,6 +126,8 @@ export function CalculadoraClient() {
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao buscar engenharia.");
       const dados: Engenharia = j.data;
       setEng(dados);
+      const skuProd = dados.produto.sku ?? "";
+      setUnidadesLote(lotesSalvos[skuProd] ?? String(dados.unidadesLote));
       // Custos do Olist preenchem o que estiver vazio (manual tem prioridade).
       setPrecos((prev) => {
         const novo = { ...prev };
@@ -138,6 +147,24 @@ export function CalculadoraClient() {
     }
   }
 
+  function mudarLote(v: string) {
+    setUnidadesLote(v);
+    const skuProd = eng?.produto.sku ?? "";
+    if (skuProd) {
+      setLotesSalvos((prev) => {
+        const novo = { ...prev, [skuProd]: v };
+        try { localStorage.setItem("nyer:lotesProdutos", JSON.stringify(novo)); } catch { /* */ }
+        return novo;
+      });
+    }
+  }
+
+  // Consumo por unidade recalculado com o rendimento EDITÁVEL do lote.
+  const porUnidade = (i: Insumo): number => {
+    const un = Math.max(num(unidadesLote), 1);
+    return i.qtdLote / un;
+  };
+
   function usarCustosOlist() {
     if (!eng) return;
     setPrecos((prev) => {
@@ -156,13 +183,13 @@ export function CalculadoraClient() {
     for (const i of eng.insumos) {
       const p = num(precos[i.sku ?? i.descricao] ?? "");
       if (p <= 0) semPreco++;
-      materiais += i.qtdPorUnidade * p;
+      materiais += porUnidade(i) * p;
     }
     const comPerda = materiais * (1 + num(perdaPct) / 100);
     const embalagem = num(caixaUnit) + num(fitaUnit);
     const total = comPerda + embalagem + num(outrosUnit);
     return { materiais, comPerda, embalagem, total, semPreco };
-  }, [eng, precos, perdaPct, caixaUnit, fitaUnit, outrosUnit]);
+  }, [eng, precos, perdaPct, caixaUnit, fitaUnit, outrosUnit, unidadesLote]);
 
   // Simula um cenário (dada a taxa de cartão).
   function simula(cartaoPct: number) {
@@ -237,7 +264,11 @@ export function CalculadoraClient() {
               <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 px-4 py-3">
                 <span className="text-sm font-bold text-white">🏭 {eng.produto.descricao}</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400">Lote de {eng.unidadesLote} un</span>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                    Rendimento do lote:
+                    <Input value={unidadesLote} onChange={(e) => mudarLote(e.target.value)} inputMode="numeric" className="h-8 w-20 text-right" />
+                    un
+                  </label>
                   <Button size="sm" variant="ghost" onClick={usarCustosOlist}>↻ Recarregar custos do Olist</Button>
                 </div>
               </div>
@@ -259,12 +290,12 @@ export function CalculadoraClient() {
                       return (
                         <tr key={key} className={p <= 0 ? "bg-amber-500/5" : ""}>
                           <td className="px-4 py-1.5 text-slate-100">{i.descricao} <span className="font-mono text-[10px] text-slate-500">{i.sku}</span></td>
-                          <td className="px-4 py-1.5 text-right text-slate-300">{i.qtdPorUnidade}</td>
+                          <td className="px-4 py-1.5 text-right text-slate-300">{Number(porUnidade(i).toFixed(6))}</td>
                           <td className="px-4 py-1.5 text-right text-xs text-slate-400">{i.custoOlist != null ? brl(i.custoOlist) : "sem custo no Olist"}</td>
                           <td className="px-4 py-1.5 text-right">
                             <Input value={precos[key] ?? ""} onChange={(e) => setPrecos((prev) => ({ ...prev, [key]: e.target.value }))} inputMode="decimal" placeholder="0,00" className={`ml-auto w-24 text-right ${p <= 0 ? "border-amber-400" : ""}`} />
                           </td>
-                          <td className="px-4 py-1.5 text-right font-medium text-slate-200">{p > 0 ? brl(i.qtdPorUnidade * p) : "—"}</td>
+                          <td className="px-4 py-1.5 text-right font-medium text-slate-200">{p > 0 ? brl(porUnidade(i) * p) : "—"}</td>
                         </tr>
                       );
                     })}
