@@ -42,6 +42,7 @@ export function CalculadoraClient() {
   const [creditoPct, setCreditoPct] = useState("20,5"); // crédito sobre a COMPRA dos insumos
   const [fixoUnit, setFixoUnit] = useState("3,50"); // R$ por unidade (flutua)
   const [temComissao, setTemComissao] = useState(true);
+  const [meiaNota, setMeiaNota] = useState(false); // imposto sobre 50% do faturamento; frete 4%
   const [comissaoPct, setComissaoPct] = useState("5");
   const [fretePct, setFretePct] = useState("5");        // % do faturamento (meia nota: 4%)
   const [cartaoVistaPct, setCartaoVistaPct] = useState("1,61");
@@ -61,6 +62,7 @@ export function CalculadoraClient() {
         if (s[k]) setter(s[k]);
       }
       if (typeof s.temComissao === "boolean") setTemComissao(s.temComissao);
+      if (typeof s.meiaNota === "boolean") setMeiaNota(s.meiaNota);
     } catch { /* primeira visita */ }
   }, []);
   useEffect(() => {
@@ -70,10 +72,10 @@ export function CalculadoraClient() {
     try {
       localStorage.setItem(LS_SIMULADOR, JSON.stringify({
         impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct,
-        perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao,
+        perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota,
       }));
     } catch { /* */ }
-  }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao]);
+  }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota]);
 
   // Lista os SABORES da família (cada sabor tem engenharia própria).
   async function listarSabores(f: { rotulo: string; termo: string }) {
@@ -151,7 +153,7 @@ export function CalculadoraClient() {
   function simula(cartaoPct: number) {
     const preco = num(precoVenda);
     if (!preco || !custo) return null;
-    const impostoDebito = preco * (num(impostoPct) / 100);
+    const impostoDebito = preco * (num(impostoPct) / 100) * (meiaNota ? 0.5 : 1);
     // CRÉDITO tributário sobre os MATERIAIS (insumos puros, sem perda/embalagem).
     const credito = custo.materiais * (num(creditoPct) / 100);
     const imposto = impostoDebito - credito; // imposto líquido
@@ -162,20 +164,20 @@ export function CalculadoraClient() {
     const lucro = preco - imposto - cartao - comissao - fixo - frete - custo.total;
     return { impostoDebito, credito, imposto, cartao, comissao, fixo, frete, lucro, margem: (lucro / preco) * 100 };
   }
-  const simVista = useMemo(() => simula(num(cartaoVistaPct)), [precoVenda, impostoPct, creditoPct, cartaoVistaPct, comissaoPct, temComissao, fixoUnit, fretePct, custo]);
-  const sim4x = useMemo(() => simula(num(cartao4xPct)), [precoVenda, impostoPct, creditoPct, cartao4xPct, comissaoPct, temComissao, fixoUnit, fretePct, custo]);
+  const simVista = useMemo(() => simula(num(cartaoVistaPct)), [precoVenda, impostoPct, creditoPct, cartaoVistaPct, comissaoPct, temComissao, meiaNota, fixoUnit, fretePct, custo]);
+  const sim4x = useMemo(() => simula(num(cartao4xPct)), [precoVenda, impostoPct, creditoPct, cartao4xPct, comissaoPct, temComissao, meiaNota, fixoUnit, fretePct, custo]);
 
   // Preço mínimo p/ margem alvo (arredondado p/ cima em 0,10).
   function alvo(cartaoPct: number): number | null {
     if (!custo) return null;
-    const taxas = (num(impostoPct) + cartaoPct + (temComissao ? num(comissaoPct) : 0) + num(fretePct)) / 100;
+    const taxas = (num(impostoPct) * (meiaNota ? 0.5 : 1) + cartaoPct + (temComissao ? num(comissaoPct) : 0) + num(fretePct)) / 100;
     const denom = 1 - taxas - num(margemAlvo) / 100;
     if (denom <= 0) return null;
     const credito = custo.materiais * (num(creditoPct) / 100);
     return Math.ceil(((custo.total + num(fixoUnit) - credito) / denom) * 10) / 10;
   }
-  const alvoVista = useMemo(() => alvo(num(cartaoVistaPct)), [custo, impostoPct, creditoPct, cartaoVistaPct, comissaoPct, temComissao, fixoUnit, fretePct, margemAlvo]);
-  const alvo4x = useMemo(() => alvo(num(cartao4xPct)), [custo, impostoPct, creditoPct, cartao4xPct, comissaoPct, temComissao, fixoUnit, fretePct, margemAlvo]);
+  const alvoVista = useMemo(() => alvo(num(cartaoVistaPct)), [custo, impostoPct, creditoPct, cartaoVistaPct, comissaoPct, temComissao, meiaNota, fixoUnit, fretePct, margemAlvo]);
+  const alvo4x = useMemo(() => alvo(num(cartao4xPct)), [custo, impostoPct, creditoPct, cartao4xPct, comissaoPct, temComissao, meiaNota, fixoUnit, fretePct, margemAlvo]);
 
   return (
     <div className="space-y-4">
@@ -184,7 +186,7 @@ export function CalculadoraClient() {
         <CardContent className="space-y-3 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             {FAMILIAS.map((f) => (
-              <Button key={f.rotulo} size="sm" variant={familiaAtiva === f.rotulo ? "default" : "secondary"} onClick={() => listarSabores(f)}>
+              <Button key={f.rotulo} size="sm" variant={familiaAtiva === f.rotulo ? "primary" : "secondary"} onClick={() => listarSabores(f)}>
                 {f.rotulo}
               </Button>
             ))}
@@ -285,8 +287,21 @@ export function CalculadoraClient() {
                 <label className="text-xs text-slate-400">Preço de venda (R$)
                   <Input value={precoVenda} onChange={(e) => setPrecoVenda(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1" />
                 </label>
-                <label className="text-xs text-slate-400">Imposto venda (%)
+                <label className="text-xs text-slate-400">
+                  <span className="flex items-center justify-between gap-1">
+                    Imposto venda (%)
+                    <span className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={meiaNota}
+                        onChange={(e) => { setMeiaNota(e.target.checked); setFretePct(e.target.checked ? "4" : "5"); }}
+                        className="accent-violet-600"
+                      />
+                      Meia nota
+                    </span>
+                  </span>
                   <Input value={impostoPct} onChange={(e) => setImpostoPct(e.target.value)} inputMode="decimal" className="mt-1" />
+                  {meiaNota ? <span className="text-[10px] text-amber-400">incide sobre 50% → efetivo {(num(impostoPct) / 2).toFixed(2).replace(".", ",")}%</span> : null}
                 </label>
                 <label className="text-xs text-slate-400">Crédito compra (%)
                   <Input value={creditoPct} onChange={(e) => setCreditoPct(e.target.value)} inputMode="decimal" className="mt-1" />
@@ -330,7 +345,7 @@ export function CalculadoraClient() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       <tr><td className="py-1.5 text-slate-300">Preço de venda</td><td className="py-1.5 text-right font-medium text-white">{brl(num(precoVenda))}</td><td className="py-1.5 text-right font-medium text-white">{brl(num(precoVenda))}</td></tr>
-                      <tr><td className="py-1.5 text-slate-400">− Imposto venda ({impostoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.impostoDebito)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.impostoDebito)}</td></tr>
+                      <tr><td className="py-1.5 text-slate-400">− Imposto venda ({meiaNota ? `meia nota · ${(num(impostoPct) / 2).toFixed(2).replace(".", ",")}` : impostoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.impostoDebito)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.impostoDebito)}</td></tr>
                       <tr><td className="py-1.5 text-slate-400">+ Crédito compra ({creditoPct}%)</td><td className="py-1.5 text-right text-emerald-400">+{brl(simVista.credito)}</td><td className="py-1.5 text-right text-emerald-400">+{brl(sim4x.credito)}</td></tr>
                       <tr><td className="py-1.5 text-slate-400">− Cartão</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.cartao)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.cartao)}</td></tr>
                       {temComissao ? <tr><td className="py-1.5 text-slate-400">− Comissão ({comissaoPct}%)</td><td className="py-1.5 text-right text-red-400">−{brl(simVista.comissao)}</td><td className="py-1.5 text-right text-red-400">−{brl(sim4x.comissao)}</td></tr> : null}
