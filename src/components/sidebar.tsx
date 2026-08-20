@@ -60,7 +60,6 @@ const nav = [
       { href: "/checkout", label: "Checkout expedição" },
       { href: "/batches", label: "Lotes de coleta" },
       { href: "/occurrences", label: "Ocorrências" },
-      { href: "/caixas", label: "Guia de caixas" },
     ],
   },
   {
