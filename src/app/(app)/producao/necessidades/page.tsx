@@ -5,6 +5,7 @@ import { getCatalog } from "@/lib/catalog";
 import { getEstoqueReport, EstoqueIndisponivelError } from "@/lib/services/estoque";
 import { ehCancelado } from "@/lib/pedido";
 import { ImprimirButton } from "./imprimir-button";
+import { ComprasMateriaPrima } from "./compras-client";
 import type { DataStore } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -259,6 +260,9 @@ export default async function NecessidadesPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Necessidade de COMPRA: explode a engenharia dos produtos em falta. */}
+      <ComprasMateriaPrima itens={linhas.map((l) => ({ sku: l.sku || null, nome: l.nome, qtd: Math.ceil(l.falta) }))} />
     </>
   );
 }
