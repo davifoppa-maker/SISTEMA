@@ -110,12 +110,15 @@ export default async function ComercialPage({
     if (pedidoNumIgnorado(v.order.order_number)) continue; // pedido excluído manualmente
     const its = itemsByOrder.get(v.order.id) ?? [];
     let custo = 0, recItens = 0;
+    let itemSemCusto = false; // algum item VALORIZADO sem custo cadastrado?
     for (const i of its) {
       const val = i.unit_value ?? 0;
       if (val <= 0) continue; // item bonificado (valor 0) NÃO entra na margem
       const tot = val * i.quantity;
       recItens += tot;
-      custo += (custoDe.get(i.sku ?? "") ?? 0) * i.quantity;
+      const custoUnit = custoDe.get(i.sku ?? "") ?? 0;
+      if (custoUnit <= 0) itemSemCusto = true; // custo PARCIAL inflaria a margem
+      custo += custoUnit * i.quantity;
       // ABC por produto (receita dos itens).
       const key = i.sku ?? "—";
       const e = abcMap.get(key) ?? { nome: nomeDe.get(i.sku ?? "") ?? (i.sku ?? "Produto"), receita: 0 };
@@ -141,8 +144,10 @@ export default async function ComercialPage({
     // BONIFICADO: tem itens, mas nenhum com valor (a receita vem só do frete).
     // Não é "produto sem custo" — é brinde. Fica fora da margem e é contado à parte.
     const ehBonificado = its.length > 0 && recItens <= 0;
-    // SEM CUSTO de verdade: vendeu com valor, mas o produto não tem custo cadastrado.
-    const semCustoCadastrado = pctFixa == null && recItens > 0 && custo <= 0;
+    // SEM CUSTO: vendeu com valor mas ALGUM produto está sem custo cadastrado —
+    // com custo parcial o pedido entraria na margem com custo subestimado
+    // (margem inflada). Fora da base até o custo ser cadastrado.
+    const semCustoCadastrado = pctFixa == null && recItens > 0 && (custo <= 0 || itemSemCusto);
     // Sem itens ainda (aguardando sincronização) — também não dá para calcular.
     const semItens = its.length === 0;
 
@@ -242,6 +247,7 @@ export default async function ComercialPage({
   for (const v of views) {
     if (ehCancelado(v.order.tiny_status)) continue; // cancelado não é compra
     if (pedidoNumIgnorado(v.order.order_number)) continue;
+    if (clienteIgnorado(v.customerName)) continue; // interno (Exx) não entra na positivação
     const cid = (v.order.customer_id ?? "").trim();
     const nome = (v.customerName ?? "").trim();
     const key = cid || (nome && nome !== "—" ? `nome:${nome.toLowerCase()}` : "");
