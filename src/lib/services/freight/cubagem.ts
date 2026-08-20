@@ -28,6 +28,18 @@ export const CAIXAS: Caixa[] = [
   { nome: "Caixa 5", comprimentoCm: 50, larguraCm: 35, alturaCm: 30 },
 ];
 
+// Caixas MÁSTER (6–10) para o SELETOR da cotação manual — caixas fechadas de
+// fábrica com N unidades. Não entram no algoritmo de empacotamento (CAIXAS),
+// só como opção de medida pronta no formulário.
+export const CAIXAS_SELETOR: Caixa[] = [
+  ...CAIXAS,
+  { nome: "Caixa 6 (8 potes)", comprimentoCm: 23, larguraCm: 22.5, alturaCm: 22.3 },
+  { nome: "Caixa 7 (8 caps)", comprimentoCm: 26, larguraCm: 13.3, alturaCm: 11.7 },
+  { nome: "Caixa 8 (4 potes 1kg)", comprimentoCm: 31, larguraCm: 30.5, alturaCm: 25.5 },
+  { nome: "Caixa 9 (10 refil 420g)", comprimentoCm: 35.5, larguraCm: 23.5, alturaCm: 16 },
+  { nome: "Caixa 10 (10 refil)", comprimentoCm: 45, larguraCm: 32, alturaCm: 17 },
+];
+
 // Quanto do volume da caixa dá pra ocupar de fato (espaços vazios entre itens).
 export const FILL_FACTOR = 0.8;
 

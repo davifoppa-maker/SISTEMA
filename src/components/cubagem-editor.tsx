@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CAIXAS } from "@/lib/services/freight/cubagem";
+import { CAIXAS_SELETOR } from "@/lib/services/freight/cubagem";
 
 /** Uma linha de cubagem (valores como texto, para edição). Dimensões em metros. */
 export interface CubagemRow {
@@ -57,7 +57,7 @@ export function cubagemToText(rows: CubagemRow[]): string {
 }
 
 // Opções do seletor: caixas padrão da expedição com as medidas no rótulo.
-const OPCOES_CAIXA = CAIXAS.map((c) => ({
+const OPCOES_CAIXA = CAIXAS_SELETOR.map((c) => ({
   nome: c.nome,
   label: `${c.nome} — ${c.comprimentoCm}×${c.larguraCm}×${c.alturaCm} cm`,
   // metros (o formulário trabalha em m)
