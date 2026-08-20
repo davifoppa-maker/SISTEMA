@@ -130,9 +130,8 @@ export function CalculadoraClient() {
     const preco = num(precoVenda);
     if (!preco || !custo) return null;
     const impostoDebito = preco * (num(impostoPct) / 100);
-    // CRÉDITO tributário sobre a COMPRA (insumos com perda + embalagem — o que
-    // entra com nota). Mão de obra/outros não geram crédito.
-    const credito = (custo.comPerda + custo.embalagem) * (num(creditoPct) / 100);
+    // CRÉDITO tributário sobre o CUSTO REAL do produto (custo total por unidade).
+    const credito = custo.total * (num(creditoPct) / 100);
     const imposto = impostoDebito - credito; // imposto líquido
     const cartao = preco * (cartaoPct / 100);
     const comissao = temComissao ? preco * (num(comissaoPct) / 100) : 0;
@@ -150,7 +149,7 @@ export function CalculadoraClient() {
     const taxas = (num(impostoPct) + cartaoPct + (temComissao ? num(comissaoPct) : 0) + num(fretePct)) / 100;
     const denom = 1 - taxas - num(margemAlvo) / 100;
     if (denom <= 0) return null;
-    const credito = (custo.comPerda + custo.embalagem) * (num(creditoPct) / 100);
+    const credito = custo.total * (num(creditoPct) / 100);
     return Math.ceil(((custo.total + num(fixoUnit) - credito) / denom) * 10) / 10;
   }
   const alvoVista = useMemo(() => alvo(num(cartaoVistaPct)), [custo, impostoPct, creditoPct, cartaoVistaPct, comissaoPct, temComissao, fixoUnit, fretePct, margemAlvo]);
@@ -253,7 +252,7 @@ export function CalculadoraClient() {
                 </label>
                 <label className="text-xs text-slate-400">Crédito compra (%)
                   <Input value={creditoPct} onChange={(e) => setCreditoPct(e.target.value)} inputMode="decimal" className="mt-1" />
-                  <span className="text-[10px] text-slate-500">sobre insumos+embalagem</span>
+                  <span className="text-[10px] text-slate-500">sobre o custo real do produto</span>
                 </label>
                 <label className="text-xs text-slate-400">Custo fixo (R$/un)
                   <Input value={fixoUnit} onChange={(e) => setFixoUnit(e.target.value)} inputMode="decimal" className="mt-1" />
