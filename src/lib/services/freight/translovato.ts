@@ -22,6 +22,7 @@
  */
 
 import type { QuoteParams, QuoteOutcome, TrackingOutcome } from "./types";
+import { pareceNaoAtende, msgNaoAtende } from "./regiao";
 
 const WS_URL =
   process.env.TRANSLOVATO_WS_URL ||
@@ -195,7 +196,11 @@ export async function quoteTranslovato(params: QuoteParams): Promise<QuoteOutcom
   // Erro de negócio: pelo WSDL, TErro = { Codigo, Descricao, Complemento }.
   const erroDesc = xmlValor(r.xml, "Descricao");
   const erroComp = xmlValor(r.xml, "Complemento");
-  const erroMsg = erroDesc ? `Translovato: ${erroDesc}${erroComp ? ` — ${erroComp}` : ""}` : null;
+  const erroMsg = erroDesc
+    ? pareceNaoAtende(erroDesc)
+      ? msgNaoAtende("Translovato")
+      : `Translovato: ${erroDesc}${erroComp ? ` — ${erroComp}` : ""}`
+    : null;
   // O valor total do frete é a tag <Frete xsi:type="xsd:double">254.52</Frete>
   // (existe também <Frete href="#2"/>, que xmlValor ignora por não ter conteúdo).
   const freteStr = xmlValor(r.xml, "Frete") || xmlValor(r.xml, "ValorLiquido");

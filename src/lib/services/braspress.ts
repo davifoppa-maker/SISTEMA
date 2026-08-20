@@ -8,6 +8,7 @@
  * Os tipos genéricos vivem em `freight/types.ts`; aqui é só a implementação Braspress.
  */
 
+import { pareceNaoAtende, msgNaoAtende } from "@/lib/services/freight/regiao";
 import type {
   QuoteParams,
   QuoteOutcome,
@@ -115,6 +116,9 @@ export async function quoteFreight(params: QuoteParams): Promise<QuoteOutcome> {
       (typeof json === "string" ? json : null) ||
       text ||
       `Erro ${res.status} na Braspress`;
+    if (pareceNaoAtende(msg)) {
+      return { ok: false, error: msgNaoAtende("Braspress"), status: res.status, detail: json ?? text };
+    }
     return { ok: false, error: String(msg), status: res.status, detail: json ?? text };
   }
 
