@@ -95,16 +95,26 @@ export function QuoteForm({
     if (prefill.cepDestino && prefill.peso > 0) return; // já veio tudo
     let vivo = true;
     setBuscandoTiny(true);
-    fetch(`/api/orders/${orderId}/tiny-info`)
+    const aplica = (d: { cepDestino?: string | null; pesoBruto?: number | null }) => {
+      setCepDestino((prev) => prev || d.cepDestino || "");
+      setPeso((prev) => (prev && prev !== "0" ? prev : d.pesoBruto ? String(d.pesoBruto) : prev));
+    };
+    // FASE 1 (rápida, ~1s): CEP + peso se o pedido já trouxer.
+    fetch(`/api/orders/${orderId}/tiny-info?fast=1`)
       .then((r) => r.json())
       .then((j) => {
         if (!vivo || !j?.ok || !j.data) return;
-        const d = j.data as { cepDestino?: string | null; pesoBruto?: number | null; volumes?: number | null };
-        setCepDestino((prev) => prev || d.cepDestino || "");
-        setPeso((prev) => (prev && prev !== "0" ? prev : d.pesoBruto ? String(d.pesoBruto) : prev));
+        aplica(j.data);
+        if (vivo) setBuscandoTiny(false);
+        // FASE 2 (lenta): só se o peso não veio — varre os produtos no Tiny.
+        if (!j.data.pesoBruto) {
+          fetch(`/api/orders/${orderId}/tiny-info`)
+            .then((r2) => r2.json())
+            .then((j2) => { if (vivo && j2?.ok && j2.data) aplica(j2.data); })
+            .catch(() => { /* fica o manual */ });
+        }
       })
-      .catch(() => { /* usuário preenche manualmente */ })
-      .finally(() => { if (vivo) setBuscandoTiny(false); });
+      .catch(() => { if (vivo) setBuscandoTiny(false); });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

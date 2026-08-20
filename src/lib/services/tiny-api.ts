@@ -1014,7 +1014,7 @@ async function fetchProductGrossWeight(
   return 0;
 }
 
-export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; companyId?: string } = {}): Promise<TinyOrderWeight> {
+export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; companyId?: string; fast?: boolean } = {}): Promise<TinyOrderWeight> {
   const companyId = opts.companyId ?? "nyer";
   const c = getTinyConfig(companyId);
   const empty: TinyOrderWeight = { pesoBruto: null, volumes: null, cepDestino: null, source: null };
@@ -1075,6 +1075,13 @@ export async function fetchOrderWeight(tinyId: string, opts: { debug?: boolean; 
       peso = sum;
       source = "itens";
     }
+  }
+
+  // Modo FAST: para aqui — o CEP (e o peso, se o pedido/itens já trouxerem)
+  // respondem em ~1 chamada. A varredura de produtos e a NF (lentas) ficam
+  // para a chamada completa em segundo plano.
+  if (opts.fast) {
+    return { pesoBruto: peso > 0 ? peso : null, volumes: null, cepDestino, source: source ?? "fast", debug: opts.debug ? debug : undefined };
   }
 
   // 3) consulta o cadastro de cada produto e soma peso bruto × quantidade.

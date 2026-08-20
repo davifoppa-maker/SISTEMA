@@ -8,12 +8,13 @@ export const maxDuration = 30;
 // Peso/CEP/volumes do pedido no Tiny — chamado em SEGUNDO PLANO pela tela de
 // cotação (antes esta busca BLOQUEAVA a página inteira; Tiny lento = 1 min de
 // tela branca).
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const fast = new URL(req.url).searchParams.get("fast") === "1";
   const sb = getSupabaseAdmin();
   const { data: order } = await sb.from("orders").select("*").eq("id", params.id).maybeSingle();
   if (!order?.tiny_id || !isTinyConfigured()) return fail("Pedido sem Tiny vinculado.", 404);
   try {
-    const w = await fetchOrderWeight(order.tiny_id, { companyId: (order as Record<string, unknown>).empresa as string ?? "nyer" });
+    const w = await fetchOrderWeight(order.tiny_id, { companyId: (order as Record<string, unknown>).empresa as string ?? "nyer", fast });
     return ok(w);
   } catch (e) {
     return fail(e instanceof Error ? e.message : "erro", 502);
