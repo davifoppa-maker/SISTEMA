@@ -16,7 +16,6 @@ const FAMILIAS: { rotulo: string; termo?: string; sabores?: { sku: string; descr
     sabores: [
       { sku: "NYER260432", descricao: "Chocolate" },
       { sku: "NYER260430", descricao: "Chocolate Maltado" },
-      { sku: "NYER260433", descricao: "Milkshake de Morango" },
       { sku: "NYER260434", descricao: "Morango" },
       { sku: "NYER260431", descricao: "Original" },
     ],
