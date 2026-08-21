@@ -78,19 +78,31 @@ async function postSoap(
   action: string,
   cookie?: string,
 ): Promise<{ ok: true; xml: string; cookie: string | null } | { ok: false; error: string; status?: number }> {
-  try {
-    const headers: Record<string, string> = { "Content-Type": "text/xml; charset=utf-8", SOAPAction: action };
-    if (cookie) headers.Cookie = cookie;
-    const res = await fetch(WS_URL, { method: "POST", headers, body });
-    const xml = await res.text();
-    // Serviços Delphi costumam amarrar a sessão num cookie — repassamos adiante.
-    const setCookie = res.headers.get("set-cookie");
-    const cookiePar = setCookie ? setCookie.split(";")[0] : null;
-    if (!res.ok) return { ok: false, error: `Translovato ${res.status}: ${xml.slice(0, 200)}`, status: res.status };
-    return { ok: true, xml, cookie: cookiePar };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erro de rede (Translovato)" };
+  // Servidor Delphi legado: às vezes trava ou recusa a 1ª conexão. Timeout de
+  // 8s por chamada + 1 retry em falha de rede resolvem a maioria dos "pau".
+  let ultimoErro = "Erro de rede (Translovato)";
+  for (let tent = 0; tent < 2; tent++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "text/xml; charset=utf-8", SOAPAction: action };
+      if (cookie) headers.Cookie = cookie;
+      const res = await fetch(WS_URL, { method: "POST", headers, body, signal: ctrl.signal });
+      const xml = await res.text();
+      const setCookie = res.headers.get("set-cookie");
+      const cookiePar = setCookie ? setCookie.split(";")[0] : null;
+      if (!res.ok) return { ok: false, error: `Translovato ${res.status}: ${xml.slice(0, 200)}`, status: res.status };
+      return { ok: true, xml, cookie: cookiePar };
+    } catch (err) {
+      ultimoErro = err instanceof Error && err.name === "AbortError"
+        ? "Translovato demorou demais para responder (8s) — tente cotar de novo."
+        : err instanceof Error ? err.message : "Erro de rede (Translovato)";
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return { ok: false, error: ultimoErro };
 }
 
 /** Passo 1: solicita a chave de acesso (válida por 5 min). Exportado para

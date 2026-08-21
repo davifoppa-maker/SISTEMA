@@ -3,7 +3,7 @@ import { ok, fail, parseBody } from "@/lib/api";
 import { getProvider } from "@/lib/services/freight/registry";
 import { ufDoCep, msgNaoAtende } from "@/lib/services/freight/regiao";
 
-export const maxDuration = 10;
+export const maxDuration = 30; // Translovato (SOAP legado) pode passar de 10s
 
 const cubagemSchema = z.object({
   altura: z.coerce.number().positive(),
