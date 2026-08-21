@@ -54,6 +54,7 @@ const nav = [
     icon: ScanLine,
     children: [
       { href: "/dashboard", label: "Dashboard" },
+      { href: "/expedicao/fila", label: "Fila de expedição" },
       { href: "/quotes", label: "Cotações" },
       { href: "/quotes/personalizada", label: "Cotação personalizada" },
       { href: "/estoque", label: "Estoque" },
