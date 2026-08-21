@@ -244,7 +244,17 @@ export async function commitSupabaseStore(store: DataStore): Promise<void> {
       return before === undefined || before !== JSON.stringify(row);
     });
     if (changed.length > 0) {
-      const { error } = await sb.from(table).upsert(changed);
+      let rowsParaGravar = changed;
+      let { error } = await sb.from(table).upsert(rowsParaGravar);
+      // Coluna que ainda não existe no banco (migração pendente): remove o campo
+      // e regrava — um campo novo no código não pode derrubar o sync inteiro.
+      for (let tent = 0; error && tent < 3; tent++) {
+        const m = /'([a-zA-Z0-9_]+)' column/.exec(error.message) ?? /column "?([a-zA-Z0-9_]+)"?/.exec(error.message);
+        if (!m) break;
+        const col = m[1];
+        rowsParaGravar = rowsParaGravar.map((r) => { const c = { ...r }; delete (c as Record<string, unknown>)[col]; return c; });
+        ({ error } = await sb.from(table).upsert(rowsParaGravar));
+      }
       if (error) throw new Error(`Erro ao gravar "${table}": ${error.message}`);
     }
   }

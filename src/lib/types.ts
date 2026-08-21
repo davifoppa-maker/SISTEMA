@@ -136,6 +136,8 @@ export interface Order {
   raw_payload: unknown;
   created_at: string;
   updated_at: string;
+  /** Forma de pagamento (ex.: "PIX", "Cartão 3x") — do Olist. */
+  payment_method?: string | null;
 }
 
 export interface Invoice {

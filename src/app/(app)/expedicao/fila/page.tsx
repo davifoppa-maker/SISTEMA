@@ -6,6 +6,7 @@ import { getCatalog } from "@/lib/catalog";
 import { getEstoqueReport, EstoqueIndisponivelError } from "@/lib/services/estoque";
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
 import type { DataStore } from "@/lib/types";
+import { ImprimirButton } from "./imprimir-button";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,9 +19,19 @@ export const maxDuration = 60;
 // Um clique = abrir esta página; o topo mostra O pedido a puxar agora.
 
 const PRAZO_DIAS = 7;
-// Fila = pedidos aguardando decisão (aprovado/aberto). "Preparando/pronto" já
-// estão em andamento na expedição e ficam fora da fila.
-const STATUS_FILA = ["abert", "aprovad"];
+// Fila = SÓ pedidos APROVADOS (regra da expedição). Abertos ainda não entram;
+// preparando/pronto já estão em andamento e ficam fora.
+const STATUS_FILA = ["aprovad"];
+
+// À VISTA tem prioridade na fila (PIX/dinheiro/transferência/1x). Parcelado/
+// prazo vai depois; sem info fica no meio, pela data.
+function classificaPagto(p: string | null | undefined): { rotulo: string; prioridade: 0 | 1 | 2 } {
+  const t = String(p ?? "").toLowerCase();
+  if (!t) return { rotulo: "—", prioridade: 1 };
+  if (/vista|pix|dinheiro|transfer|deposito|depósito/.test(t) && !/\d+\s*x|parcel/.test(t)) return { rotulo: `💵 ${p}`, prioridade: 0 };
+  if (/\d+\s*x|parcel|prazo|boleto/.test(t)) return { rotulo: `💳 ${p}`, prioridade: 2 };
+  return { rotulo: String(p), prioridade: 1 };
+}
 
 const norm = (s: string | null | undefined) =>
   String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
@@ -95,13 +106,21 @@ export default async function FilaExpedicaoPage() {
     decisao: "separar" | "producao" | "sem_itens";
     faltas: { nome: string; falta: number }[];
     valor: number;
+    pagto: { rotulo: string; prioridade: 0 | 1 | 2 };
+    itens: { nome: string; sku: string; qtd: number }[];
   }
   const fila: Linha[] = [];
   const candidatos = store.orders
     .filter((o) => !ehCancelado(o.tiny_status) && !pedidoNumIgnorado(o.order_number))
     .filter((o) => { const s = String(o.tiny_status ?? "").toLowerCase(); return STATUS_FILA.some((k) => s.includes(k)); })
     .filter((o) => !clienteIgnorado(clienteDe.get(o.customer_id ?? "") ?? ""))
-    .sort((a, b) => String(a.order_date ?? "").localeCompare(String(b.order_date ?? "")));
+    .sort((a, b) => {
+      // 1º critério: À VISTA na frente; 2º: mais antigo primeiro.
+      const pa = classificaPagto((a as any).payment_method).prioridade;
+      const pb = classificaPagto((b as any).payment_method).prioridade;
+      if (pa !== pb) return pa - pb;
+      return String(a.order_date ?? "").localeCompare(String(b.order_date ?? ""));
+    });
 
   for (const o of candidatos) {
     const dia = String(o.order_date ?? "").slice(0, 10);
@@ -131,6 +150,12 @@ export default async function FilaExpedicaoPage() {
       id: o.id, numero: o.order_number, cliente: clienteDe.get(o.customer_id ?? "") ?? "—",
       data: dia || "—", dias, atrasado: dias > PRAZO_DIAS, decisao, faltas,
       valor: o.total_value ?? 0,
+      pagto: classificaPagto((o as any).payment_method),
+      itens: its.map((it) => ({
+        nome: nomeDeSku.get((it.sku ?? "").trim()) ?? it.description ?? it.sku ?? "Item",
+        sku: (it.sku ?? "").trim(),
+        qtd: Number(it.quantity) || 0,
+      })),
     });
   }
 
@@ -142,10 +167,28 @@ export default async function FilaExpedicaoPage() {
 
   return (
     <>
-      <PageHeader
-        title="🎯 Fila de Expedição"
-        description={`Decisão automática: mais antigo primeiro (prazo ${PRAZO_DIAS} dias), batendo com o estoque em cascata. Tem tudo → separar; falta → produção.`}
-      />
+      <div className="no-print">
+        <PageHeader
+          title="🎯 Fila de Expedição"
+          description={`À vista primeiro, depois o mais antigo (prazo ${PRAZO_DIAS} dias). Bate com o estoque em cascata: tem tudo → separar; falta → produção.`}
+        />
+      </div>
+
+      {/* ROMANEIO DE SEPARAÇÃO — só sai na impressão */}
+      {proximo ? (
+        <div className="print-only mb-4">
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Separação — Pedido #{proximo.numero}</h1>
+          <p style={{ fontSize: 13 }}>Cliente: {proximo.cliente} · Data do pedido: {proximo.data} · {proximo.pagto.rotulo.replace("💵 ", "").replace("💳 ", "")}</p>
+          <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr><th style={{ textAlign: "left", borderBottom: "1px solid #000", padding: 4 }}>Produto</th><th style={{ textAlign: "left", borderBottom: "1px solid #000", padding: 4 }}>SKU</th><th style={{ textAlign: "right", borderBottom: "1px solid #000", padding: 4 }}>Qtd</th><th style={{ borderBottom: "1px solid #000", padding: 4 }}>✓</th></tr></thead>
+            <tbody>
+              {proximo.itens.map((it, i) => (
+                <tr key={i}><td style={{ padding: 4, borderBottom: "1px solid #ccc" }}>{it.nome}</td><td style={{ padding: 4, borderBottom: "1px solid #ccc" }}>{it.sku}</td><td style={{ padding: 4, textAlign: "right", borderBottom: "1px solid #ccc" }}>{it.qtd}</td><td style={{ padding: 4, borderBottom: "1px solid #ccc", width: 40 }}>___</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {estoqueErro ? (
         <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
@@ -154,7 +197,7 @@ export default async function FilaExpedicaoPage() {
       ) : null}
 
       {/* O PRÓXIMO pedido a puxar */}
-      <Card className="mb-4 border-emerald-500/40">
+      <Card className="no-print mb-4 border-emerald-500/40">
         <CardContent className="pt-4">
           {proximo ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -165,9 +208,12 @@ export default async function FilaExpedicaoPage() {
                   {proximo.dias} dia(s) na fila {proximo.atrasado ? <span className="font-semibold text-red-400">· ATRASADO (prazo {PRAZO_DIAS}d)</span> : `· dentro do prazo`} · {brl(proximo.valor)}
                 </p>
               </div>
-              <Link href={`/orders/${proximo.id}`} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                Abrir pedido →
-              </Link>
+              <div className="flex items-center gap-2">
+                <ImprimirButton />
+                <Link href={`/orders/${proximo.id}`} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                  Abrir pedido →
+                </Link>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-slate-400">Nenhum pedido com estoque completo para separar agora.</p>
@@ -176,14 +222,14 @@ export default async function FilaExpedicaoPage() {
       </Card>
 
       {/* KPIs da fila */}
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="no-print mb-4 grid grid-cols-3 gap-3">
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-red-400">{nAtrasados}</p><p className="text-xs text-slate-400">atrasados (&gt;{PRAZO_DIAS}d)</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-emerald-400">{nSeparar}</p><p className="text-xs text-slate-400">prontos p/ separar</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-amber-400">{nProducao}</p><p className="text-xs text-slate-400">aguardando produção</p></CardContent></Card>
       </div>
 
       {/* Fila completa */}
-      <Card>
+      <Card className="no-print">
         <CardContent className="p-0">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <span className="text-sm font-semibold text-white">Fila completa ({fila.length} pedidos)</span>
@@ -196,6 +242,7 @@ export default async function FilaExpedicaoPage() {
                   <th className="px-4 py-2">#</th>
                   <th className="px-4 py-2">Pedido</th>
                   <th className="px-4 py-2">Cliente</th>
+                  <th className="px-4 py-2">Pagto</th>
                   <th className="px-4 py-2 text-right">Dias</th>
                   <th className="px-4 py-2">Prazo</th>
                   <th className="px-4 py-2">Decisão</th>
@@ -208,6 +255,7 @@ export default async function FilaExpedicaoPage() {
                     <td className="px-4 py-2 text-slate-500">{i + 1}</td>
                     <td className="px-4 py-2"><Link href={`/orders/${l.id}`} className="font-semibold text-brand-700 hover:underline">#{l.numero}</Link></td>
                     <td className="px-4 py-2 text-slate-200">{l.cliente}</td>
+                    <td className="px-4 py-2 text-xs text-slate-300">{l.pagto.rotulo}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{l.dias}</td>
                     <td className="px-4 py-2">
                       {l.atrasado
@@ -230,7 +278,7 @@ export default async function FilaExpedicaoPage() {
         </CardContent>
       </Card>
 
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="no-print mt-3 text-xs text-slate-500">
         Prazo contado da DATA DO PEDIDO (aproximação da aprovação). Estoque reservado em cascata: quem está na frente da fila reserva primeiro.
       </p>
     </>

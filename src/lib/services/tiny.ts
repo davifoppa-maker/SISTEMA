@@ -307,6 +307,7 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
     order_origin: str(payload.ecommerce?.nome),
     carrier_name: str(payload.transportadora),
     nat_operacao: str((payload as Record<string, unknown>).nat_operacao),
+    payment_method: str((payload as Record<string, unknown>).forma_pagamento),
     order_date: tinyDateToIso((payload as Record<string, unknown>).data),
     due_date: tinyDateToIso((payload as Record<string, unknown>).vencimento),
     tags: marcadores,
@@ -505,8 +506,10 @@ export async function enrichOrderMetadata(store: DataStore, cap = 40): Promise<n
               .map((m) => String(m?.descricao ?? m?.marcador?.descricao ?? m ?? "").trim())
               .filter(Boolean)
           : [];
-        if (natOp || tags.length > 0) {
+        const pagto = str((payload as Record<string, unknown>).forma_pagamento);
+        if (natOp || tags.length > 0 || pagto) {
           if (natOp) (order as any).nat_operacao = natOp;
+          if (pagto && !(order as any).payment_method) (order as any).payment_method = pagto;
           if (tags.length > 0) order.tags = tags;
           if (((order as any).empresa ?? "nyer") !== emp) (order as any).empresa = emp;
           order.updated_at = nowIso();

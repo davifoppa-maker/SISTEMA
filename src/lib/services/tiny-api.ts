@@ -768,6 +768,15 @@ export function mapV3OrderToPayload(v3: Record<string, any>): TinyOrderPayload {
     },
     vendedor: v3.vendedor?.nome ?? v3.vendedor ?? v3.nomeVendedor,
     lista_preco: v3.listaPreco?.nome ?? v3.listaPreco,
+    // Forma de pagamento (V3: objeto `pagamento` com forma/meio/parcelas).
+    forma_pagamento: (() => {
+      const pag: any = v3.pagamento ?? {};
+      const forma = pag.formaPagamento?.nome ?? pag.formaPagamento ?? pag.meioPagamento?.nome ?? pag.meioPagamento;
+      const parcelas = Number(pag.quantidadeParcelas ?? (Array.isArray(pag.parcelas) ? pag.parcelas.length : 0)) || 0;
+      const base = typeof forma === "string" && forma.trim() ? forma.trim() : null;
+      if (!base && parcelas <= 0) return undefined;
+      return `${base ?? "Pagamento"}${parcelas > 1 ? ` ${parcelas}x` : ""}`;
+    })(),
     // Natureza de operação (V3 manda em `naturezaOperacao`, objeto ou string).
     nat_operacao:
       v3.naturezaOperacao?.nome ??
