@@ -17,6 +17,7 @@ import { isMultitransConfigured, quoteMultitrans, trackMultitrans } from "@/lib/
 import { isBrudamConfigured, quoteBrudam, trackBrudam } from "@/lib/services/freight/brudam";
 import { isBbmConfigured, quoteBbm, trackBbm } from "@/lib/services/freight/bbm";
 import { isTranslovatoConfigured, quoteTranslovato, trackTranslovato } from "@/lib/services/freight/translovato";
+import { isFrenetConfigured, quoteFrenet, trackFrenet } from "@/lib/services/freight/frenet";
 import { isCorreiosConfigured, quoteCorreios, trackCorreios } from "@/lib/services/freight/correios";
 import { isRodonavesConfigured, quoteRodonaves, trackRodonaves } from "@/lib/services/freight/rodonaves";
 import { isEsmConfigured, quoteEsm, trackEsm } from "@/lib/services/freight/esm";
@@ -133,6 +134,16 @@ const fm: FreightProvider = {
   track: (id) => trackFm(id),
 };
 
+const frenet: FreightProvider = {
+  id: "frenet",
+  label: "Frenet (Correios/Jadlog…)",
+  isConfigured: isFrenetConfigured,
+  // Gateway multi-transportadora — devolvemos a opção mais barata; ideal para
+  // pacotes pequenos (envios de influenciador/B2C).
+  quote: quoteFrenet,
+  track: (cod) => trackFrenet(cod),
+};
+
 const PROVIDERS: Record<string, FreightProvider> = {
   [braspress.id]: braspress,
   [arlete.id]: arlete,
@@ -142,6 +153,7 @@ const PROVIDERS: Record<string, FreightProvider> = {
   [brudam.id]: brudam,
   [bbm.id]: bbm,
   [translovato.id]: translovato,
+  [frenet.id]: frenet,
   [correios.id]: correios,
   [rodonaves.id]: rodonaves,
   [esm.id]: esm,
