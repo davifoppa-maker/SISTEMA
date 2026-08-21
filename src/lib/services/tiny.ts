@@ -263,9 +263,11 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
   //       duplicatas mesmo se o campo empresa estiver inconsistente;
   //   2º) senão, por número + source + EMPRESA (NYER e Ecopro podem ter o mesmo
   //       número em contas Tiny independentes e não devem colidir).
+  // tiny_id casa em QUALQUER empresa: o mesmo pedido consultado pela outra
+  // conta (webhook/revalidação tentam as duas) NÃO pode virar duplicata.
   let order =
     (tinyId
-      ? store.orders.find((o) => o.source === "tiny" && o.tiny_id === tinyId && ((o as any).empresa ?? "nyer") === companyId)
+      ? store.orders.find((o) => o.source === "tiny" && o.tiny_id === tinyId)
       : undefined) ??
     store.orders.find(
       (o) =>
@@ -273,6 +275,10 @@ export function ingestOrder(store: DataStore, payload: TinyOrderPayload, company
         o.source === "tiny" &&
         ((o as any).empresa ?? "nyer") === companyId,
     );
+  // Achou sob outra empresa? Corrige a marcação para a conta que respondeu.
+  if (order && ((order as any).empresa ?? "nyer") !== companyId) {
+    (order as any).empresa = companyId;
+  }
 
   // TODOS os marcadores do Olist (não só o primeiro) — usados para separar
   // Influencer / B2B / permuta etc. nas telas.

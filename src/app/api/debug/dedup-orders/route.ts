@@ -26,7 +26,8 @@ export async function GET(req: Request) {
   const grupos = new Map<string, string[]>();
   for (const o of orders ?? []) {
     const emp = (o as any).empresa ?? "nyer";
-    const key = (o as any).tiny_id ? `t:${(o as any).tiny_id}:${emp}` : `n:${(o as any).order_number}:${emp}`;
+    // tiny_id identifica o pedido GLOBALMENTE (dup entre empresas também conta).
+    const key = (o as any).tiny_id ? `t:${(o as any).tiny_id}` : `n:${(o as any).order_number}:${emp}`;
     const arr = grupos.get(key) ?? [];
     arr.push((o as any).id); // já vem ordenado por created_at asc → [0] é o mais antigo
     grupos.set(key, arr);
