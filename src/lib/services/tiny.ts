@@ -489,7 +489,7 @@ export async function enrichOrderDates(store: DataStore, cap = 40): Promise<numb
  */
 export async function enrichOrderMetadata(store: DataStore, cap = 40): Promise<number> {
   const pendentes = store.orders.filter(
-    (o) => o.tiny_id && !(o as any).nat_operacao,
+    (o) => o.tiny_id && (!(o as any).nat_operacao || !(o as any).payment_method),
   ).slice(0, cap);
 
   let atualizados = 0;
