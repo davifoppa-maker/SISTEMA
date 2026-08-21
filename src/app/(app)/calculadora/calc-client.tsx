@@ -83,7 +83,7 @@ export function CalculadoraClient() {
   async function listarTodos(forcar = false) {
     if (!forcar) {
       try {
-        const c = JSON.parse(localStorage.getItem("nyer:engProdutos2") ?? "null");
+        const c = JSON.parse(localStorage.getItem("nyer:engProdutos3") ?? "null");
         if (c && c.exp > Date.now() && Array.isArray(c.sabores) && c.sabores.length > 0) {
           setSabores(c.sabores);
           return;
@@ -100,7 +100,7 @@ export function CalculadoraClient() {
       const achados = j.data.sabores ?? [];
       setSabores(achados);
       if (achados.length > 0) {
-        try { localStorage.setItem("nyer:engProdutos2", JSON.stringify({ sabores: achados, exp: Date.now() + 30 * 60 * 1000 })); } catch { /* */ }
+        try { localStorage.setItem("nyer:engProdutos3", JSON.stringify({ sabores: achados, exp: Date.now() + 30 * 60 * 1000 })); } catch { /* */ }
       } else setErro("Nenhum produto com engenharia encontrado no Olist.");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao listar.");
@@ -298,7 +298,7 @@ export function CalculadoraClient() {
             <Button size="sm" variant="ghost" onClick={() => listarTodos(true)} disabled={buscandoSabores} title="Recarregar a lista do Olist">
               ↻
             </Button>
-            <span className="ml-auto text-[10px] text-slate-600">v17</span>
+            <span className="ml-auto text-[10px] text-slate-600">v18</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}

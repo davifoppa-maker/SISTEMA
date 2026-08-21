@@ -66,59 +66,35 @@ export async function GET(req: Request) {
     if (falhas429 === 0) listaCache.set(chaveCache, { dados, exp: Date.now() + 10 * 60 * 1000 });
     return ok({ versaoLista: "v3-paralela", ...dados });
   }
-  // Modo TODAS (?todas=1): lista TODOS os produtos com engenharia no Olist.
-  // Varredura com verificação de BOM em lotes paralelos; cache de 30 min.
+  // Modo TODAS (?todas=1): lista OFICIAL de produtos com engenharia
+  // (confirmada pelo usuário em 20/08/2026). Sem varredura — só busca as
+  // descrições no Olist (1 chamada por SKU, com cache de 30 min).
+  // Produto novo com engenharia? Adicionar o SKU aqui.
   if (u.searchParams.get("todas") === "1") {
+    const ENGENHARIA_SKUS = [
+      "NYER260432", "NYER260430", "NYER260433", "NYER260431", "NYER260434",
+      "NYER26029", "NYER26099", "NYER260101", "NYER260102", "NYER21321", "NYER6921",
+    ];
     const chave = `todas:${empresa}`;
     const hit = listaCache.get(chave);
-    if (hit && hit.exp > Date.now()) return ok({ versaoLista: "todas-cache", ...hit.dados });
+    if (hit && hit.exp > Date.now()) return ok({ versaoLista: "todas-fixa-cache", ...hit.dados });
 
-    // Candidatos: UNIÃO de buscas direcionadas pelas famílias fabricadas — a
-    // busca genérica ("nyer") devolvia os 100 primeiros produtos e deixava as
-    // linhas com engenharia de fora.
-    const termos = ["hydro", "milk", "gourmet", "beef", "refil"];
-    const vistos = new Set<string>();
-    const candidatos: { id: string; sku: string; descricao: string }[] = [];
-    for (const termo of termos) {
-      const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(termo)}&limit=50`, {}, empresa).catch(() => null);
-      const j = r ? await r.json().catch(() => null) as any : null;
-      for (const i of ((j?.itens ?? j?.data ?? []) as any[])) {
-        const id = String(i.id ?? "");
-        const sku = i.sku ?? i.codigo ?? null;
-        if (!id || !sku || vistos.has(id)) continue;
-        vistos.add(id);
-        candidatos.push({ id, sku: String(sku), descricao: i.descricao ?? i.nome ?? "" });
+    const sabores: { sku: string; descricao: string }[] = [];
+    for (const skuEng of ENGENHARIA_SKUS) {
+      try {
+        const r = await tinyFetch(`${c.apiBaseUrl}/produtos?codigo=${encodeURIComponent(skuEng)}&limit=1`, {}, empresa);
+        const j = await r.json().catch(() => null) as any;
+        const item = (j?.itens ?? j?.data ?? [])[0];
+        sabores.push({ sku: skuEng, descricao: item?.descricao ?? item?.nome ?? skuEng });
+      } catch {
+        sabores.push({ sku: skuEng, descricao: skuEng }); // mostra pelo SKU se a busca falhar
       }
       await new Promise((res) => setTimeout(res, 120));
-      if (candidatos.length >= 60) break;
     }
-
-    const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
-    const verifica = async (cand: { id: string }) => {
-      for (let tent = 0; tent < 2; tent++) {
-        try {
-          const rd = await tinyFetch(`${c.apiBaseUrl}/produtos/${cand.id}`, {}, empresa);
-          if (rd.status === 429) { await pausaMs(900); continue; }
-          const jd = await rd.json().catch(() => null) as any;
-          const raw = jd?.data ?? jd ?? {};
-          const bomL: any[] = raw?.producao?.produtos ?? [];
-          return Array.isArray(bomL) && bomL.length > 0;
-        } catch { /* retry */ }
-      }
-      return false;
-    };
-    const produtos: { sku: string; descricao: string }[] = [];
-    const soCandidatos = candidatos.slice(0, 60);
-    for (let i = 0; i < soCandidatos.length; i += 8) {
-      const lote = soCandidatos.slice(i, i + 8);
-      const oks = await Promise.all(lote.map(verifica));
-      lote.forEach((cand, idx) => { if (oks[idx]) produtos.push({ sku: String(cand.sku), descricao: cand.descricao }); });
-      await pausaMs(120);
-    }
-    produtos.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
-    const dados = { candidatosVerificados: candidatos.length, sabores: produtos };
+    sabores.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
+    const dados = { sabores };
     listaCache.set(chave, { dados, exp: Date.now() + 30 * 60 * 1000 });
-    return ok({ versaoLista: "todas-v2", ...dados });
+    return ok({ versaoLista: "todas-fixa", ...dados });
   }
 
   if (!sku && !busca) return fail("Informe ?sku=, ?busca=, ?lista= ou ?todas=1", 400);
