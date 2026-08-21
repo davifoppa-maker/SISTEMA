@@ -11,8 +11,9 @@ import type { DataStore } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Status de pedido que geram necessidade de produção (pré-expedição).
-const STATUS_ALVO = ["abert", "aprovad", "preparando", "pronto", "separa"];
+// Necessidade de produção = SÓ pedidos APROVADOS (regra da expedição,
+// alinhada com a Fila de Expedição).
+const STATUS_ALVO = ["aprovad"];
 function statusEntra(s: string | null | undefined): boolean {
   const n = String(s ?? "").toLowerCase();
   return STATUS_ALVO.some((k) => n.includes(k));
@@ -158,7 +159,7 @@ export default async function NecessidadesPage({
       <div className="no-print mb-1 flex items-start justify-between gap-3">
         <PageHeader
           title="🏭 Necessidades de Produção"
-          description="Produtos a produzir: soma dos pedidos em aberto / aprovados / preparando / em separação / prontos para envio, menos o balanço de estoque."
+          description="Produtos a produzir: soma dos pedidos APROVADOS, menos o balanço de estoque."
         />
         <ImprimirButton />
       </div>
