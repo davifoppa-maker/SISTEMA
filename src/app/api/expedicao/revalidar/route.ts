@@ -1,9 +1,8 @@
 import { ok, fail } from "@/lib/api";
-import { loadStoreFor, commitStore } from "@/lib/db";
+import { loadStore, commitStore } from "@/lib/db";
 import { ingestOrder, removeOrderCascade } from "@/lib/services/tiny";
 import { fetchOrderById } from "@/lib/services/tiny-api";
 import { tinyOrderSchema } from "@/lib/validation/schemas";
-import type { DataStore } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,8 +13,7 @@ export const maxDuration = 60;
 //   • pedido APAGADO no Tiny (404 confirmado) → remove daqui;
 //   • de quebra, atualiza pagamento/natureza/itens do payload completo.
 export async function POST() {
-  const tables: Array<keyof DataStore> = ["orders", "customers", "invoices", "shipments", "order_items", "api_sync_logs", "carriers", "shipment_volumes", "webhook_events", "sla_records", "audit_logs", "occurrences", "collections"];
-  const store = await loadStoreFor(tables);
+  const store = await loadStore(); // completo — removeOrderCascade toca várias tabelas
   const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const fila = store.orders
