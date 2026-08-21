@@ -78,8 +78,18 @@ export function CalculadoraClient() {
     } catch { /* */ }
   }, [impostoPct, creditoPct, fixoUnit, comissaoPct, fretePct, cartaoVistaPct, cartao4xPct, perdaPct, margemAlvo, caixaUnit, fitaUnit, temComissao, meiaNota]);
 
-  // Lista TODOS os produtos com engenharia (cache 30 min no servidor).
-  async function listarTodos() {
+  // Lista TODOS os produtos com engenharia. Cache duplo: navegador (30 min,
+  // abre instantâneo) + servidor (30 min). Carrega SOZINHA ao abrir a página.
+  async function listarTodos(forcar = false) {
+    if (!forcar) {
+      try {
+        const c = JSON.parse(localStorage.getItem("nyer:engProdutos") ?? "null");
+        if (c && c.exp > Date.now() && Array.isArray(c.sabores) && c.sabores.length > 0) {
+          setSabores(c.sabores);
+          return;
+        }
+      } catch { /* sem cache */ }
+    }
     setBuscandoSabores(true);
     setErro(null);
     try {
@@ -88,13 +98,21 @@ export function CalculadoraClient() {
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar.");
       const achados = j.data.sabores ?? [];
       setSabores(achados);
-      if (achados.length === 0) setErro("Nenhum produto com engenharia encontrado no Olist.");
+      if (achados.length > 0) {
+        try { localStorage.setItem("nyer:engProdutos", JSON.stringify({ sabores: achados, exp: Date.now() + 30 * 60 * 1000 })); } catch { /* */ }
+      } else setErro("Nenhum produto com engenharia encontrado no Olist.");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao listar.");
     } finally {
       setBuscandoSabores(false);
     }
   }
+
+  // Carrega a lista automaticamente ao abrir a calculadora.
+  useEffect(() => {
+    listarTodos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Busca por nome/SKU/sabor: SKU exato carrega direto; senão lista os
   // produtos COM engenharia que casam com o termo, para clicar.
@@ -252,19 +270,20 @@ export function CalculadoraClient() {
       <Card>
         <CardContent className="space-y-3 pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            {buscandoSabores ? <span className="text-xs text-slate-400">listando sabores…</span> : null}
-            {sabores.length > 0 ? (
+            <label className="text-xs text-slate-400">
+              Produto (com engenharia no Olist)
               <select
                 defaultValue=""
                 onChange={(e) => { if (e.target.value) carregar({ sku: e.target.value }); }}
-                className="h-9 max-w-[320px] rounded-lg border border-white/15 bg-white/5 px-2 text-sm text-white"
+                className="mt-1 block h-10 min-w-[320px] rounded-lg border border-violet-500/50 bg-white/5 px-2 text-sm text-white"
               >
-                <option value="">— escolher o sabor —</option>
+                <option value="">{buscandoSabores ? "carregando produtos…" : `— escolher (${sabores.length}) —`}</option>
                 {sabores.map((sb) => (
                   <option key={sb.sku} value={sb.sku}>{sb.descricao}</option>
                 ))}
               </select>
-            ) : null}
+            </label>
+            {buscandoSabores ? <span className="text-xs text-slate-400">listando sabores…</span> : null}
             <Input
               value={skuBusca}
               onChange={(e) => setSkuBusca(e.target.value)}
@@ -275,10 +294,10 @@ export function CalculadoraClient() {
             <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
               {buscandoSabores ? "Buscando…" : "Buscar"}
             </Button>
-            <Button size="sm" variant="secondary" onClick={listarTodos} disabled={buscandoSabores}>
-              📋 Todos com engenharia
+            <Button size="sm" variant="ghost" onClick={() => listarTodos(true)} disabled={buscandoSabores} title="Recarregar a lista do Olist">
+              ↻
             </Button>
-            <span className="ml-auto text-[10px] text-slate-600">v14</span>
+            <span className="ml-auto text-[10px] text-slate-600">v15</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}
