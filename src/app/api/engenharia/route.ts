@@ -73,21 +73,25 @@ export async function GET(req: Request) {
     const hit = listaCache.get(chave);
     if (hit && hit.exp > Date.now()) return ok({ versaoLista: "todas-cache", ...hit.dados });
 
-    // Candidatos: tenta filtrar fabricados direto (tipo=F); se a API ignorar,
-    // cai para a pesquisa ampla por "nyer".
-    const pegaCandidatos = async (): Promise<any[]> => {
-      for (const q of ["tipo=F&limit=100", "pesquisa=nyer&limit=100"]) {
-        const r = await tinyFetch(`${c.apiBaseUrl}/produtos?${q}`, {}, empresa).catch(() => null);
-        const j = r ? await r.json().catch(() => null) as any : null;
-        const itens = (j?.itens ?? j?.data ?? []) as any[];
-        if (Array.isArray(itens) && itens.length > 0) return itens;
+    // Candidatos: UNIÃO de buscas direcionadas pelas famílias fabricadas — a
+    // busca genérica ("nyer") devolvia os 100 primeiros produtos e deixava as
+    // linhas com engenharia de fora.
+    const termos = ["hydro", "milk", "whey", "gourmet", "beef", "refil", "isn"];
+    const vistos = new Set<string>();
+    const candidatos: { id: string; sku: string; descricao: string }[] = [];
+    for (const termo of termos) {
+      const r = await tinyFetch(`${c.apiBaseUrl}/produtos?pesquisa=${encodeURIComponent(termo)}&limit=50`, {}, empresa).catch(() => null);
+      const j = r ? await r.json().catch(() => null) as any : null;
+      for (const i of ((j?.itens ?? j?.data ?? []) as any[])) {
+        const id = String(i.id ?? "");
+        const sku = i.sku ?? i.codigo ?? null;
+        if (!id || !sku || vistos.has(id)) continue;
+        vistos.add(id);
+        candidatos.push({ id, sku: String(sku), descricao: i.descricao ?? i.nome ?? "" });
       }
-      return [];
-    };
-    const candidatos = (await pegaCandidatos())
-      .map((i) => ({ id: i.id, sku: i.sku ?? i.codigo ?? null, descricao: i.descricao ?? i.nome ?? "" }))
-      .filter((i) => i.id && i.sku)
-      .slice(0, 80);
+      await new Promise((res) => setTimeout(res, 200));
+      if (candidatos.length >= 120) break;
+    }
 
     const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
     const verifica = async (cand: { id: string }) => {
@@ -113,7 +117,7 @@ export async function GET(req: Request) {
     produtos.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
     const dados = { candidatosVerificados: candidatos.length, sabores: produtos };
     listaCache.set(chave, { dados, exp: Date.now() + 30 * 60 * 1000 });
-    return ok({ versaoLista: "todas-v1", ...dados });
+    return ok({ versaoLista: "todas-v2", ...dados });
   }
 
   if (!sku && !busca) return fail("Informe ?sku=, ?busca=, ?lista= ou ?todas=1", 400);
