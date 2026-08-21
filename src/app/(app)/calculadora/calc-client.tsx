@@ -94,8 +94,9 @@ export function CalculadoraClient() {
     setErro(null);
     try {
       const r = await fetch("/api/engenharia?todas=1");
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha ao listar.");
+      if (r.status === 504) throw new Error("A varredura demorou demais (tempo do servidor). Clica no ↻ para tentar de novo — a segunda tentativa aproveita o cache e é mais rápida.");
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? `Falha ao listar (HTTP ${r.status}).`);
       const achados = j.data.sabores ?? [];
       setSabores(achados);
       if (achados.length > 0) {
@@ -297,7 +298,7 @@ export function CalculadoraClient() {
             <Button size="sm" variant="ghost" onClick={() => listarTodos(true)} disabled={buscandoSabores} title="Recarregar a lista do Olist">
               ↻
             </Button>
-            <span className="ml-auto text-[10px] text-slate-600">v16</span>
+            <span className="ml-auto text-[10px] text-slate-600">v17</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}

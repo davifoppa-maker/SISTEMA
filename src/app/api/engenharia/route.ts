@@ -76,7 +76,7 @@ export async function GET(req: Request) {
     // Candidatos: UNIÃO de buscas direcionadas pelas famílias fabricadas — a
     // busca genérica ("nyer") devolvia os 100 primeiros produtos e deixava as
     // linhas com engenharia de fora.
-    const termos = ["hydro", "milk", "whey", "gourmet", "beef", "refil", "isn"];
+    const termos = ["hydro", "milk", "gourmet", "beef", "refil"];
     const vistos = new Set<string>();
     const candidatos: { id: string; sku: string; descricao: string }[] = [];
     for (const termo of termos) {
@@ -89,8 +89,8 @@ export async function GET(req: Request) {
         vistos.add(id);
         candidatos.push({ id, sku: String(sku), descricao: i.descricao ?? i.nome ?? "" });
       }
-      await new Promise((res) => setTimeout(res, 200));
-      if (candidatos.length >= 120) break;
+      await new Promise((res) => setTimeout(res, 120));
+      if (candidatos.length >= 60) break;
     }
 
     const pausaMs = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -108,11 +108,12 @@ export async function GET(req: Request) {
       return false;
     };
     const produtos: { sku: string; descricao: string }[] = [];
-    for (let i = 0; i < candidatos.length; i += 5) {
-      const lote = candidatos.slice(i, i + 5);
+    const soCandidatos = candidatos.slice(0, 60);
+    for (let i = 0; i < soCandidatos.length; i += 8) {
+      const lote = soCandidatos.slice(i, i + 8);
       const oks = await Promise.all(lote.map(verifica));
       lote.forEach((cand, idx) => { if (oks[idx]) produtos.push({ sku: String(cand.sku), descricao: cand.descricao }); });
-      await pausaMs(300);
+      await pausaMs(120);
     }
     produtos.sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR"));
     const dados = { candidatosVerificados: candidatos.length, sabores: produtos };
