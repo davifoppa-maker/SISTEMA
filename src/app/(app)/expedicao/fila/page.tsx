@@ -7,6 +7,7 @@ import { getEstoqueReport, EstoqueIndisponivelError } from "@/lib/services/estoq
 import { ehCancelado, clienteIgnorado, pedidoNumIgnorado } from "@/lib/pedido";
 import type { DataStore } from "@/lib/types";
 import { ImprimirButton } from "./imprimir-button";
+import { RevalidarButton } from "./revalidar-button";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -167,11 +168,12 @@ export default async function FilaExpedicaoPage() {
 
   return (
     <>
-      <div className="no-print">
+      <div className="no-print flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="🎯 Fila de Expedição"
           description={`À vista primeiro, depois o mais antigo (prazo ${PRAZO_DIAS} dias). Bate com o estoque em cascata: tem tudo → separar; falta → produção.`}
         />
+        <RevalidarButton />
       </div>
 
       {/* ROMANEIO DE SEPARAÇÃO — só sai na impressão */}
