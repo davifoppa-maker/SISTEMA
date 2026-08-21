@@ -16,7 +16,6 @@ const num = (s: string) => Number(String(s).replace(",", ".")) || 0;
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function CalculadoraClient() {
-  const [skuBusca, setSkuBusca] = useState("NYER260430");
   const [sabores, setSabores] = useState<{ sku: string; descricao: string }[]>([]);
   const [buscandoSabores, setBuscandoSabores] = useState(false);
   const [eng, setEng] = useState<Engenharia | null>(null);
@@ -114,44 +113,6 @@ export function CalculadoraClient() {
     listarTodos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Busca por nome/SKU/sabor: SKU exato carrega direto; senão lista os
-  // produtos COM engenharia que casam com o termo, para clicar.
-  async function buscar() {
-    const termo = skuBusca.trim();
-    if (!termo) return;
-    setErro(null);
-    // Parece SKU (sem espaço, tem dígito)? Tenta carregar direto.
-    if (!termo.includes(" ") && /\d/.test(termo)) {
-      const okDireto = await carregar({ sku: termo });
-      if (okDireto) return;
-    }
-    // Busca por termo → lista clicável.
-    setBuscandoSabores(true);
-    try {
-      const r = await fetch(`/api/engenharia?lista=${encodeURIComponent(termo)}`);
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Falha na busca.");
-      const achados = j.data.sabores ?? [];
-      setSabores(achados);
-      if (achados.length === 0) {
-        const cand = j.data.candidatos ?? 0;
-        const rate = j.data.falhas429 ?? 0;
-        setErro(
-          cand === 0
-            ? `Nada no Olist para "${termo}" — confira o nome.`
-            : rate > 0
-              ? `A API do Olist limitou a verificação (${rate}x). Clica em Buscar de novo.`
-              : `Encontrei ${cand} produto(s) para "${termo}", mas nenhum com engenharia cadastrada no Olist.`,
-        );
-      } else setErro(null);
-    } catch (e) {
-      setSabores([]);
-      setErro(e instanceof Error ? e.message : "Erro na busca.");
-    } finally {
-      setBuscandoSabores(false);
-    }
-  }
 
   async function carregar(q: { sku?: string; busca?: string }): Promise<boolean> {
     setCarregando(true);
@@ -285,20 +246,10 @@ export function CalculadoraClient() {
               </select>
             </label>
             {buscandoSabores ? <span className="text-xs text-slate-400">listando sabores…</span> : null}
-            <Input
-              value={skuBusca}
-              onChange={(e) => setSkuBusca(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") buscar(); }}
-              placeholder="🔎 Pesquisar produto com engenharia (nome, SKU ou sabor)…"
-              className="w-72"
-            />
-            <Button size="sm" onClick={buscar} disabled={carregando || buscandoSabores}>
-              {buscandoSabores ? "Buscando…" : "Buscar"}
-            </Button>
             <Button size="sm" variant="ghost" onClick={() => listarTodos(true)} disabled={buscandoSabores} title="Recarregar a lista do Olist">
               ↻
             </Button>
-            <span className="ml-auto text-[10px] text-slate-600">v18</span>
+            <span className="ml-auto text-[10px] text-slate-600">v19</span>
             {carregando ? <span className="text-xs text-slate-400">carregando engenharia… (~10s)</span> : null}
           </div>
           {erro ? <p className="text-sm text-amber-400">{erro}</p> : null}
