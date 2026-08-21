@@ -244,4 +244,8 @@ export const PRODUCT_MEASURES: Record<string, ProductMeasure> = {
   "NYER260432": { desc: "Hydro Protein Nyer Refil 820g - Chocolate",         larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
   "NYER260433": { desc: "Hydro Protein Nyer Refil 820g - Milkshake de Morango", larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
   "NYER260434": { desc: "Hydro Protein Nyer Refil 820g - Morango",           larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  // Milk Protein 80 900g — mesma base/caixa do Hydro (caixa10, 10un, 450×320×170mm).
+  "NYER26099":  { desc: "Milk Protein 80 Chocolate - 900g",                  larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260101": { desc: "Milk Protein 80 Morango - 900g",                    larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
+  "NYER260102": { desc: "Milk Protein 80 Original - 900g",                   larguraCm: 32.0, alturaCm: 17.0, comprimentoCm: 45.0 },
 };
