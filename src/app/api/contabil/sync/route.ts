@@ -70,8 +70,20 @@ export async function POST(req: Request) {
       const decodifica = (t: string): string => {
         let x = t;
         for (let passo = 0; passo < 4; passo++) {
+          // JSON PRIMEIRO: o Tiny devolve {"xmlNfe":"<?xml ..."} com as barras
+          // de fechamento escapadas (<\/dhEmi>) — as tags de ABERTURA aparecem
+          // intactas e enganavam a checagem de "já é XML".
+          if (x.trim().startsWith("{")) {
+            try {
+              const j = JSON.parse(x);
+              const direto = j?.xmlNfe ?? j?.xml ?? j?.data?.xmlNfe ?? j?.data?.xml;
+              if (typeof direto === "string" && direto.includes("<")) { x = direto; continue; }
+            } catch { /* segue para as outras heurísticas */ }
+          }
           if (x.includes("<ICMSTot>") || x.includes("<infNFe")) {
-            if (x.includes("<dhEmi>") || x.includes("<nNF>") || x.includes("<vNF>")) return x;
+            if (x.includes("</dhEmi>") || x.includes("</nNF>") || x.includes("</vNF>")) return x;
+            // Barras de fechamento escapadas (\/) — desescapa e revalida.
+            if (x.includes("<\\/")) { x = x.replace(/\\\//g, "/"); continue; }
           }
           // JSON com campo xml em qualquer nível?
           try {
@@ -102,7 +114,7 @@ export async function POST(req: Request) {
         return x;
       };
       const xml = decodifica(bruto);
-      if (!xml || (!xml.includes("<vNF>") && !xml.includes("<nNF>") && !xml.includes("<dhEmi>"))) {
+      if (!xml || (!xml.includes("</vNF>") && !xml.includes("</nNF>") && !xml.includes("</dhEmi>"))) {
         // Sem XML (nota não autorizada / rascunho / cancelada): grava um stub
         // para NÃO ficar tentando para sempre — fica fora da apuração.
         errosXml++;
