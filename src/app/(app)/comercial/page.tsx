@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "@/lib/db/supabase-store";
 import { fetchAllRows } from "@/lib/db/fetch-all";
 import { getCatalog } from "@/lib/catalog";
 import { buildSellerCanonicalizer, vendedorOculto } from "@/lib/seller";
-import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, vendedorForaDaMargem, margemFixaPct } from "@/lib/pedido";
+import { ehCancelado, clienteIgnorado, pedidoNumIgnorado, clienteForaDaMargem, vendedorForaDaMargem, margemFixaPct, margemAjustePontos } from "@/lib/pedido";
 import { ComercialClient, type DadosComercial } from "./comercial-client";
 
 export const dynamic = "force-dynamic";
@@ -214,7 +214,8 @@ export default async function ComercialPage({
         faturamento: a.faturamento,
         pedidos: a.pedidos,
         ticketMedio: a.pedidos > 0 ? a.faturamento / a.pedidos : 0,
-        margem: a.fatMargem > 0 ? ((a.fatMargem - a.custo) / a.fatMargem) * 100 : 0,
+        // Margem + ajuste por vendedor (compensação de comissão — ver pedido.ts).
+        margem: a.fatMargem > 0 ? ((a.fatMargem - a.custo) / a.fatMargem) * 100 + margemAjustePontos(nome) : 0,
         // Sobre quanto do faturamento DESTE vendedor a margem foi calculada.
         margemCobertura: a.faturamento > 0 ? (a.fatMargem / a.faturamento) * 100 : 0,
         clientesPositivados: a.clientes.size,

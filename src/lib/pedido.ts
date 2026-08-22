@@ -20,6 +20,20 @@ export function clienteIgnorado(nome: string | null | undefined): boolean {
 // a margem pra -278% etc.). Comparação por "contém".
 const CLIENTES_FORA_DA_MARGEM = ["exx nutrition"];
 
+// AJUSTE de margem por vendedor (PONTOS PERCENTUAIS somados à margem exibida
+// no Dashboard Comercial). Compensa diferenças de comissão: quem não paga
+// comissão (Davi) rende +5 pontos; Amanda tem comissão menor (+3 pontos).
+const MARGEM_AJUSTE_PONTOS: [string, number][] = [
+  ["davi foppa", 5],
+  ["amanda de castilhos", 3],
+];
+export function margemAjustePontos(nome: string | null | undefined): number {
+  const n = normNome(nome);
+  if (!n) return 0;
+  for (const [v, pts] of MARGEM_AJUSTE_PONTOS) if (n.includes(v)) return pts;
+  return 0;
+}
+
 // Vendedores cujos pedidos FICAM FORA da base de margem do Dashboard Comercial
 // (faturamento conta normal; margem não é calculada — custo/condição distorcidos).
 const VENDEDORES_FORA_MARGEM = ["luiz eduardo galdino"];
