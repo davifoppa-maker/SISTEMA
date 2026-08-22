@@ -26,6 +26,22 @@ export function expedCredentials(): { username: string; password: string } {
   };
 }
 
+// Acesso COMERCIAL (perfil restrito: só a área Comercial).
+// Credenciais via env: COMERCIAL_USERNAME / COMERCIAL_PASSWORD (⚠️ defina no
+// Vercel — NUNCA hardcodar a senha real aqui: o repositório é público).
+export function comercialCredentials(): { username: string; password: string } {
+  return {
+    username: process.env.COMERCIAL_USERNAME || "amanda",
+    password: process.env.COMERCIAL_PASSWORD || "Nyer@Comercial2026",
+  };
+}
+
+/** Páginas que o perfil Comercial pode acessar. */
+export const COMERCIAL_ALLOWED_PREFIXES = ["/comercial", "/margem"];
+
+/** APIs que o perfil Comercial pode chamar. */
+export const COMERCIAL_ALLOWED_API_PREFIXES = ["/api/auth/logout"];
+
 /** Páginas que o usuário de Expedição pode acessar. */
 export const EXPED_ALLOWED_PREFIXES = [
   "/dashboard",

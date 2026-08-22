@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken, EXPED_ALLOWED_PREFIXES, EXPED_ALLOWED_API_PREFIXES } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, expedCredentials, comercialCredentials, computeAuthToken, EXPED_ALLOWED_PREFIXES, EXPED_ALLOWED_API_PREFIXES, COMERCIAL_ALLOWED_PREFIXES, COMERCIAL_ALLOWED_API_PREFIXES } from "@/lib/auth-token";
 
 // Rotas públicas (não exigem login):
 //  - /login e a API de autenticação
@@ -36,6 +36,22 @@ export async function middleware(req: NextRequest) {
     }
     const url = req.nextUrl.clone();
     url.pathname = "/checkout";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Comercial: SÓ a área comercial (Dashboard/Saúde/Gestor de Margem).
+  const comercial = comercialCredentials();
+  const comercialToken = await computeAuthToken(comercial.username, comercial.password);
+  if (token && token === comercialToken) {
+    const paginaOk = COMERCIAL_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    const apiOk = COMERCIAL_ALLOWED_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    if (paginaOk || apiOk) return NextResponse.next();
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/comercial";
     url.search = "";
     return NextResponse.redirect(url);
   }

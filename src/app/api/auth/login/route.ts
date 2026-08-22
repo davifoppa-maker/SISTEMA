@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE, authCredentials, expedCredentials, computeAuthToken } from "@/lib/auth-token";
+import { AUTH_COOKIE, authCredentials, expedCredentials, comercialCredentials, computeAuthToken } from "@/lib/auth-token";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +17,20 @@ export async function POST(req: Request) {
 
   const admin = authCredentials();
   const exped = expedCredentials();
+  const comercial = comercialCredentials();
 
   let cred: { username: string; password: string } | null = null;
-  let perfil: "admin" | "exped" | null = null;
+  let perfil: "admin" | "exped" | "comercial" | null = null;
   if (user === admin.username && pass === admin.password) { cred = admin; perfil = "admin"; }
   else if (user === exped.username && pass === exped.password) { cred = exped; perfil = "exped"; }
+  else if (user === comercial.username && pass === comercial.password) { cred = comercial; perfil = "comercial"; }
 
   if (!cred) {
     return NextResponse.json({ ok: false, error: "Usuário ou senha inválidos." }, { status: 401 });
   }
 
   const token = await computeAuthToken(cred.username, cred.password);
-  const res = NextResponse.json({ ok: true, perfil, redirect: perfil === "exped" ? "/checkout" : null });
+  const res = NextResponse.json({ ok: true, perfil, redirect: perfil === "exped" ? "/checkout" : perfil === "comercial" ? "/comercial" : null });
   res.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

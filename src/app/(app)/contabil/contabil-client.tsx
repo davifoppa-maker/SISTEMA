@@ -9,9 +9,18 @@ export interface NotaFiscal {
   id: string; empresa: string; tipo: "entrada" | "saida"; numero: string | null;
   chave: string | null; data: string | null; cliente: string | null;
   valor: number; vicms: number; vpis: number; vcofins: number; vipi: number;
+  natureza?: string | null; cstat?: string | null;
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Naturezas que NÃO compõem a apuração (bonificação, brinde, remessa,
+// devolução etc. não geram débito/crédito de ICMS·PIS·COFINS aqui).
+const NAT_NAO_COMPOE = /bonific|brinde|amostra|remessa|devolu|troca|conserto|demonstr|transfer|comodato|retorno|simples\s*fatur/i;
+// Compõe a apuração: nota AUTORIZADA (cStat 100 — vazio = nota antiga, aceita)
+// e natureza que não está na lista de exclusão.
+const compoe = (n: NotaFiscal) =>
+  (!n.cstat || n.cstat === "100") && !NAT_NAO_COMPOE.test(n.natureza ?? "");
 
 export function ContabilClient({ mes, notas, erroTabela }: { mes: string; notas: NotaFiscal[]; erroTabela: string | null }) {
   const router = useRouter();
@@ -40,11 +49,16 @@ export function ContabilClient({ mes, notas, erroTabela }: { mes: string; notas:
 
   const ent = useMemo(() => notas.filter((n) => n.tipo === "entrada"), [notas]);
   const sai = useMemo(() => notas.filter((n) => n.tipo === "saida"), [notas]);
+  // Apuração: só notas AUTORIZADAS com natureza de venda/compra de verdade —
+  // bonificação, remessa, devolução etc. aparecem na lista mas ficam de fora.
+  const entApur = useMemo(() => ent.filter(compoe), [ent]);
+  const saiApur = useMemo(() => sai.filter(compoe), [sai]);
+  const foraApuracao = sai.length + ent.length - saiApur.length - entApur.length;
   const soma = (arr: NotaFiscal[], k: keyof NotaFiscal) => arr.reduce((s, n) => s + (Number(n[k]) || 0), 0);
 
-  const icmsDeb = soma(sai, "vicms"), icmsCred = soma(ent, "vicms"), icmsSaldo = icmsDeb - icmsCred;
-  const pisDeb = soma(sai, "vpis"), pisCred = soma(ent, "vpis");
-  const cofDeb = soma(sai, "vcofins"), cofCred = soma(ent, "vcofins");
+  const icmsDeb = soma(saiApur, "vicms"), icmsCred = soma(entApur, "vicms"), icmsSaldo = icmsDeb - icmsCred;
+  const pisDeb = soma(saiApur, "vpis"), pisCred = soma(entApur, "vpis");
+  const cofDeb = soma(saiApur, "vcofins"), cofCred = soma(entApur, "vcofins");
 
   function mudaMes(delta: number) {
     const [a, m] = mes.split("-").map(Number);
@@ -59,17 +73,20 @@ export function ContabilClient({ mes, notas, erroTabela }: { mes: string; notas:
         <thead>
           <tr className="border-b border-white/10 text-left text-xs text-slate-400">
             <th className="px-3 py-2">Data</th><th className="px-3 py-2">NF</th><th className="px-3 py-2">Cliente/Fornecedor</th>
-            <th className="px-3 py-2">Emp.</th><th className="px-3 py-2 text-right">Valor</th>
+            <th className="px-3 py-2">Natureza</th><th className="px-3 py-2 text-right">Valor</th>
             <th className="px-3 py-2 text-right">ICMS</th><th className="px-3 py-2 text-right">PIS</th><th className="px-3 py-2 text-right">COFINS</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {lista.map((n) => (
-            <tr key={n.id}>
+            <tr key={n.id} className={compoe(n) ? "" : "opacity-50"} title={compoe(n) ? "" : "Fora da apuração (não autorizada ou natureza sem imposto)"}>
               <td className="px-3 py-1.5 text-slate-400">{n.data ? n.data.split("-").reverse().join("/") : "—"}</td>
               <td className="px-3 py-1.5 font-mono text-xs text-slate-300">{n.numero}</td>
               <td className="px-3 py-1.5 text-slate-200">{n.cliente ?? "—"}</td>
-              <td className="px-3 py-1.5 text-xs text-slate-500">{n.empresa}</td>
+              <td className="px-3 py-1.5 text-xs text-slate-400">
+                {n.natureza || "—"}
+                {!compoe(n) ? <span className="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">fora da apuração</span> : null}
+              </td>
               <td className="px-3 py-1.5 text-right font-medium text-white">{brl(n.valor)}</td>
               <td className="px-3 py-1.5 text-right text-slate-300">{brl(n.vicms)}</td>
               <td className="px-3 py-1.5 text-right text-slate-300">{brl(n.vpis)}</td>
@@ -109,6 +126,7 @@ export function ContabilClient({ mes, notas, erroTabela }: { mes: string; notas:
               {icmsSaldo >= 0 ? `a recolher ${brl(icmsSaldo)}` : `crédito ${brl(-icmsSaldo)}`}
             </p>
             <p className="text-xs text-slate-500">débito (saídas) {brl(icmsDeb)} − crédito (entradas) {brl(icmsCred)}</p>
+            {foraApuracao > 0 ? <p className="text-[11px] text-amber-400/80">{foraApuracao} nota(s) fora da apuração (bonificação/remessa/devolução/não autorizada)</p> : null}
           </CardContent>
         </Card>
         <Card>

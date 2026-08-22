@@ -36,27 +36,35 @@ export async function POST(req: Request) {
   const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
   const dataFinal = `${mes}-${String(fim).padStart(2, "0")}`;
 
-  // 1) Lista as notas do período (paginado).
+  // 1) Lista as notas do período (paginado). A listagem SEM filtro traz só as
+  // notas EMITIDAS (saídas) — as de ENTRADA (compras de fornecedor) precisam
+  // do parâmetro tipo=E. Lista as duas e junta por id.
   const notas: { id: string; numero?: string; situacao?: unknown }[] = [];
-  for (let offset = 0; offset < 600; offset += 100) {
-    const r = await tinyFetch(`${c.apiBaseUrl}/notas?dataInicial=${dataInicial}&dataFinal=${dataFinal}&limit=100&offset=${offset}`, {}, empresa).catch(() => null);
-    const j = r ? await r.json().catch(() => null) as any : null;
-    const itens = (j?.itens ?? j?.data ?? []) as any[];
-    if (!Array.isArray(itens) || itens.length === 0) break;
-    for (const n of itens) if (n?.id) notas.push({ id: String(n.id), numero: n.numero, situacao: n.situacao });
-    if (itens.length < 100) break;
-    await pausa(150);
+  const vistos = new Set<string>();
+  for (const tipoParam of ["", "&tipo=E"]) {
+    for (let offset = 0; offset < 600; offset += 100) {
+      const r = await tinyFetch(`${c.apiBaseUrl}/notas?dataInicial=${dataInicial}&dataFinal=${dataFinal}&limit=100&offset=${offset}${tipoParam}`, {}, empresa).catch(() => null);
+      const j = r ? await r.json().catch(() => null) as any : null;
+      const itens = (j?.itens ?? j?.data ?? []) as any[];
+      if (!Array.isArray(itens) || itens.length === 0) break;
+      for (const n of itens) {
+        if (n?.id && !vistos.has(String(n.id))) { vistos.add(String(n.id)); notas.push({ id: String(n.id), numero: n.numero, situacao: n.situacao }); }
+      }
+      if (itens.length < 100) break;
+      await pausa(150);
+    }
   }
   if (notas.length === 0) return ok({ mes, empresa, listadas: 0, gravadas: 0, pendentes: 0, aviso: "Nenhuma nota no período (ou o endpoint /notas não aceitou os filtros)." });
 
   // 2) Quais já temos gravadas?
   const ids = notas.map((n) => `${empresa}:${n.id}`);
-  const { data: existentes } = await sb.from("fiscal_notes").select("id, tipo, data, valor").in("id", ids);
+  const { data: existentes } = await sb.from("fiscal_notes").select("id, tipo, data, valor, natureza").in("id", ids);
   // Linhas VAZIAS voltam para a fila: o parser antigo gravava data=dia 01 e
   // valor 0 — então "data preenchida" não basta; exige valor > 0 (ou stub).
+  // Linha sem NATUREZA gravada (versão anterior) também volta, uma única vez.
   const jaTem = new Set(
     (existentes ?? [])
-      .filter((e: any) => e.tipo === "sem_xml" || (e.data && Number(e.valor) > 0))
+      .filter((e: any) => e.tipo === "sem_xml" || (e.data && Number(e.valor) > 0 && e.natureza != null))
       .map((e: any) => e.id),
   );
   const faltantes = notas.filter((n) => !jaTem.has(`${empresa}:${n.id}`));
@@ -134,6 +142,9 @@ export async function POST(req: Request) {
       }
       const tpNF = tag(xml, "tpNF"); // 0 = entrada · 1 = saída
       const tot = xml.slice(xml.indexOf("<ICMSTot>"), xml.indexOf("</ICMSTot>") + 10);
+      // cStat do protocolo (100 = autorizada; 101/135 = cancelada). Fica na
+      // seção <protNFe> — pega o cStat de lá para não confundir com outros.
+      const prot = xml.split("<protNFe")[1] ?? "";
       linhas.push({
         id: `${empresa}:${n.id}`,
         empresa,
@@ -150,6 +161,8 @@ export async function POST(req: Request) {
         vcofins: num(tag(tot, "vCOFINS")),
         vipi: num(tag(tot, "vIPI")),
         situacao: String(n.situacao ?? ""),
+        natureza: tag(xml, "natOp") ?? "",
+        cstat: tag(prot, "cStat") ?? "",
       });
     } catch {
       errosXml++;
@@ -170,7 +183,7 @@ export async function POST(req: Request) {
 
   return ok({
     mes, empresa,
-    versao: "v3-requeue-zeros",
+    versao: "v4-natureza-entradas",
     listadas: notas.length,
     jaGravadas: jaTem.size,
     gravadasAgora: linhas.length,
