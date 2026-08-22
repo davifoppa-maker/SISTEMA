@@ -286,6 +286,19 @@ export default async function ComercialPage({
   }
   const hojeIso = isoDaysAgo(0);
   const hojeMs = Date.parse(hojeIso);
+  // Classe ABC HISTÓRICA de cada cliente (pelo faturamento de todos os tempos):
+  // é ela que diz o quão crítico é um cliente parado (curva A parada = alerta).
+  const todosCli = [...porCliente.values()].sort((a, b) => b.total - a.total);
+  const totalCli = todosCli.reduce((s, c) => s + c.total, 0) || 1;
+  const classeDe = new Map<string, string>();
+  {
+    let acumC = 0;
+    for (const c of todosCli) {
+      acumC += c.total;
+      const pct = (acumC / totalCli) * 100;
+      classeDe.set(c.nome + "|" + c.ultima, pct <= 80 ? "A" : pct <= 95 ? "B" : "C");
+    }
+  }
   const positivar = [...porCliente.values()]
     .map((c) => ({
       cliente: c.nome,
@@ -294,10 +307,11 @@ export default async function ComercialPage({
       diasSemComprar: Math.max(0, Math.floor((hojeMs - Date.parse(c.ultima)) / 86400000)),
       pedidos: c.pedidos,
       faturamentoTotal: c.total,
+      classe: classeDe.get(c.nome + "|" + c.ultima) ?? "C",
     }))
-    .filter((c) => c.diasSemComprar >= 30) // só quem já passou do ponto de recompra
+    .filter((c) => c.diasSemComprar >= 15) // faixas a partir de 15 dias
     .sort((a, b) => b.diasSemComprar - a.diasSemComprar)
-    .slice(0, 500);
+    .slice(0, 800);
 
   const dados: DadosComercial = {
     de, ate,

@@ -48,6 +48,7 @@ export interface DadosComercial {
     diasSemComprar: number;
     pedidos: number;
     faturamentoTotal: number;
+    classe: string;
   }[];
 }
 
@@ -315,91 +316,159 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
 // ————————————————————————————————————————————————————————————————
 // Aba de Positivação: clientes que pararam de comprar (por vendedor / faixa de dias).
 function PositivacaoPanel({ positivar }: { positivar: DadosComercial["positivar"] }) {
+  const [visao, setVisao] = useState<"clientes" | "alertas">("alertas");
   const [vendedor, setVendedor] = useState("");
-  const [minDias, setMinDias] = useState(30);
+  const [classe, setClasse] = useState("");
+  const [minDias, setMinDias] = useState(15);
 
   const vendedores = useMemo(
     () => [...new Set(positivar.map((c) => c.vendedor))].sort((a, b) => a.localeCompare(b)),
     [positivar],
   );
+
+  // ALERTAS: clientes importantes parados — curva A há 30+ dias ou curva B há
+  // 60+ dias sem comprar. Ordenados pelo faturamento (o mais crítico primeiro).
+  const alertas = useMemo(
+    () =>
+      positivar
+        .filter((c) => (c.classe === "A" && c.diasSemComprar >= 30) || (c.classe === "B" && c.diasSemComprar >= 60))
+        .filter((c) => !vendedor || c.vendedor === vendedor)
+        .sort((a, b) => b.faturamentoTotal - a.faturamentoTotal),
+    [positivar, vendedor],
+  );
+
   const lista = useMemo(
-    () => positivar.filter((c) => c.diasSemComprar >= minDias && (!vendedor || c.vendedor === vendedor)),
-    [positivar, minDias, vendedor],
+    () =>
+      positivar.filter(
+        (c) => c.diasSemComprar >= minDias && (!vendedor || c.vendedor === vendedor) && (!classe || c.classe === classe),
+      ),
+    [positivar, minDias, vendedor, classe],
   );
 
   const faixa = (d: number) =>
-    d >= 90 ? { txt: "90+ dias", cls: "bg-red-500/20 text-red-400" }
-    : d >= 60 ? { txt: "60–89 dias", cls: "bg-orange-500/20 text-orange-400" }
-    : { txt: "30–59 dias", cls: "bg-amber-500/20 text-amber-400" };
+    d >= 90 ? { cls: "bg-red-500/20 text-red-400" }
+    : d >= 60 ? { cls: "bg-orange-500/20 text-orange-400" }
+    : d >= 45 ? { cls: "bg-amber-500/20 text-amber-400" }
+    : d >= 30 ? { cls: "bg-yellow-500/15 text-yellow-300" }
+    : { cls: "bg-slate-500/20 text-slate-300" };
+
+  const TabelaClientes = ({ rows, destaque }: { rows: typeof positivar; destaque?: boolean }) => (
+    <Card>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                <th className="px-4 py-2 text-center">Curva</th>
+                <th className="px-4 py-2">Cliente</th>
+                <th className="px-4 py-2">Vendedor responsável</th>
+                <th className="px-4 py-2 text-right">Última compra</th>
+                <th className="px-4 py-2 text-right">Sem comprar</th>
+                <th className="px-4 py-2 text-right">Pedidos</th>
+                <th className="px-4 py-2 text-right">Faturamento total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {rows.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-400">Nenhum cliente nesse critério.</td></tr>
+              ) : rows.map((c, i) => {
+                const f = faixa(c.diasSemComprar);
+                return (
+                  <tr key={i} className={destaque && c.classe === "A" ? "bg-red-500/5" : ""}>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold ${classeCor[c.classe] ?? classeCor.C}`}>{c.classe}</span>
+                    </td>
+                    <td className="px-4 py-2 font-medium text-white">{c.cliente}</td>
+                    <td className="px-4 py-2 text-slate-300">{c.vendedor}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{c.ultimaCompra.split("-").reverse().join("/")}</td>
+                    <td className="px-4 py-2 text-right">
+                      <span className={`rounded px-2 py-0.5 text-xs font-semibold ${f.cls}`}>{c.diasSemComprar} d</span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-300">{c.pedidos}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-white">{brl(c.faturamentoTotal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="text-sm text-slate-300">
-          Clientes que <b className="text-white">já compraram</b> mas <b className="text-white">não recompram</b> há um tempo —
-          estão na hora de <b className="text-violet-300">positivar</b>. Ordenados pelos mais atrasados.
-        </p>
+      {/* Sub-abas: Alertas (críticos) × Todos os clientes */}
+      <div className="flex gap-1 border-b border-white/10">
+        {([["alertas", `Alertas (${alertas.length})`], ["clientes", "Todos os clientes"]] as const).map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setVisao(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+              visao === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">Vendedor</label>
-          <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}
-            className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
-            <option value="">Todos</option>
-            {vendedores.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-400">Sem comprar há</label>
-          <select value={minDias} onChange={(e) => setMinDias(Number(e.target.value))}
-            className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
-            <option value={30}>+30 dias</option>
-            <option value={45}>+45 dias</option>
-            <option value={60}>+60 dias</option>
-            <option value={90}>+90 dias</option>
-          </select>
-        </div>
-        <span className="pb-2 text-xs text-slate-500">{lista.length} cliente(s) para positivar</span>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
-                  <th className="px-4 py-2">Cliente</th>
-                  <th className="px-4 py-2">Vendedor</th>
-                  <th className="px-4 py-2 text-right">Última compra</th>
-                  <th className="px-4 py-2 text-right">Sem comprar</th>
-                  <th className="px-4 py-2 text-right">Pedidos</th>
-                  <th className="px-4 py-2 text-right">Faturamento total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {lista.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Nenhum cliente nesse critério. 🎉</td></tr>
-                ) : lista.map((c, i) => {
-                  const f = faixa(c.diasSemComprar);
-                  return (
-                    <tr key={i}>
-                      <td className="px-4 py-2 font-medium text-white">{c.cliente}</td>
-                      <td className="px-4 py-2 text-slate-300">{c.vendedor}</td>
-                      <td className="px-4 py-2 text-right text-slate-300">{c.ultimaCompra.split("-").reverse().join("/")}</td>
-                      <td className="px-4 py-2 text-right">
-                        <span className={`rounded px-2 py-0.5 text-xs font-semibold ${f.cls}`}>{c.diasSemComprar} d</span>
-                      </td>
-                      <td className="px-4 py-2 text-right text-slate-300">{c.pedidos}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-white">{brl(c.faturamentoTotal)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {visao === "alertas" ? (
+        <>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm text-slate-200">
+              <b className="text-white">Clientes críticos:</b> curva <b>A</b> há 30+ dias sem comprar, ou curva <b>B</b> há 60+ dias.
+              São os que mais pesam no faturamento — prioridade máxima de positivação. Ordenados pelo faturamento histórico.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Vendedor</label>
+              <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}
+                className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+                <option value="">Todos</option>
+                {vendedores.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <span className="pb-2 text-xs text-slate-500">{alertas.length} cliente(s) em alerta</span>
+          </div>
+          <TabelaClientes rows={alertas} destaque />
+        </>
+      ) : (
+        <>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p className="text-sm text-slate-300">
+              Clientes que <b className="text-white">já compraram</b> mas <b className="text-white">não recompram</b> há um tempo.
+              A coluna <b className="text-white">Curva</b> mostra o peso histórico do cliente no faturamento (A/B/C).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Vendedor</label>
+              <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}
+                className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+                <option value="">Todos</option>
+                {vendedores.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Sem comprar há</label>
+              <select value={minDias} onChange={(e) => setMinDias(Number(e.target.value))}
+                className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+                {[15, 30, 45, 60, 75, 90].map((d) => <option key={d} value={d}>+{d} dias</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Curva</label>
+              <select value={classe} onChange={(e) => setClasse(e.target.value)}
+                className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white">
+                <option value="">Todas</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+              </select>
+            </div>
+            <span className="pb-2 text-xs text-slate-500">{lista.length} cliente(s) para positivar</span>
+          </div>
+          <TabelaClientes rows={lista} />
+        </>
+      )}
     </div>
   );
 }
