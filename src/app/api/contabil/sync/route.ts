@@ -62,9 +62,13 @@ export async function POST(req: Request) {
   // Linhas VAZIAS voltam para a fila: o parser antigo gravava data=dia 01 e
   // valor 0 — então "data preenchida" não basta; exige valor > 0 (ou stub).
   // Linha sem NATUREZA gravada (versão anterior) também volta, uma única vez.
+  // Stub antigo (natureza null) volta UMA vez — para as notas de ENTRADA que
+  // antes viravam sem_xml e agora são gravadas pelo detalhe.
   const jaTem = new Set(
     (existentes ?? [])
-      .filter((e: any) => e.tipo === "sem_xml" || (e.data && Number(e.valor) > 0 && e.natureza != null))
+      .filter((e: any) =>
+        e.tipo === "sem_xml" ? e.natureza != null : e.data && Number(e.valor) > 0 && e.natureza != null,
+      )
       .map((e: any) => e.id),
   );
   const faltantes = notas.filter((n) => !jaTem.has(`${empresa}:${n.id}`));
@@ -128,15 +132,46 @@ export async function POST(req: Request) {
       };
       const xml = decodifica(bruto);
       if (!xml || (!xml.includes("</vNF>") && !xml.includes("</nNF>") && !xml.includes("</dhEmi>"))) {
-        // Sem XML (nota não autorizada / rascunho / cancelada): grava um stub
-        // para NÃO ficar tentando para sempre — fica fora da apuração.
-        errosXml++;
-        linhas.push({
-          id: `${empresa}:${n.id}`, empresa, tipo: "sem_xml", numero: n.numero ?? null,
-          serie: null, chave: null, data: `${mes}-01`, cliente: null,
-          valor: 0, vprod: 0, vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
-          situacao: `sem XML (${String(n.situacao ?? "?")})`,
-        });
+        // Sem XML. Notas de ENTRADA lançadas no Olist respondem 400
+        // ("Nota fiscal não autorizada") no /xml — mas o DETALHE traz tudo
+        // (fornecedor, valor, data). Grava a entrada pelo detalhe; os impostos
+        // ficam 0 (sem XML a API não entrega o ICMS destacado).
+        await pausa(200);
+        let detalheOk = false;
+        try {
+          const rd = await tinyFetch(`${c.apiBaseUrl}/notas/${n.id}`, {}, empresa);
+          const dj = (await rd.json().catch(() => null)) as any;
+          const det = dj?.data ?? dj;
+          if (rd.ok && det && (det.tipo === "E" || det.tipo === "S")) {
+            detalheOk = true;
+            linhas.push({
+              id: `${empresa}:${n.id}`,
+              empresa,
+              tipo: det.tipo === "E" ? "entrada" : "saida",
+              numero: String(det.numero ?? n.numero ?? ""),
+              serie: String(det.serie ?? ""),
+              chave: String(det.chaveAcesso ?? "") || null,
+              data: String(det.dataEmissao ?? "").slice(0, 10) || `${mes}-01`,
+              cliente: det.cliente?.nome ?? null,
+              valor: Number(det.valor) || 0,
+              vprod: Number(det.valorProdutos) || 0,
+              vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
+              situacao: `via detalhe (${String(det.situacao ?? n.situacao ?? "?")})`,
+              natureza: det.tipo === "E" ? "entrada (impostos indisponíveis sem XML)" : "saída sem XML",
+              cstat: "",
+            });
+          }
+        } catch { /* detalhe indisponível → stub */ }
+        if (!detalheOk) {
+          errosXml++;
+          linhas.push({
+            id: `${empresa}:${n.id}`, empresa, tipo: "sem_xml", numero: n.numero ?? null,
+            serie: null, chave: null, data: `${mes}-01`, cliente: null,
+            valor: 0, vprod: 0, vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
+            situacao: `sem XML (${String(n.situacao ?? "?")})`,
+            natureza: "", cstat: "",
+          });
+        }
         await pausa(150);
         continue;
       }
@@ -171,6 +206,7 @@ export async function POST(req: Request) {
         serie: null, chave: null, data: `${mes}-01`, cliente: null,
         valor: 0, vprod: 0, vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
         situacao: "erro ao baixar XML",
+        natureza: null, cstat: null, // erro de rede → tenta de novo na próxima
       });
     }
     await pausa(200);
