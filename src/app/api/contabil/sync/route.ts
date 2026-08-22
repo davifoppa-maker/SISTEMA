@@ -170,6 +170,7 @@ export async function POST(req: Request) {
 
   return ok({
     mes, empresa,
+    versao: "v3-requeue-zeros",
     listadas: notas.length,
     jaGravadas: jaTem.size,
     gravadasAgora: linhas.length,
