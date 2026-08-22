@@ -7,6 +7,10 @@
     {
       "path": "/api/financial/caixa/sync",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/contabil",
+      "schedule": "30 7 * * *"
     }
   ]
 }
