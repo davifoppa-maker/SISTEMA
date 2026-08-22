@@ -22,7 +22,7 @@ function isoInicioDoMes() {
 export default async function ComercialPage({
   searchParams,
 }: {
-  searchParams: { de?: string; ate?: string };
+  searchParams: { de?: string; ate?: string; aba?: string };
 }) {
   // Padrão: mês atual (1º dia → hoje).
   const de = searchParams.de || isoInicioDoMes();
@@ -304,7 +304,7 @@ export default async function ComercialPage({
     positivar,
   };
 
-  return <ComercialClient dados={dados} />;
+  return <ComercialClient dados={dados} abaInicial={searchParams.aba} />;
   } catch (e) {
     const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
     return (

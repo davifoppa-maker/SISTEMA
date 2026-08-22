@@ -75,7 +75,7 @@ const classeCor: Record<string, string> = {
   C: "bg-slate-500/20 text-slate-400",
 };
 
-export function ComercialClient({ dados }: { dados: DadosComercial }) {
+export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; abaInicial?: string }) {
   const { kpis, vendedores, abc } = dados;
   const router = useRouter();
 
@@ -107,7 +107,9 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
   const mesAtual = dados.de.slice(0, 7);
 
   // Abas do dashboard.
-  const [aba, setAba] = useState<"faturamento" | "positivacao" | "saude">("faturamento");
+  const [aba, setAba] = useState<"faturamento" | "positivacao" | "saude">(
+    abaInicial === "saude" ? "saude" : abaInicial === "positivacao" ? "positivacao" : "faturamento",
+  );
   // Vendedor expandido (mostra os pedidos para validar contra o Olist).
   const [aberto, setAberto] = useState<string | null>(null);
 
