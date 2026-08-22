@@ -22,10 +22,10 @@ const CLIENTES_FORA_DA_MARGEM = ["exx nutrition"];
 
 // AJUSTE de margem por vendedor (PONTOS PERCENTUAIS somados à margem exibida
 // no Dashboard Comercial). Compensa diferenças de comissão: quem não paga
-// comissão (Davi) rende +5 pontos; Amanda tem comissão menor (+3 pontos).
+// comissão (Davi) rende +5 pontos; Amanda tem comissão menor (+2 pontos).
 const MARGEM_AJUSTE_PONTOS: [string, number][] = [
   ["davi foppa", 5],
-  ["amanda de castilhos", 3],
+  ["amanda de castilhos", 2],
 ];
 export function margemAjustePontos(nome: string | null | undefined): number {
   const n = normNome(nome);
