@@ -429,14 +429,20 @@ function PositivacaoPanel({ positivar }: { positivar: DadosComercial["positivar"
 // ————————————————————————————————————————————————————————————————
 // SAÚDE DO COMERCIAL: metas do time interno × externo, quebradas em
 // mês/semana/dia, com o quanto já foi realizado no período e uma NOTA
-// (realizado ÷ esperado até hoje). INTERNO = Amanda de Castilhos,
-// Davi Foppa e Tainá Evangelista; EXTERNO = todos os demais vendedores.
+// (realizado ÷ esperado até hoje). INTERNO = Amanda de Castilhos e
+// Tainá Evangelista; EXTERNO = todos os demais vendedores.
+// Davi Foppa fica FORA dos dois times (não entra nas metas).
 const semAcento = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-const VENDEDORES_INTERNOS = ["amanda", "davi foppa", "taina"];
+const VENDEDORES_INTERNOS = ["amanda", "taina"];
+const VENDEDORES_FORA_METAS = ["davi foppa"];
 const ehInterno = (nome: string) => {
   const n = semAcento(nome);
   return VENDEDORES_INTERNOS.some((v) => n.includes(v));
+};
+const foraDasMetas = (nome: string) => {
+  const n = semAcento(nome);
+  return VENDEDORES_FORA_METAS.some((v) => n.includes(v));
 };
 
 const METAS_LS = "nyer:metasComercial";
@@ -446,6 +452,8 @@ function notaCor(nota: number) {
 }
 
 function SaudePanel({ dados }: { dados: DadosComercial }) {
+  // Sub-aba do time em exibição.
+  const [time, setTime] = useState<"interno" | "externo">("interno");
   // Metas MENSAIS editáveis (persistem no navegador).
   const [metaInterno, setMetaInterno] = useState(0);
   const [metaExterno, setMetaExterno] = useState(0);
@@ -475,6 +483,7 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
     let interno = 0, externo = 0;
     const membrosInterno: string[] = [], membrosExterno: string[] = [];
     for (const v of dados.vendedores) {
+      if (foraDasMetas(v.nome)) continue; // Davi Foppa não entra nas metas
       if (ehInterno(v.nome)) { interno += v.faturamento; membrosInterno.push(v.nome); }
       else { externo += v.faturamento; membrosExterno.push(v.nome); }
     }
@@ -599,8 +608,20 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
         ) : null}
       </div>
 
-      {linha("interno", "🏠", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))}
-      {linha("externo", "🚗", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
+      {/* Sub-abas: um time por vez, mais organizado. */}
+      <div className="flex gap-1 border-b border-white/10">
+        {([["interno", "🏠 Comercial interno"], ["externo", "🚗 Comercial externo"]] as const).map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setTime(key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+              time === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {time === "interno"
+        ? linha("interno", "🏠", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))
+        : linha("externo", "🚗", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
     </div>
   );
 }
