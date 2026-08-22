@@ -11,11 +11,13 @@ export default async function ContabilPage({ searchParams }: { searchParams: { m
   const sb = getSupabaseAdmin();
   let notas: NotaFiscal[] = [];
   let erroTabela: string | null = null;
+  // Último dia REAL do mês (mes-31 quebra em meses de 30 dias/fevereiro).
+  const ultimoDia = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
   const { data, error } = await sb
     .from("fiscal_notes")
     .select("*")
     .gte("data", `${mes}-01`)
-    .lte("data", `${mes}-31`)
+    .lte("data", `${mes}-${String(ultimoDia).padStart(2, "0")}`)
     .order("data", { ascending: false });
   if (error) erroTabela = error.message;
   else notas = (data ?? []) as NotaFiscal[];
