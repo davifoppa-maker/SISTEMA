@@ -51,9 +51,14 @@ export async function POST(req: Request) {
 
   // 2) Quais já temos gravadas?
   const ids = notas.map((n) => `${empresa}:${n.id}`);
-  const { data: existentes } = await sb.from("fiscal_notes").select("id, tipo, data").in("id", ids);
-  // Linhas VAZIAS (parser antigo: data null e não-stub) voltam para a fila.
-  const jaTem = new Set((existentes ?? []).filter((e: any) => e.tipo === "sem_xml" || e.data).map((e: any) => e.id));
+  const { data: existentes } = await sb.from("fiscal_notes").select("id, tipo, data, valor").in("id", ids);
+  // Linhas VAZIAS voltam para a fila: o parser antigo gravava data=dia 01 e
+  // valor 0 — então "data preenchida" não basta; exige valor > 0 (ou stub).
+  const jaTem = new Set(
+    (existentes ?? [])
+      .filter((e: any) => e.tipo === "sem_xml" || (e.data && Number(e.valor) > 0))
+      .map((e: any) => e.id),
+  );
   const faltantes = notas.filter((n) => !jaTem.has(`${empresa}:${n.id}`));
 
   // 3) Baixa e parseia o XML de até 35 notas por rodada (retomável).

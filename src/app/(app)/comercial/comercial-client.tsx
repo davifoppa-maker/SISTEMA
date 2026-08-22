@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -107,7 +107,7 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
   const mesAtual = dados.de.slice(0, 7);
 
   // Abas do dashboard.
-  const [aba, setAba] = useState<"faturamento" | "positivacao">("faturamento");
+  const [aba, setAba] = useState<"faturamento" | "positivacao" | "saude">("faturamento");
   // Vendedor expandido (mostra os pedidos para validar contra o Olist).
   const [aberto, setAberto] = useState<string | null>(null);
 
@@ -117,7 +117,7 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
 
       {/* Abas */}
       <div className="mb-5 flex gap-1 border-b border-white/10">
-        {([["faturamento", "Faturamento"], ["positivacao", "Positivação"]] as const).map(([key, label]) => (
+        {([["faturamento", "Faturamento"], ["positivacao", "Positivação"], ["saude", "Saúde do Comercial"]] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setAba(key)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
               aba === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
@@ -127,6 +127,7 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
       </div>
 
       {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
+      {aba === "saude" ? <SaudePanel dados={dados} /> : null}
 
       <div className={aba === "faturamento" ? "" : "hidden"}>
       {/* Filtro de período */}
@@ -178,7 +179,7 @@ export function ComercialClient({ dados }: { dados: DadosComercial }) {
         <Kpi label="Faturamento" value={brl(kpis.faturamento)} sub={`${kpis.pedidos} pedidos`} />
         <Kpi label="Ticket médio" value={brl(kpis.ticketMedio)} />
         <Kpi
-          label="Margem líquida"
+          label="Margem de contribuição"
           value={`${kpis.margem.toFixed(1)}%`}
           sub={(() => {
             if (kpis.margemCobertura >= 99.5) return "base: 100% do faturamento";
@@ -419,6 +420,185 @@ function PositivacaoPanel({ positivar }: { positivar: DadosComercial["positivar"
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ————————————————————————————————————————————————————————————————
+// SAÚDE DO COMERCIAL: metas do time interno × externo, quebradas em
+// mês/semana/dia, com o quanto já foi realizado no período e uma NOTA
+// (realizado ÷ esperado até hoje). INTERNO = Amanda de Castilhos,
+// Davi Foppa e Tainá Evangelista; EXTERNO = todos os demais vendedores.
+const semAcento = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const VENDEDORES_INTERNOS = ["amanda", "davi foppa", "taina"];
+const ehInterno = (nome: string) => {
+  const n = semAcento(nome);
+  return VENDEDORES_INTERNOS.some((v) => n.includes(v));
+};
+
+const METAS_LS = "nyer:metasComercial";
+
+function notaCor(nota: number) {
+  return nota >= 9 ? "text-emerald-400" : nota >= 7 ? "text-lime-400" : nota >= 5 ? "text-amber-400" : "text-red-400";
+}
+
+function SaudePanel({ dados }: { dados: DadosComercial }) {
+  // Metas MENSAIS editáveis (persistem no navegador).
+  const [metaInterno, setMetaInterno] = useState(0);
+  const [metaExterno, setMetaExterno] = useState(0);
+  useEffect(() => {
+    try {
+      const j = JSON.parse(localStorage.getItem(METAS_LS) ?? "{}");
+      if (Number(j.interno) > 0) setMetaInterno(Number(j.interno));
+      if (Number(j.externo) > 0) setMetaExterno(Number(j.externo));
+    } catch { /* sem metas salvas */ }
+  }, []);
+  const salvar = (interno: number, externo: number) => {
+    setMetaInterno(interno);
+    setMetaExterno(externo);
+    try { localStorage.setItem(METAS_LS, JSON.stringify({ interno, externo })); } catch { /* modo privado */ }
+  };
+
+  // Calendário do período selecionado (padrão: mês atual até hoje).
+  const [y, m] = dados.de.slice(0, 7).split("-").map(Number);
+  const diasNoMes = new Date(y, m, 0).getDate();
+  const hoje = new Date();
+  const mesCorrente = hoje.getFullYear() === y && hoje.getMonth() + 1 === m;
+  // Dias já decorridos do mês (se o período é um mês passado, o mês inteiro).
+  const diasDecorridos = mesCorrente ? Math.min(hoje.getDate(), diasNoMes) : diasNoMes;
+
+  // Realizado por time (faturamento dos vendedores no período do dashboard).
+  const times = useMemo(() => {
+    let interno = 0, externo = 0;
+    const membrosInterno: string[] = [], membrosExterno: string[] = [];
+    for (const v of dados.vendedores) {
+      if (ehInterno(v.nome)) { interno += v.faturamento; membrosInterno.push(v.nome); }
+      else { externo += v.faturamento; membrosExterno.push(v.nome); }
+    }
+    return { interno, externo, membrosInterno, membrosExterno };
+  }, [dados.vendedores]);
+
+  const linha = (nome: string, emoji: string, meta: number, realizado: number, membros: string[], setMeta: (n: number) => void) => {
+    const metaDia = meta / diasNoMes;
+    const metaSemana = metaDia * 7;
+    const esperadoAteHoje = metaDia * diasDecorridos;
+    const pctMes = meta > 0 ? (realizado / meta) * 100 : 0;
+    const ritmo = esperadoAteHoje > 0 ? realizado / esperadoAteHoje : 0; // 1 = no ritmo da meta
+    const nota = meta > 0 ? Math.min(10, ritmo * 10) : 0;
+    const projecao = diasDecorridos > 0 ? (realizado / diasDecorridos) * diasNoMes : 0;
+    return (
+      <Card key={nome}>
+        <CardContent className="p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-white">{emoji} Comercial {nome}</h3>
+              <p className="text-[11px] text-slate-400" title={membros.join(", ")}>
+                {membros.length} vendedor(es): {membros.join(", ") || "—"}
+              </p>
+            </div>
+            <div className="flex items-end gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-400">Meta do mês (R$)</label>
+                <input
+                  type="number" min={0} step={1000} value={meta || ""}
+                  placeholder="ex.: 150000"
+                  onChange={(e) => setMeta(Number(e.target.value) || 0)}
+                  className="h-9 w-36 rounded-lg border border-white/15 bg-white/5 px-3 text-right text-sm text-white"
+                />
+              </div>
+              {meta > 0 ? (
+                <div className="pb-1 text-right">
+                  <div className={`text-2xl font-bold tabular-nums ${notaCor(nota)}`}>{nota.toFixed(1)}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">nota</div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {meta > 0 ? (
+            <>
+              {/* Barra de progresso do mês */}
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="text-slate-300">
+                  Realizado <b className="text-white">{brl(realizado)}</b> de <b className="text-white">{brl(meta)}</b>
+                </span>
+                <span className={`font-semibold ${ritmo >= 1 ? "text-emerald-400" : ritmo >= 0.8 ? "text-amber-400" : "text-red-400"}`}>
+                  {pctMes.toFixed(1)}% da meta
+                </span>
+              </div>
+              <div className="relative mb-3 h-3 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={`h-full rounded-full ${ritmo >= 1 ? "bg-emerald-500" : ritmo >= 0.8 ? "bg-amber-500" : "bg-red-500"}`}
+                  style={{ width: `${Math.min(100, pctMes)}%` }}
+                />
+                {/* Marcador de onde a meta DEVERIA estar hoje */}
+                <div
+                  className="absolute top-0 h-full w-0.5 bg-white/70"
+                  style={{ left: `${Math.min(100, (diasDecorridos / diasNoMes) * 100)}%` }}
+                  title="Onde a meta deveria estar hoje"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">Meta / dia</div>
+                  <div className="text-sm font-semibold tabular-nums text-white">{brl(metaDia)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">Meta / semana</div>
+                  <div className="text-sm font-semibold tabular-nums text-white">{brl(metaSemana)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">Esperado até hoje</div>
+                  <div className="text-sm font-semibold tabular-nums text-white">{brl(esperadoAteHoje)}</div>
+                  <div className={`text-[10px] ${realizado >= esperadoAteHoje ? "text-emerald-400" : "text-red-400"}`}>
+                    {realizado >= esperadoAteHoje ? "+" : ""}{brl(realizado - esperadoAteHoje)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">Projeção do mês</div>
+                  <div className={`text-sm font-semibold tabular-nums ${projecao >= meta ? "text-emerald-400" : "text-white"}`}>{brl(projecao)}</div>
+                  <div className="text-[10px] text-slate-500">no ritmo atual</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-slate-400">Defina a meta do mês acima para acompanhar dia, semana e nota. 💾 Fica salva neste navegador.</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const notaGeral = (() => {
+    const notas: number[] = [];
+    for (const [meta, real] of [[metaInterno, times.interno], [metaExterno, times.externo]] as const) {
+      if (meta <= 0) continue;
+      const esperado = (meta / diasNoMes) * diasDecorridos;
+      notas.push(esperado > 0 ? Math.min(10, (real / esperado) * 10) : 0);
+    }
+    return notas.length ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+  })();
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+        <p className="text-sm text-slate-300">
+          <b className="text-white">Saúde do Comercial</b> — período <b className="text-white">{dados.de.split("-").reverse().join("/")}</b> a{" "}
+          <b className="text-white">{dados.ate.split("-").reverse().join("/")}</b> · {diasDecorridos}/{diasNoMes} dias do mês.
+          A nota compara o realizado com onde a meta deveria estar hoje (10 = no ritmo ou acima).
+        </p>
+        {notaGeral != null ? (
+          <div className="text-right">
+            <div className={`text-3xl font-bold tabular-nums ${notaCor(notaGeral)}`}>{notaGeral.toFixed(1)}</div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">saúde geral</div>
+          </div>
+        ) : null}
+      </div>
+
+      {linha("interno", "🏠", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))}
+      {linha("externo", "🚗", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
     </div>
   );
 }
