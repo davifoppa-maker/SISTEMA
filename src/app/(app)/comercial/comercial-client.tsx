@@ -212,7 +212,7 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
                   <th className="px-4 py-2 text-right">Faturamento</th>
                   <th className="px-4 py-2 text-right">Pedidos</th>
                   <th className="px-4 py-2 text-right">Ticket médio</th>
-                  <th className="px-4 py-2 text-right">Margem líq.</th>
+                  <th className="px-4 py-2 text-right">Margem de contribuição</th>
                   <th className="px-4 py-2 text-right">Clientes novos</th>
                   <th className="px-4 py-2 text-right">1ª venda (R$)</th>
                   <th className="px-4 py-2 text-right">Positivação</th>
