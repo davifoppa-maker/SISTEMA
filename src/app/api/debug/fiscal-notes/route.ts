@@ -44,5 +44,43 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.json({ ok: true, total, semData, porTipo, amostra, xmlCru, erro: error?.message ?? null });
+  // &lista=1 → sonda a LISTAGEM /notas do Tiny com várias variantes de filtro,
+  // para descobrir como pegar as notas de ENTRADA (compras de fornecedor).
+  let listagem: Record<string, unknown> | null = null;
+  if (u.searchParams.get("lista") === "1") {
+    const { getTinyConfig, tinyFetch } = await import("@/lib/services/tiny-api");
+    const mes = u.searchParams.get("mes") || new Date().toISOString().slice(0, 7);
+    const fim = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate();
+    const base = `dataInicial=${mes}-01&dataFinal=${mes}-${String(fim).padStart(2, "0")}&limit=100`;
+    const c = getTinyConfig("nyer");
+    const variantes: Record<string, string> = {
+      semFiltro: `/notas?${base}`,
+      tipoE: `/notas?${base}&tipo=E`,
+      tipoEntrada: `/notas?${base}&tipo=entrada`,
+      tipo0: `/notas?${base}&tipo=0`,
+      tipoNotaE: `/notas?${base}&tipoNota=E`,
+    };
+    listagem = { mes };
+    for (const [nome, path] of Object.entries(variantes)) {
+      try {
+        const r = await tinyFetch(`${c.apiBaseUrl}${path}`, {}, "nyer");
+        const txt = await r.text();
+        let qtd: unknown = null, primeiro: unknown = null;
+        try {
+          const j = JSON.parse(txt);
+          const itens = (j?.itens ?? j?.data ?? []) as any[];
+          qtd = Array.isArray(itens) ? itens.length : null;
+          primeiro = Array.isArray(itens) && itens[0]
+            ? { id: itens[0].id, numero: itens[0].numero, tipo: itens[0].tipo ?? itens[0].tipoNota, situacao: itens[0].situacao }
+            : null;
+        } catch { primeiro = txt.slice(0, 200); }
+        listagem[nome] = { status: r.status, qtd, primeiro };
+      } catch (e) {
+        listagem[nome] = { erro: e instanceof Error ? e.message : "erro" };
+      }
+      await new Promise((res) => setTimeout(res, 350));
+    }
+  }
+
+  return Response.json({ ok: true, total, semData, porTipo, amostra, xmlCru, listagem, erro: error?.message ?? null });
 }
