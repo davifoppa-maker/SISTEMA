@@ -68,7 +68,19 @@ export async function POST(req: Request) {
       if (!bruto.includes("<NFe") && !bruto.includes("<nfeProc")) {
         try { const j = JSON.parse(bruto); xml = j?.data?.xml ?? j?.xml ?? ""; } catch { xml = ""; }
       }
-      if (!xml || (!xml.includes("<ICMSTot>") && !xml.includes("<infNFe"))) { errosXml++; await pausa(150); continue; }
+      if (!xml || (!xml.includes("<ICMSTot>") && !xml.includes("<infNFe"))) {
+        // Sem XML (nota não autorizada / rascunho / cancelada): grava um stub
+        // para NÃO ficar tentando para sempre — fica fora da apuração.
+        errosXml++;
+        linhas.push({
+          id: `${empresa}:${n.id}`, empresa, tipo: "sem_xml", numero: n.numero ?? null,
+          serie: null, chave: null, data: `${mes}-01`, cliente: null,
+          valor: 0, vprod: 0, vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
+          situacao: `sem XML (${String(n.situacao ?? "?")})`,
+        });
+        await pausa(150);
+        continue;
+      }
       const tpNF = tag(xml, "tpNF"); // 0 = entrada · 1 = saída
       const tot = xml.slice(xml.indexOf("<ICMSTot>"), xml.indexOf("</ICMSTot>") + 10);
       linhas.push({
@@ -88,7 +100,15 @@ export async function POST(req: Request) {
         vipi: num(tag(tot, "vIPI")),
         situacao: String(n.situacao ?? ""),
       });
-    } catch { errosXml++; }
+    } catch {
+      errosXml++;
+      linhas.push({
+        id: `${empresa}:${n.id}`, empresa, tipo: "sem_xml", numero: n.numero ?? null,
+        serie: null, chave: null, data: `${mes}-01`, cliente: null,
+        valor: 0, vprod: 0, vicms: 0, vpis: 0, vcofins: 0, vipi: 0,
+        situacao: "erro ao baixar XML",
+      });
+    }
     await pausa(200);
   }
 
@@ -103,6 +123,6 @@ export async function POST(req: Request) {
     jaGravadas: jaTem.size,
     gravadasAgora: linhas.length,
     errosXml,
-    pendentes: Math.max(0, faltantes.length - lote.length) + errosXml,
+    pendentes: Math.max(0, faltantes.length - lote.length),
   });
 }
