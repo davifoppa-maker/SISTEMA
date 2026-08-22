@@ -77,9 +77,23 @@ const nav = [
       { href: "/bonificados", label: "Custos de pedidos bonificados" },
     ],
   },
-  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { href: "/margem", label: "Gestor de Margem", icon: BarChart2 },
-  { href: "/comercial", label: "Dashboard Comercial", icon: TrendingUp },
+  {
+    href: "/comercial",
+    label: "Comercial",
+    icon: TrendingUp,
+    children: [
+      { href: "/comercial", label: "Dashboard Comercial" },
+      { href: "/margem", label: "Gestor de Margem" },
+    ],
+  },
+  {
+    href: "/whatsapp",
+    label: "Pós-venda",
+    icon: MessageCircle,
+    children: [
+      { href: "/whatsapp", label: "WhatsApp" },
+    ],
+  },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
