@@ -20,5 +20,29 @@ export async function GET(req: Request) {
   const { data: tipos } = await sb.from("fiscal_notes").select("tipo");
   const porTipo: Record<string, number> = {};
   for (const t of tipos ?? []) porTipo[(t as any).tipo ?? "null"] = (porTipo[(t as any).tipo ?? "null"] ?? 0) + 1;
-  return Response.json({ ok: true, total, semData, porTipo, amostra, erro: error?.message ?? null });
+  // &xml=1 → baixa o XML da 1ª nota da amostra e mostra o começo CRU (para
+  // decifrar o formato real que o parser precisa tratar).
+  let xmlCru: Record<string, unknown> | null = null;
+  if (u.searchParams.get("xml") === "1" && (amostra ?? []).length > 0) {
+    const { getTinyConfig, tinyFetch } = await import("@/lib/services/tiny-api");
+    const alvo = (amostra as any[])[0];
+    const tinyId = String(alvo.id).split(":")[1];
+    const empresa = alvo.empresa ?? "nyer";
+    const c = getTinyConfig(empresa);
+    try {
+      const r = await tinyFetch(`${c.apiBaseUrl}/notas/${tinyId}/xml`, {}, empresa);
+      const bruto = await r.text();
+      xmlCru = {
+        notaId: tinyId,
+        status: r.status,
+        contentType: r.headers.get("content-type"),
+        tamanho: bruto.length,
+        inicio: bruto.slice(0, 600),
+      };
+    } catch (e) {
+      xmlCru = { erro: e instanceof Error ? e.message : "erro" };
+    }
+  }
+
+  return Response.json({ ok: true, total, semData, porTipo, amostra, xmlCru, erro: error?.message ?? null });
 }
