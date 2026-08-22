@@ -90,7 +90,7 @@ export async function POST(req: Request) {
         numero: tag(xml, "nNF") ?? n.numero ?? null,
         serie: tag(xml, "serie"),
         chave: (xml.match(/Id="NFe(\d{44})"/) ?? [])[1] ?? null,
-        data: (tag(xml, "dhEmi") ?? "").slice(0, 10) || null,
+        data: (tag(xml, "dhEmi") ?? tag(xml, "dEmi") ?? "").slice(0, 10) || `${mes}-01`,
         cliente: (xml.split("<dest>")[1]?.match(/<xNome>([^<]*)<\/xNome>/) ?? [])[1] ?? tag(xml, "xNome"),
         valor: num(tag(tot, "vNF")),
         vprod: num(tag(tot, "vProd")),
