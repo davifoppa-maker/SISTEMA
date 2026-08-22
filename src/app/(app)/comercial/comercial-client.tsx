@@ -129,20 +129,6 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
         }
       />
 
-      {/* Dashboard e Positivação dividem a página (alternância discreta);
-          a Saúde tem página própria no menu, sem essa barra. */}
-      {aba === "faturamento" || aba === "positivacao" ? (
-        <div className="mb-5 flex gap-1 border-b border-white/10">
-          {([["/comercial", "Faturamento", "faturamento"], ["/comercial/positivacao", "Positivação", "positivacao"]] as const).map(([href, label, key]) => (
-            <a key={key} href={href}
-              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
-                aba === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
-              {label}
-            </a>
-          ))}
-        </div>
-      ) : null}
-
       {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
       {aba === "saude" ? <SaudePanel dados={dados} /> : null}
       {aba === "abc" ? <AbcPanel dados={dados} /> : null}

@@ -82,6 +82,7 @@ const nav = [
     icon: TrendingUp,
     children: [
       { href: "/comercial", label: "Comercial" },
+      { href: "/comercial/positivacao", label: "Positivação" },
       { href: "/comercial/saude", label: "Saúde do Comercial" },
       { href: "/comercial/abc", label: "Curva ABC" },
       { href: "/margem", label: "Gestor de Margem" },
