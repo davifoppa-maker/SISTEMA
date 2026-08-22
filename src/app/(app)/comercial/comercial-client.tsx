@@ -39,7 +39,7 @@ export interface DadosComercial {
     primeirasVendas: number;
     lista: { numero: string; data: string; cliente: string; valor: number; frete: number }[];
   }[];
-  abc: { nome: string; receita: number; pctAcum: number; classe: string }[];
+  abc: { nome: string; receita: number; qtd: number; pctAcum: number; classe: string }[];
   abcClientes: { nome: string; receita: number; pctAcum: number; classe: string; pedidos: number }[];
   positivar: {
     cliente: string;
@@ -720,7 +720,7 @@ function AbcPanel({ dados }: { dados: DadosComercial }) {
                 <tr className="border-b border-white/10 text-left text-xs text-slate-400">
                   <th className="px-4 py-2">#</th>
                   <th className="px-4 py-2">{visao === "clientes" ? "Cliente" : "Produto"}</th>
-                  {visao === "clientes" ? <th className="px-4 py-2 text-right">Pedidos</th> : null}
+                  {visao === "clientes" ? <th className="px-4 py-2 text-right">Pedidos</th> : <th className="px-4 py-2 text-right">Unidades</th>}
                   <th className="px-4 py-2 text-right">Receita</th>
                   <th className="px-4 py-2 text-right">% acum.</th>
                   <th className="px-4 py-2 text-center">Classe</th>
@@ -748,6 +748,7 @@ function AbcPanel({ dados }: { dados: DadosComercial }) {
                   <tr key={i}>
                     <td className="px-4 py-2 text-slate-500">{i + 1}</td>
                     <td className="px-4 py-2 text-white">{p.nome}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{p.qtd.toLocaleString("pt-BR")}</td>
                     <td className="px-4 py-2 text-right text-slate-300">{brl(p.receita)}</td>
                     <td className="px-4 py-2 text-right text-slate-400">{p.pctAcum.toFixed(1)}%</td>
                     <td className="px-4 py-2 text-center">

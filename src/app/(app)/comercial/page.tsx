@@ -95,7 +95,7 @@ export default async function ComercialPage({
   interface Agg { faturamento: number; fatMargem: number; custo: number; pedidos: number; clientes: Set<string>; clientesNovos: number; primeirasVendas: number; lista: PedidoLinha[]; }
   const novaAgg = (): Agg => ({ faturamento: 0, fatMargem: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0, lista: [] });
   const porVendedor = new Map<string, Agg>();
-  const abcMap = new Map<string, { nome: string; receita: number }>();
+  const abcMap = new Map<string, { nome: string; receita: number; qtd: number }>();
   // Curva ABC de CLIENTES: receita por cliente no período.
   const abcCliMap = new Map<string, { nome: string; receita: number; pedidos: number }>();
   const positivadosGlobal = new Set<string>();
@@ -123,8 +123,9 @@ export default async function ComercialPage({
       custo += custoUnit * i.quantity;
       // ABC por produto (receita dos itens).
       const key = i.sku ?? "—";
-      const e = abcMap.get(key) ?? { nome: nomeDe.get(i.sku ?? "") ?? (i.sku ?? "Produto"), receita: 0 };
+      const e = abcMap.get(key) ?? { nome: nomeDe.get(i.sku ?? "") ?? (i.sku ?? "Produto"), receita: 0, qtd: 0 };
       e.receita += tot;
+      e.qtd += i.quantity;
       abcMap.set(key, e);
     }
     // Faturamento = valor total do pedido (igual ao Olist); fallback: soma dos itens.
@@ -245,7 +246,7 @@ export default async function ComercialPage({
     acum += p.receita;
     const pctAcum = (acum / totalAbc) * 100;
     const classe = pctAcum <= 80 ? "A" : pctAcum <= 95 ? "B" : "C";
-    return { nome: p.nome, receita: p.receita, pctAcum, classe };
+    return { nome: p.nome, receita: p.receita, qtd: p.qtd, pctAcum, classe };
   });
 
   // Curva ABC de clientes (mesma classificação 80/95).
