@@ -82,5 +82,26 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.json({ ok: true, total, semData, porTipo, amostra, xmlCru, listagem, erro: error?.message ?? null });
+  // &nota=ID → baixa o DETALHE e o XML de uma nota específica (para entender
+  // por que as notas de ENTRADA não rendem XML).
+  let nota: Record<string, unknown> | null = null;
+  const notaId = u.searchParams.get("nota");
+  if (notaId) {
+    const { getTinyConfig, tinyFetch } = await import("@/lib/services/tiny-api");
+    const c = getTinyConfig("nyer");
+    nota = { id: notaId };
+    try {
+      const r = await tinyFetch(`${c.apiBaseUrl}/notas/${notaId}`, {}, "nyer");
+      const txt = await r.text();
+      nota.detalhe = { status: r.status, inicio: txt.slice(0, 700) };
+    } catch (e) { nota.detalhe = { erro: e instanceof Error ? e.message : "erro" }; }
+    await new Promise((res) => setTimeout(res, 400));
+    try {
+      const r = await tinyFetch(`${c.apiBaseUrl}/notas/${notaId}/xml`, {}, "nyer");
+      const txt = await r.text();
+      nota.xml = { status: r.status, contentType: r.headers.get("content-type"), tamanho: txt.length, inicio: txt.slice(0, 400) };
+    } catch (e) { nota.xml = { erro: e instanceof Error ? e.message : "erro" }; }
+  }
+
+  return Response.json({ ok: true, total, semData, porTipo, amostra, xmlCru, listagem, nota, erro: error?.message ?? null });
 }

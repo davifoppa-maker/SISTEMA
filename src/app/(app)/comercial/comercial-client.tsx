@@ -106,27 +106,24 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
 
   const mesAtual = dados.de.slice(0, 7);
 
-  // Abas do dashboard.
-  const [aba, setAba] = useState<"faturamento" | "positivacao" | "saude">(
-    abaInicial === "saude" ? "saude" : abaInicial === "positivacao" ? "positivacao" : "faturamento",
-  );
+  // Visão vinda da rota (menu lateral): faturamento, positivação ou saúde.
+  const aba: "faturamento" | "positivacao" | "saude" =
+    abaInicial === "saude" ? "saude" : abaInicial === "positivacao" ? "positivacao" : "faturamento";
   // Vendedor expandido (mostra os pedidos para validar contra o Olist).
   const [aberto, setAberto] = useState<string | null>(null);
 
   return (
     <>
-      <PageHeader title="📊 Dashboard Comercial" description="Desempenho de vendas por vendedor, carteira e curva ABC." />
-
-      {/* Abas */}
-      <div className="mb-5 flex gap-1 border-b border-white/10">
-        {([["faturamento", "Faturamento"], ["positivacao", "Positivação"], ["saude", "Saúde do Comercial"]] as const).map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setAba(key)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
-              aba === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <PageHeader
+        title={aba === "saude" ? "❤️ Saúde do Comercial" : aba === "positivacao" ? "🎯 Positivação" : "📊 Dashboard Comercial"}
+        description={
+          aba === "saude"
+            ? "Metas dos times interno e externo — quanto falta e a nota do mês."
+            : aba === "positivacao"
+              ? "Clientes que pararam de comprar — hora de positivar."
+              : "Desempenho de vendas por vendedor, carteira e curva ABC."
+        }
+      />
 
       {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
       {aba === "saude" ? <SaudePanel dados={dados} /> : null}
