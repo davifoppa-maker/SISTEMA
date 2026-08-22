@@ -6,7 +6,9 @@ import { AUTH_COOKIE, authCredentials, expedCredentials, comercialCredentials, c
 //  - OAuth do Tiny (/api/auth/tiny/*) — chamado externamente
 //  - cron (CRON_SECRET) e webhooks (Tiny/Meta) — chamados por serviços externos
 //  - /api/debug (protegida pela própria chave)
-const PUBLIC_PREFIXES = ["/login", "/api/auth", "/api/cron", "/api/webhooks", "/api/debug"];
+// /api/contabil/sync é público porque o cron diário o chama por self-fetch
+// (sem cookie) — a rota só importa notas do Tiny para o banco, não expõe dados.
+const PUBLIC_PREFIXES = ["/login", "/api/auth", "/api/cron", "/api/webhooks", "/api/debug", "/api/contabil/sync"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
