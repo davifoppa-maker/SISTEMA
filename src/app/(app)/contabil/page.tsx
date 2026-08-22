@@ -16,6 +16,7 @@ export default async function ContabilPage({ searchParams }: { searchParams: { m
   const { data, error } = await sb
     .from("fiscal_notes")
     .select("*")
+    .eq("empresa", "nyer") // apuração só da NRX (lucro real)
     .gte("data", `${mes}-01`)
     .lte("data", `${mes}-${String(ultimoDia).padStart(2, "0")}`)
     .order("data", { ascending: false });

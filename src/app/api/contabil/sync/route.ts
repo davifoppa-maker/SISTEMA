@@ -51,8 +51,9 @@ export async function POST(req: Request) {
 
   // 2) Quais já temos gravadas?
   const ids = notas.map((n) => `${empresa}:${n.id}`);
-  const { data: existentes } = await sb.from("fiscal_notes").select("id").in("id", ids);
-  const jaTem = new Set((existentes ?? []).map((e: any) => e.id));
+  const { data: existentes } = await sb.from("fiscal_notes").select("id, tipo, data").in("id", ids);
+  // Linhas VAZIAS (parser antigo: data null e não-stub) voltam para a fila.
+  const jaTem = new Set((existentes ?? []).filter((e: any) => e.tipo === "sem_xml" || e.data).map((e: any) => e.id));
   const faltantes = notas.filter((n) => !jaTem.has(`${empresa}:${n.id}`));
 
   // 3) Baixa e parseia o XML de até 35 notas por rodada (retomável).
@@ -63,12 +64,45 @@ export async function POST(req: Request) {
     try {
       const rx = await tinyFetch(`${c.apiBaseUrl}/notas/${n.id}/xml`, {}, empresa);
       const bruto = await rx.text();
-      // O XML pode vir cru ou embrulhado em JSON { data: { xml: "..." } }.
-      let xml = bruto;
-      if (!bruto.includes("<NFe") && !bruto.includes("<nfeProc")) {
-        try { const j = JSON.parse(bruto); xml = j?.data?.xml ?? j?.xml ?? ""; } catch { xml = ""; }
-      }
-      if (!xml || (!xml.includes("<ICMSTot>") && !xml.includes("<infNFe"))) {
+      // Decodificador UNIVERSAL: o XML pode vir cru, embrulhado em JSON
+      // ({data:{xml}} — inclusive em base64), com entidades HTML (&lt;) ou
+      // escapes unicode (\u003c). Normaliza tudo até sobrar XML de verdade.
+      const decodifica = (t: string): string => {
+        let x = t;
+        for (let passo = 0; passo < 4; passo++) {
+          if (x.includes("<ICMSTot>") || x.includes("<infNFe")) {
+            if (x.includes("<dhEmi>") || x.includes("<nNF>") || x.includes("<vNF>")) return x;
+          }
+          // JSON com campo xml em qualquer nível?
+          try {
+            const j = JSON.parse(x);
+            const acha = (o: any, prof: number): string | null => {
+              if (typeof o === "string" && (o.includes("<infNFe") || o.includes("&lt;infNFe") || /^[A-Za-z0-9+/=\s]{200,}$/.test(o))) return o;
+              if (o && typeof o === "object" && prof < 4) {
+                for (const v of Object.values(o)) { const r2 = acha(v, prof + 1); if (r2) return r2; }
+              }
+              return null;
+            };
+            const dentro = acha(j, 0);
+            if (dentro) { x = dentro; continue; }
+          } catch { /* não é JSON */ }
+          // Entidades HTML?
+          if (x.includes("&lt;")) { x = x.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&"); continue; }
+          // Escapes unicode?
+          if (x.includes("\\u003c")) { x = x.replace(/\\u003c/gi, "<").replace(/\\u003e/gi, ">").replace(/\\u0026/gi, "&"); continue; }
+          // Base64 de XML?
+          if (/^[A-Za-z0-9+/=\s]{200,}$/.test(x.trim())) {
+            try {
+              const dec = Buffer.from(x.trim(), "base64").toString("utf-8");
+              if (dec.includes("<")) { x = dec; continue; }
+            } catch { /* não é base64 */ }
+          }
+          break;
+        }
+        return x;
+      };
+      const xml = decodifica(bruto);
+      if (!xml || (!xml.includes("<vNF>") && !xml.includes("<nNF>") && !xml.includes("<dhEmi>"))) {
         // Sem XML (nota não autorizada / rascunho / cancelada): grava um stub
         // para NÃO ficar tentando para sempre — fica fora da apuração.
         errosXml++;

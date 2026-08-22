@@ -23,7 +23,7 @@ export function ContabilClient({ mes, notas, erroTabela }: { mes: string; notas:
     setRodando(true);
     setSync("Buscando notas e XMLs no Olist…");
     try {
-      for (const empresa of ["nyer", "ecopro"]) {
+      for (const empresa of ["nyer"]) { // só NRX (lucro real; Ecopro fora da apuração)
         for (let rodada = 0; rodada < 12; rodada++) {
           const r = await fetch(`/api/contabil/sync?mes=${mes}&empresa=${empresa}`, { method: "POST" });
           const j = await r.json();
