@@ -115,7 +115,7 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
   return (
     <>
       <PageHeader
-        title={aba === "saude" ? "❤️ Saúde do Comercial" : aba === "positivacao" ? "🎯 Positivação" : "📊 Dashboard Comercial"}
+        title={aba === "saude" ? "Saúde do Comercial" : aba === "positivacao" ? "🎯 Positivação" : "📊 Dashboard Comercial"}
         description={
           aba === "saude"
             ? "Metas dos times interno e externo — quanto falta e a nota do mês."
@@ -124,6 +124,20 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
               : "Desempenho de vendas por vendedor, carteira e curva ABC."
         }
       />
+
+      {/* Dashboard e Positivação dividem a página (alternância discreta);
+          a Saúde tem página própria no menu, sem essa barra. */}
+      {aba !== "saude" ? (
+        <div className="mb-5 flex gap-1 border-b border-white/10">
+          {([["/comercial", "Faturamento", "faturamento"], ["/comercial/positivacao", "Positivação", "positivacao"]] as const).map(([href, label, key]) => (
+            <a key={key} href={href}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+                aba === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+              {label}
+            </a>
+          ))}
+        </div>
+      ) : null}
 
       {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
       {aba === "saude" ? <SaudePanel dados={dados} /> : null}
@@ -487,7 +501,7 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
     return { interno, externo, membrosInterno, membrosExterno };
   }, [dados.vendedores]);
 
-  const linha = (nome: string, emoji: string, meta: number, realizado: number, membros: string[], setMeta: (n: number) => void) => {
+  const linha = (nome: string, meta: number, realizado: number, membros: string[], setMeta: (n: number) => void) => {
     const metaDia = meta / diasNoMes;
     const metaSemana = metaDia * 7;
     const esperadoAteHoje = metaDia * diasDecorridos;
@@ -500,7 +514,7 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
         <CardContent className="p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-white">{emoji} Comercial {nome}</h3>
+              <h3 className="text-sm font-semibold text-white">Comercial {nome}</h3>
               <p className="text-[11px] text-slate-400" title={membros.join(", ")}>
                 {membros.length} vendedor(es): {membros.join(", ") || "—"}
               </p>
@@ -572,7 +586,7 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
               </div>
             </>
           ) : (
-            <p className="text-xs text-slate-400">Defina a meta do mês acima para acompanhar dia, semana e nota. 💾 Fica salva neste navegador.</p>
+            <p className="text-xs text-slate-400">Defina a meta do mês acima para acompanhar dia, semana e nota. Fica salva neste navegador.</p>
           )}
         </CardContent>
       </Card>
@@ -607,7 +621,7 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
 
       {/* Sub-abas: um time por vez, mais organizado. */}
       <div className="flex gap-1 border-b border-white/10">
-        {([["interno", "🏠 Comercial interno"], ["externo", "🚗 Comercial externo"]] as const).map(([key, label]) => (
+        {([["interno", "Comercial interno"], ["externo", "Comercial externo"]] as const).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTime(key)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
               time === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
@@ -617,8 +631,8 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
       </div>
 
       {time === "interno"
-        ? linha("interno", "🏠", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))
-        : linha("externo", "🚗", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
+        ? linha("interno", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))
+        : linha("externo", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
     </div>
   );
 }
