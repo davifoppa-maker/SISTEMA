@@ -96,6 +96,8 @@ export default async function ComercialPage({
   const novaAgg = (): Agg => ({ faturamento: 0, fatMargem: 0, custo: 0, pedidos: 0, clientes: new Set(), clientesNovos: 0, primeirasVendas: 0, lista: [] });
   const porVendedor = new Map<string, Agg>();
   const abcMap = new Map<string, { nome: string; receita: number }>();
+  // Curva ABC de CLIENTES: receita por cliente no período.
+  const abcCliMap = new Map<string, { nome: string; receita: number; pedidos: number }>();
   const positivadosGlobal = new Set<string>();
   let fatTotal = 0, fatMargemTotal = 0, custoTotal = 0, pedidosTotal = 0;
   // Faturamento que ficou FORA da base de margem (sem itens / sem custo cadastrado).
@@ -175,6 +177,13 @@ export default async function ComercialPage({
     });
     porVendedor.set(sel, a);
 
+    { // ABC de clientes (receita do período por cliente).
+      const ck = chaveCliente(v);
+      const key = ck || `pedido:${v.order.id}`;
+      const e = abcCliMap.get(key) ?? { nome: (v.customerName ?? "—") || "—", receita: 0, pedidos: 0 };
+      e.receita += receita; e.pedidos += 1;
+      abcCliMap.set(key, e);
+    }
     fatTotal += receita; pedidosTotal += 1;
     if (!foraMargem) { fatMargemTotal += receita; custoTotal += custoMargem; }
     { const ck = chaveCliente(v); if (ck) positivadosGlobal.add(ck); }
@@ -239,6 +248,17 @@ export default async function ComercialPage({
     return { nome: p.nome, receita: p.receita, pctAcum, classe };
   });
 
+  // Curva ABC de clientes (mesma classificação 80/95).
+  const abcCliOrden = [...abcCliMap.values()].sort((a, b) => b.receita - a.receita);
+  const totalAbcCli = abcCliOrden.reduce((s, p) => s + p.receita, 0) || 1;
+  let acumCli = 0;
+  const abcClientes = abcCliOrden.map((p) => {
+    acumCli += p.receita;
+    const pctAcum = (acumCli / totalAbcCli) * 100;
+    const classe = pctAcum <= 80 ? "A" : pctAcum <= 95 ? "B" : "C";
+    return { nome: p.nome, receita: p.receita, pctAcum, classe, pedidos: p.pedidos };
+  });
+
   // POSITIVAÇÃO (independe do período): última compra de cada cliente em TODOS os
   // tempos, usando TODOS os pedidos (menos cancelados). Quando o pedido não tem
   // customer_id, usa o NOME como chave — para não perder cliente por falta de
@@ -301,6 +321,7 @@ export default async function ComercialPage({
     },
     vendedores,
     abc: abc.slice(0, 40),
+    abcClientes: abcClientes.slice(0, 100),
     positivar,
   };
 

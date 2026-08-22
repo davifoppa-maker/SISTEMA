@@ -40,6 +40,7 @@ export interface DadosComercial {
     lista: { numero: string; data: string; cliente: string; valor: number; frete: number }[];
   }[];
   abc: { nome: string; receita: number; pctAcum: number; classe: string }[];
+  abcClientes: { nome: string; receita: number; pctAcum: number; classe: string; pedidos: number }[];
   positivar: {
     cliente: string;
     vendedor: string;
@@ -76,7 +77,7 @@ const classeCor: Record<string, string> = {
 };
 
 export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; abaInicial?: string }) {
-  const { kpis, vendedores, abc } = dados;
+  const { kpis, vendedores } = dados;
   const router = useRouter();
 
   const iso = (d: Date) =>
@@ -106,28 +107,30 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
 
   const mesAtual = dados.de.slice(0, 7);
 
-  // Visão vinda da rota (menu lateral): faturamento, positivação ou saúde.
-  const aba: "faturamento" | "positivacao" | "saude" =
-    abaInicial === "saude" ? "saude" : abaInicial === "positivacao" ? "positivacao" : "faturamento";
+  // Visão vinda da rota (menu lateral): faturamento, positivação, saúde ou ABC.
+  const aba: "faturamento" | "positivacao" | "saude" | "abc" =
+    abaInicial === "saude" ? "saude" : abaInicial === "positivacao" ? "positivacao" : abaInicial === "abc" ? "abc" : "faturamento";
   // Vendedor expandido (mostra os pedidos para validar contra o Olist).
   const [aberto, setAberto] = useState<string | null>(null);
 
   return (
     <>
       <PageHeader
-        title={aba === "saude" ? "Saúde do Comercial" : aba === "positivacao" ? "🎯 Positivação" : "📊 Dashboard Comercial"}
+        title={aba === "saude" ? "Saúde do Comercial" : aba === "abc" ? "Curva ABC" : aba === "positivacao" ? "🎯 Positivação" : "📊 Dashboard Comercial"}
         description={
           aba === "saude"
             ? "Metas dos times interno e externo — quanto falta e a nota do mês."
-            : aba === "positivacao"
-              ? "Clientes que pararam de comprar — hora de positivar."
-              : "Desempenho de vendas por vendedor, carteira e curva ABC."
+            : aba === "abc"
+              ? "Clientes e produtos que mais representam o faturamento do período."
+              : aba === "positivacao"
+                ? "Clientes que pararam de comprar — hora de positivar."
+                : "Desempenho de vendas por vendedor e carteira."
         }
       />
 
       {/* Dashboard e Positivação dividem a página (alternância discreta);
           a Saúde tem página própria no menu, sem essa barra. */}
-      {aba !== "saude" ? (
+      {aba === "faturamento" || aba === "positivacao" ? (
         <div className="mb-5 flex gap-1 border-b border-white/10">
           {([["/comercial", "Faturamento", "faturamento"], ["/comercial/positivacao", "Positivação", "positivacao"]] as const).map(([href, label, key]) => (
             <a key={key} href={href}
@@ -141,6 +144,7 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
 
       {aba === "positivacao" ? <PositivacaoPanel positivar={dados.positivar} /> : null}
       {aba === "saude" ? <SaudePanel dados={dados} /> : null}
+      {aba === "abc" ? <AbcPanel dados={dados} /> : null}
 
       <div className={aba === "faturamento" ? "" : "hidden"}>
       {/* Filtro de período */}
@@ -303,43 +307,6 @@ export function ComercialClient({ dados, abaInicial }: { dados: DadosComercial; 
         </CardContent>
       </Card>
 
-      {/* Curva ABC */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold text-white">📈 Curva ABC de produtos (por receita)</h2>
-            <p className="text-[11px] text-slate-400">A = 80% do faturamento · B = próximos 15% · C = os 5% finais</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
-                  <th className="px-4 py-2">#</th>
-                  <th className="px-4 py-2">Produto</th>
-                  <th className="px-4 py-2 text-right">Receita</th>
-                  <th className="px-4 py-2 text-right">% acum.</th>
-                  <th className="px-4 py-2 text-center">Classe</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {abc.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-400">Sem dados.</td></tr>
-                ) : abc.map((p, i) => (
-                  <tr key={i}>
-                    <td className="px-4 py-2 text-slate-500">{i + 1}</td>
-                    <td className="px-4 py-2 text-white">{p.nome}</td>
-                    <td className="px-4 py-2 text-right text-slate-300">{brl(p.receita)}</td>
-                    <td className="px-4 py-2 text-right text-slate-400">{p.pctAcum.toFixed(1)}%</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`rounded px-2 py-0.5 text-xs font-bold ${classeCor[p.classe]}`}>{p.classe}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
       </div>
     </>
   );
@@ -633,6 +600,97 @@ function SaudePanel({ dados }: { dados: DadosComercial }) {
       {time === "interno"
         ? linha("interno", metaInterno, times.interno, times.membrosInterno, (n) => salvar(n, metaExterno))
         : linha("externo", metaExterno, times.externo, times.membrosExterno, (n) => salvar(metaInterno, n))}
+    </div>
+  );
+}
+
+// ————————————————————————————————————————————————————————————————
+// CURVA ABC: clientes e produtos que mais representam o faturamento do
+// período. A = 80% do faturamento · B = próximos 15% · C = os 5% finais.
+function AbcPanel({ dados }: { dados: DadosComercial }) {
+  const [visao, setVisao] = useState<"clientes" | "produtos">("clientes");
+  const mesAtual = dados.de.slice(0, 7);
+
+  const aplicarMes = (m: string) => {
+    if (!m) return;
+    const [y, mm] = m.split("-").map(Number);
+    const de = `${y}-${String(mm).padStart(2, "0")}-01`;
+    const ultimo = new Date(y, mm, 0).getDate();
+    window.location.href = `/comercial/abc?de=${de}&ate=${y}-${String(mm).padStart(2, "0")}-${String(ultimo).padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex gap-1 border-b border-white/10">
+          {([["clientes", "Clientes"], ["produtos", "Produtos"]] as const).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setVisao(key)}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+                visao === key ? "border-violet-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Mês</label>
+          <input type="month" defaultValue={mesAtual} onChange={(e) => aplicarMes(e.target.value)}
+            className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white" />
+        </div>
+      </div>
+
+      <p className="text-[11px] text-slate-400">
+        Período {dados.de.split("-").reverse().join("/")} a {dados.ate.split("-").reverse().join("/")} ·
+        A = 80% do faturamento · B = próximos 15% · C = os 5% finais.
+      </p>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                  <th className="px-4 py-2">#</th>
+                  <th className="px-4 py-2">{visao === "clientes" ? "Cliente" : "Produto"}</th>
+                  {visao === "clientes" ? <th className="px-4 py-2 text-right">Pedidos</th> : null}
+                  <th className="px-4 py-2 text-right">Receita</th>
+                  <th className="px-4 py-2 text-right">% acum.</th>
+                  <th className="px-4 py-2 text-center">Classe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {visao === "clientes" ? (
+                  dados.abcClientes.length === 0 ? (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Sem vendas no período.</td></tr>
+                  ) : dados.abcClientes.map((p, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-2 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-2 text-white">{p.nome}</td>
+                      <td className="px-4 py-2 text-right text-slate-300">{p.pedidos}</td>
+                      <td className="px-4 py-2 text-right text-slate-300">{brl(p.receita)}</td>
+                      <td className="px-4 py-2 text-right text-slate-400">{p.pctAcum.toFixed(1)}%</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`rounded px-2 py-0.5 text-xs font-bold ${classeCor[p.classe]}`}>{p.classe}</span>
+                      </td>
+                    </tr>
+                  ))
+                ) : dados.abc.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-400">Sem vendas no período.</td></tr>
+                ) : dados.abc.map((p, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-2 text-slate-500">{i + 1}</td>
+                    <td className="px-4 py-2 text-white">{p.nome}</td>
+                    <td className="px-4 py-2 text-right text-slate-300">{brl(p.receita)}</td>
+                    <td className="px-4 py-2 text-right text-slate-400">{p.pctAcum.toFixed(1)}%</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold ${classeCor[p.classe]}`}>{p.classe}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

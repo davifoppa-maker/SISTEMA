@@ -45,7 +45,6 @@ const nav = [
     icon: Package,
     children: [
       { href: "/orders", label: "Todos os pedidos" },
-      { href: "/orders/lancar", label: "Lançar pedido (IA)" },
     ],
   },
   {
@@ -84,7 +83,9 @@ const nav = [
     children: [
       { href: "/comercial", label: "Comercial" },
       { href: "/comercial/saude", label: "Saúde do Comercial" },
+      { href: "/comercial/abc", label: "Curva ABC" },
       { href: "/margem", label: "Gestor de Margem" },
+      { href: "/orders/lancar", label: "Lançar pedido (IA)" },
     ],
   },
   {
